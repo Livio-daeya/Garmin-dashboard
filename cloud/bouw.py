@@ -114,15 +114,11 @@ def secret_bijwerken(token: str, repo: str, naam: str, waarde: str) -> None:
     """Zet een nieuw geheim. Garmin draait het verversingstoken bij elk
     gebruik; slaan we het niet op, dan werkt de koppeling de volgende keer
     niet meer."""
-    try:
-        from nacl import encoding, public
-    except ImportError:
-        sys.exit("PyNaCl ontbreekt. De workflow hoort 'pip install pynacl' te doen.")
+    from verzegeld import verzegel
     sleutel = gh(f"/repos/{repo}/actions/secrets/public-key", token)
-    pk = public.PublicKey(sleutel["key"].encode("utf-8"), encoding.Base64Encoder())
-    versleuteld = public.SealedBox(pk).encrypt(waarde.encode("utf-8"))
+    doos = verzegel(waarde.encode("utf-8"), base64.b64decode(sleutel["key"]))
     gh(f"/repos/{repo}/actions/secrets/{naam}", token, methode="PUT",
-       data={"encrypted_value": base64.b64encode(versleuteld).decode("utf-8"),
+       data={"encrypted_value": base64.b64encode(doos).decode("ascii"),
              "key_id": sleutel["key_id"]})
     print(f"  secret {naam} bijgewerkt")
 
