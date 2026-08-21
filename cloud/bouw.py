@@ -179,8 +179,9 @@ def main() -> None:
     print("Berekenen...")
     payload = D.build_payload(cache, weken)
 
+    # De pagina komt in de repository zelf terecht; de workflow zet hem daarna
+    # online. De wachtwoordzin komt uit een secret en wordt niet weggeschreven.
     D.PUBLISH_DIR = WORTEL
-    D.KEYFILE = WORTEL / ".geen-sleutelbestand"   # nooit wegschrijven op de runner
     D.publish(payload, passphrase=wachtwoordzin)
     (WORTEL / ".nojekyll").write_text("", encoding="utf-8")
     print(f"Klaar. {fetcher.calls} API-calls gedaan.")
