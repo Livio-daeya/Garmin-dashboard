@@ -921,36 +921,44 @@ PUBLISH_DIR = Path(PUBLISH_TARGET).expanduser() if PUBLISH_TARGET else HERE / "p
 KEYFILE = HERE / "publish.key"
 
 
-def publish(payload: dict[str, Any]) -> None:
+def publish(payload: dict[str, Any], passphrase: str | None = None) -> Path:
     """Schrijf een versleutelde kopie die veilig publiek mag staan.
 
-    De wachtwoordzin komt uit publish.key naast dit script. Dat bestand hoort
-    NOOIT mee de repository in — er staat een .gitignore voor klaar.
+    De wachtwoordzin komt in deze volgorde: meegegeven door de aanroeper (zo
+    doet de bouw bij GitHub het, met de zin uit een secret), anders uit
+    publish.key naast dit script, anders uit DASHBOARD_PW, anders wordt hij
+    gevraagd. publish.key hoort NOOIT mee de repository in — er staat een
+    .gitignore voor klaar.
+
+    Wordt de zin meegegeven, dan schrijven we hem niet weg. Op een bouwmachine
+    van iemand anders hoort je wachtwoordzin niet op schijf te belanden.
     """
     import getpass
 
-    if KEYFILE.exists():
+    meegegeven = bool((passphrase or "").strip())
+    pw = (passphrase or "").strip()
+    if not pw and KEYFILE.exists():
         pw = KEYFILE.read_text(encoding="utf-8").strip()
-    else:
+    if not pw:
         pw = os.environ.get("DASHBOARD_PW", "").strip()
     if not pw:
         pw = getpass.getpass("Wachtwoordzin voor de gepubliceerde pagina: ").strip()
-        if len(pw) < 12:
-            sys.exit("Te kort. Neem een zin van minstens vier woorden — de versleutelde "
-                     "pagina staat publiek, dus je wachtwoord is de enige bescherming.")
-        KEYFILE.write_text(pw + "\n", encoding="utf-8")
-        KEYFILE.chmod(0o600)
-        print(f"  wachtwoordzin opgeslagen in {KEYFILE.name} (alleen voor jou leesbaar)")
+        if len(pw) >= 12:
+            KEYFILE.write_text(pw + "\n", encoding="utf-8")
+            KEYFILE.chmod(0o600)
+            print(f"  wachtwoordzin opgeslagen in {KEYFILE.name} (alleen voor jou leesbaar)")
 
     if len(pw) < 12:
-        sys.exit(f"De wachtwoordzin in {KEYFILE.name} is korter dan 12 tekens. "
-                 f"Te zwak voor een publiek bestand; maak 'm langer.")
+        sys.exit("De wachtwoordzin is korter dan 12 tekens. Te zwak voor een pagina die "
+                 "publiek staat; neem een zin van vier woorden.")
 
     PUBLISH_DIR.mkdir(parents=True, exist_ok=True)
-    render(payload, passphrase=pw, out=PUBLISH_DIR / "index.html")
+    doel = PUBLISH_DIR / "index.html"
+    render(payload, passphrase=pw, out=doel)
     (PUBLISH_DIR / ".nojekyll").write_text("", encoding="utf-8")
-    size = (PUBLISH_DIR / "index.html").stat().st_size / 1024
-    print(f"✓ {PUBLISH_DIR / 'index.html'}  ({size:.0f} kB, versleuteld)")
+    print(f"✓ {doel}  ({doel.stat().st_size / 1024:.0f} kB, versleuteld)"
+          + ("  [zin uit een secret, niet opgeslagen]" if meegegeven else ""))
+    return doel
 
 
 # ==========================================================================
