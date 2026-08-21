@@ -190,6 +190,13 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
   .tabbar button { min-height: 50px; justify-content: center; }
   .tabbar button[aria-selected="true"] svg { stroke-width: 2.1; }
   body { padding-bottom: 84px; }
+  /* Zes bestemmingen op een telefoon is krap. Het raakvlak blijft 50 px hoog en
+     minstens 44 px breed (390 / 6 = 65); alleen het label krimpt, en op de
+     smalste toestellen mag het afbreken in plaats van de rij op te rekken. */
+  .tabbar button { font-size: 9.5px; letter-spacing: 0; padding: var(--sp2) 1px; }
+  .tabbar button svg { width: 20px; height: 20px; }
+  .tabbar button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
 }
 @media (min-width: 860px) {
   .tabbar {
@@ -644,6 +651,55 @@ tbody tr:last-child td { border-bottom: 0; }
   .gvk .w { font-size: 9px; }
 }
 
+/* ---- coach ----------------------------------------------------------- */
+.coachwrap { display: flex; flex-direction: column; gap: var(--sp4); }
+.coachlog { display: flex; flex-direction: column; gap: var(--sp4); min-height: 40vh; }
+.bericht { display: flex; gap: var(--sp3); align-items: flex-start; }
+.bericht .wie { flex: none; width: 26px; height: 26px; border-radius: 999px; display: grid;
+  place-items: center; font-size: 10.5px; font-weight: 650; letter-spacing: .04em;
+  background: var(--bg3); color: var(--muted); margin-top: 1px; }
+.bericht.jij .wie { background: var(--accent); color: var(--bg0); }
+.bericht .tekst { font-size: 14.5px; line-height: 1.65; color: var(--ink); min-width: 0; flex: 1; }
+.bericht .tekst p { margin: 0 0 10px; }
+.bericht .tekst p:last-child { margin-bottom: 0; }
+.bericht .tekst ul, .bericht .tekst ol { margin: 0 0 10px; padding-left: 20px; }
+.bericht .tekst li { margin-bottom: 4px; }
+.bericht .tekst code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88em; background: var(--bg2); padding: 1px 5px; border-radius: 5px; }
+.bericht.bezig .tekst::after { content: "▌"; color: var(--muted);
+  animation: knipper 1s steps(2) infinite; }
+@keyframes knipper { 50% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .bericht.bezig .tekst::after { animation: none } }
+
+.voorstel { border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg1));
+  border-radius: var(--r-md); padding: var(--sp4); margin: 10px 0; }
+.voorstel .k { font-size: 10.5px; font-weight: 620; letter-spacing: .085em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+.voorstel .w { font-size: 14px; color: var(--ink); line-height: 1.55; margin-bottom: 12px; }
+.voorstel .knoppen { display: flex; gap: 8px; flex-wrap: wrap; }
+.voorstel button { font: inherit; font-size: 13px; font-weight: 600; min-height: 40px;
+  padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--ink); color: var(--bg0); }
+.voorstel button.stil { background: var(--bg2); color: var(--ink-2);
+  border: 1px solid var(--line); font-weight: 500; }
+.voorstel.gedaan { border-color: color-mix(in srgb, var(--good) 34%, transparent);
+  background: color-mix(in srgb, var(--good) 8%, var(--bg1)); }
+.voorstel.gedaan .k { color: var(--good); }
+
+.coachbalk { position: sticky; bottom: 0; background: var(--bg0);
+  padding-top: var(--sp3); display: flex; gap: 8px; align-items: flex-end; }
+.coachbalk textarea { flex: 1; font: inherit; font-size: 15px; line-height: 1.5;
+  padding: 12px 14px; min-height: 48px; max-height: 160px; resize: none;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--bg1);
+  color: var(--ink); }
+.coachbalk textarea:focus { outline: none; border-color: var(--accent); }
+.coachbalk button { flex: none; font: inherit; font-size: 14px; font-weight: 600;
+  min-height: 48px; padding: 0 20px; border-radius: 999px; border: 0;
+  background: var(--ink); color: var(--bg0); cursor: pointer; }
+.coachbalk button:disabled { opacity: .4; cursor: default; }
+.coachvoet { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+
 /* ---- verversen en synchroniseren ------------------------------------- */
 .syncst { display: inline-flex; align-items: center; color: var(--muted); padding: 0 2px; }
 .syncst svg { width: 15px; height: 15px; }
@@ -945,6 +1001,7 @@ footer { color: var(--muted); font-size: 12px; line-height: 1.6;
   <button data-tab="herstel" data-ic="herstel"><span>Herstel</span></button>
   <button data-tab="training" data-ic="halter"><span>Training</span></button>
   <button data-tab="plan" data-ic="plan"><span>Plan</span></button>
+  <button data-tab="coach" data-ic="praat"><span>Coach</span></button>
 </nav>
 
 <div class="wrap">
@@ -1426,6 +1483,45 @@ footer { color: var(--muted); font-size: 12px; line-height: 1.6;
   
 </section>
 
+<section class="panel" id="tab-coach">
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Je coach</h2>
+      <p class="hint">Praat met Claude over jouw cijfers. Hij krijgt je stand automatisch mee:
+        gereedheid, belasting, slaap, je week en je krachtlogboek.</p></div>
+      <span class="spacer"></span>
+      <button class="info" data-how="howCoach" aria-expanded="false"
+              title="Wat gaat er precies heen, en wat kost het?">i</button>
+    </div>
+    <div class="how" id="howCoach">
+      <strong>Wat er verstuurd wordt.</strong> Een samenvatting van je stand — geen namen,
+      geen e-mailadres, geen tokens. Je hele historie gaat niet mee; dat zou elke vraag duur
+      maken zonder dat het beter wordt.<br><br>
+      <strong>Waar je sleutel staat.</strong> Alleen in de opslag van deze browser, op dit
+      apparaat. Hij gaat <em>niet</em> mee in de gepubliceerde pagina en wordt
+      <em>niet</em> gesynchroniseerd naar je andere apparaten — dat moet je daar dus een
+      keer apart invullen. Reden: een sleutel die meegaat met de pagina zou voor iedereen
+      met je wachtwoordzin te gebruiken zijn, op jouw rekening.<br><br>
+      <strong>Wat het kost.</strong> Je betaalt per bericht aan Anthropic, niet aan mij.
+      Een vraag met je stand erbij is een paar duizend tokens; onderaan zie je na elk
+      antwoord hoeveel het er waren. Zet in je Anthropic-account een uitgavelimiet als je
+      dat zeker wilt weten.<br><br>
+      <strong>De browser mag dit.</strong> De API van Anthropic staat verzoeken vanaf een
+      webpagina toe met een aparte kopregel. Dat is uitdrukkelijk bedoeld voor het geval
+      waarin je je eigen sleutel gebruikt — precies dit.
+    </div>
+    <div id="coachSetup"></div>
+    <div class="coachwrap" id="coachWrap" style="display:none">
+      <div class="coachlog" id="coachLog"></div>
+      <div class="coachbalk">
+        <textarea id="coachIn" rows="1" placeholder="Kan ik morgen zwaar squatten?"></textarea>
+        <button id="coachStuur">Vraag</button>
+      </div>
+      <div class="coachvoet" id="coachVoet"></div>
+    </div>
+  </div>
+</section>
+
 <section class="panel" id="tab-instellingen">
   <div class="card">
     <h2>Doelen</h2>
@@ -1678,6 +1774,7 @@ const ICON = {
   bed:       '<path d="M3 19v-9"/><path d="M3 13.5h18V19"/><path d="M7 10.2h4.4a2 2 0 0 1 2 2v1.3"/>',
   tandwiel:  '<circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.4a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3.6a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5V3.6a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>',
   halter:    '<path d="M2.5 9.5v5M5.5 7v10M18.5 7v10M21.5 9.5v5M5.5 12h13"/>',
+  praat:     '<path d="M20.5 12.2a7.7 7.7 0 0 1-8.3 7.7 8.6 8.6 0 0 1-2.6-.4L4.5 21l1.4-4.2a7.6 7.6 0 0 1-1.4-4.6 7.7 7.7 0 0 1 8-7.7 7.7 7.7 0 0 1 8 7.7z"/>',
   wolk:      '<path d="M6.8 19.5h10.4a4.2 4.2 0 0 0 .5-8.4 6 6 0 0 0-11.5-1.4 3.9 3.9 0 0 0 .6 9.8z"/>',
   ververs:   '<path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 4v5h-5"/>',
   sprong:    '<path d="M12 3.5v6"/><path d="m8 7 4-3.5L16 7"/><path d="M4 20.5h16"/><path d="M7 20.5v-4.2a5 5 0 0 1 10 0v4.2"/>',
@@ -5106,8 +5203,9 @@ document.getElementById("tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-tab]"); if (!b) return;
   document.querySelectorAll("#tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + b.dataset.tab));
-  ["btnUitleg", "btnInstel"].forEach(b =>
-    document.getElementById(b).setAttribute("aria-pressed", "false"));
+  ["btnUitleg", "btnInstel"].forEach(k =>
+    document.getElementById(k).setAttribute("aria-pressed", "false"));
+  if (b.dataset.tab === "coach") renderCoachSetup();
   window.scrollTo({top: 0, behavior: "instant"});
 });
 
@@ -5356,6 +5454,418 @@ async function verversVolgen() {
 }
 
 document.getElementById("btnVervers").addEventListener("click", verversStart);
+
+/* =======================================================================
+   Coach
+   -----------------------------------------------------------------------
+   Waarom dit hier zit en niet in de Claude-app: het enige dat deze chat
+   toevoegt is dat hij je cijfers al kent. Zonder die context kun je beter
+   de gewone app gebruiken -- die is beter in gesprek en kost je niets extra.
+
+   Waarom de sleutel alleen in deze browser staat: de gepubliceerde pagina
+   is voor iedereen te downloaden. Zou de sleutel in de databundel zitten,
+   dan zou iedereen met je wachtwoordzin op jouw rekening kunnen praten.
+   Nu staat hij per apparaat in localStorage, gaat hij niet mee in de
+   synchronisatie en verlaat hij deze browser alleen richting Anthropic.
+
+   Dat de browser dit uberhaupt mag, is niet vanzelfsprekend: Anthropic
+   staat verzoeken vanaf een webpagina alleen toe met een aparte kopregel,
+   die ze bewust "dangerous" noemen -- juist omdat sleutels in paginas
+   horen te lekken. Het geval waarvoor hij wel bedoeld is, is dit: je eigen
+   sleutel, op je eigen apparaat.
+   ======================================================================= */
+const COACH_KEY = "sportdashboard.coach.v1";      // staat bewust NIET in SYNC_VAKKEN
+const COACH_API = "https://api.anthropic.com/v1";
+const COACH_VERSIE = "2023-06-01";
+
+const coachLees = () => bewaardLees(COACH_KEY, {});
+const coachZet = o => bewaardSchrijf(COACH_KEY, o);   // niet via blokZet: nooit synchroniseren
+
+let COACH_GESPREK = [];
+let COACH_BEZIG = null;      // AbortController zolang er een antwoord loopt
+
+function coachKop(sleutel) {
+  return {
+    "x-api-key": sleutel,
+    "anthropic-version": COACH_VERSIE,
+    "anthropic-dangerous-direct-browser-access": "true",
+    "content-type": "application/json",
+  };
+}
+
+/* ---- wat de coach van je weet ----------------------------------------
+   Bewust een samenvatting en niet de hele bundel: die is honderden
+   kilobytes en zou elke vraag duur maken zonder dat het antwoord beter
+   wordt. Wat hier in zit is precies waar trainingsvragen over gaan.
+   --------------------------------------------------------------------- */
+function coachContext() {
+  const vandaag = (DATA.planbasis || {}).vandaag || DATA.days[DATA.days.length - 1];
+  const g = gereedheidNu();
+  const f = FITHEID && FITHEID.reeks ? FITHEID.reeks[FITHEID.reeks.length - 1] : null;
+  const laatste = (DATA.daily || []).slice(-14).map(d => ({
+    datum: d.date,
+    slaap: d.sleep_h ?? null, hrv: d.hrv ?? null, rust_hartslag: d.rhr ?? null,
+    belasting: Math.round((((FITHEID || {}).loads || {})[d.date]) || 0) || null,
+  }));
+  const sessies = (DATA.activities || []).slice(-12).map(a => ({
+    datum: a.date, sport: a.sport, naam: a.name,
+    minuten: Math.round((a.duration_s || 0) / 60),
+    km: a.distance_m ? Math.round(a.distance_m / 100) / 10 : null,
+    belasting: Math.round(a.load || 0), zwaarte: a.grade,
+  }));
+  const week = planDagen(10).map(d => ({
+    datum: d.date, dag: d.weekday, wat: d.label, sport: d.sport,
+    geschatte_belasting: Math.round(d.load || 0),
+    verwachte_vorm: Math.round(d.tsb),
+    wedstrijd: !!d.doel, zelf_ingepland: !!d.eigen,
+  }));
+  const checks = Object.entries(checkLees())
+    .sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 10)
+    .map(([datum, c]) => ({datum, gevoel: c.gevoel ?? null,
+      alcohol_glazen: c.alcohol ?? null,
+      sessies: (c.sessies || []).map(x => `${x.sport} ${x.minuten}min RPE${x.rpe}`)}));
+  const kracht = {};
+  logLees().forEach(r => {
+    const b = kracht[r.oefening];
+    if (!b || r.datum > b.datum) kracht[r.oefening] = {datum: r.datum, kg: r.kg, reps: r.reps, sets: r.sets};
+  });
+  const I = instelLees();
+
+  return {
+    vandaag,
+    max_hartslag: DATA.max_hr,
+    gereedheid: g.score == null ? null : {score: g.score, opbouw: g.delen, compleet: g.compleet},
+    vorm: f ? {fitheid: Math.round(f.ctl), vermoeidheid: Math.round(f.atl), vorm_tsb: Math.round(f.tsb)} : null,
+    laatste_14_dagen: laatste,
+    laatste_sessies: sessies,
+    komende_dagen: week,
+    eigen_checks: checks,
+    laatste_krachtwaarden: kracht,
+    doelen: {vo2max: I.doelVo2 ?? null, bankdrukken: I.doelBench ?? null,
+             squat: I.doelSquat ?? null, deadlift: I.doelDead ?? null,
+             gewicht: I.gewicht ?? null, fase: I.fase === "off" ? "buiten het seizoen" : "in het seizoen"},
+    dekking: DATA.coverage || {},
+    alcohol_effect_per_glas: {rust_hartslag_bpm: ALC_RHR_PER_GLAS, hrv_ms: -ALC_HRV_PER_GLAS,
+                              bron: "Grosicki e.a., PLOS Digital Health 2026"},
+  };
+}
+
+const COACH_SYSTEEM = `Je bent de trainingscoach van een ervaren handballer. Hij traint vijf
+avonden per week handbal en gaat drie tot vier keer per week naar de sportschool; buiten het
+seizoen loopt hij veel hard.
+
+WAAR JE OP LEUNT
+Jeff Nippard, Andrew Huberman, Steve Cook, Jake Hutton en Bryan Johnson, plus peer-reviewed
+onderzoek. Blijf kritisch op Nippard waar nieuwere studies iets anders laten zien. Oefeningen
+mogen leunen op Fitness Culture (Cook, Hutton) en op science-based werk.
+
+HOE JE ANTWOORDT
+- Nederlands, kort, concreet. Geen opsomming van alles wat je weet.
+- Noem de bron bij een claim die ertoe doet. Weet je iets niet zeker, zeg dat.
+- Verzin nooit een getal. Gebruik wat in de data hieronder staat; ontbreekt het, zeg dat het
+  ontbreekt in plaats van het te schatten.
+- Reken zichtbaar als je rekent.
+- Zijn de metingen dun (kijk naar "dekking"), zeg dan waar je conclusie op steunt.
+
+WAT DE CIJFERS ZIJN
+Fitheid (CTL), vermoeidheid (ATL) en vorm (TSB) zijn modelgetallen uit het
+impuls-responsmodel, geen Garmin-cijfers. Gereedheid is een eigen samenstelling: gevoel 40%,
+herstel 35%, belasting 25%. Behandel ze als richting over tijd, niet als absolute waarheid.
+
+VOORSTELLEN
+Wil je iets in zijn dashboard zetten, zet dan aan het eind van je antwoord een blok in dit
+formaat. Hij ziet dan een knop en beslist zelf. Verzin geen voorstel als hij er niet om vraagt.
+
+\`\`\`voorstel
+{"soort":"plan","datum":"JJJJ-MM-DD","kind":"rust","note":"korte reden"}
+\`\`\`
+
+Geldige vormen:
+- {"soort":"plan","datum":"...","kind":"rust|training|wedstrijd|extra|sociaal","sport":"Handbal|Kracht|Hardlopen|Fietsen|Overig","min":90,"glazen":4,"note":"..."}
+  (sport en min alleen bij training/wedstrijd/extra; glazen alleen bij sociaal)
+- {"soort":"doel","veld":"doelBench|doelSquat|doelDead|doelVo2","waarde":100}
+
+Eén blok per voorstel, meerdere blokken mag.`;
+
+/* ---- het scherm ------------------------------------------------------ */
+
+function renderCoachSetup() {
+  const host = document.getElementById("coachSetup");
+  const wrap = document.getElementById("coachWrap");
+  if (!host) return;
+  const c = coachLees();
+  if (c.sleutel) {
+    host.innerHTML = `
+      <div class="planmelding">Model <strong>${veiligeTekst(c.model || "nog niet gekozen")}</strong>.
+        Je sleutel staat in deze browser en gaat niet mee naar je andere apparaten.</div>
+      <div class="planbar" style="margin-top:12px">
+        <button class="ghost" id="coachWissel">Model wisselen</button>
+        <button class="ghost" id="coachWis">Gesprek wissen</button>
+        <button class="ghost" id="coachUit">Sleutel verwijderen</button>
+      </div>`;
+    wrap.style.display = "";
+    document.getElementById("coachWissel").onclick = () => coachModellen(c.sleutel);
+    document.getElementById("coachWis").onclick = () => {
+      COACH_GESPREK = []; document.getElementById("coachLog").innerHTML = "";
+      document.getElementById("coachVoet").textContent = "";
+    };
+    document.getElementById("coachUit").onclick = () => {
+      coachZet({}); COACH_GESPREK = []; renderCoachSetup();
+    };
+    return;
+  }
+  wrap.style.display = "none";
+  host.innerHTML = `
+    <div class="planmelding let">Nog geen sleutel op dit apparaat. Je hebt er een nodig van
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+      Hij blijft in deze browser en gaat niet mee met de gepubliceerde pagina.</div>
+    <div class="velden" style="margin-top:14px;grid-template-columns:minmax(220px,1fr)">
+      <div><label for="coachSleutel">API-sleutel</label>
+        <input id="coachSleutel" type="password" autocomplete="off" spellcheck="false"
+          placeholder="sk-ant-..."></div>
+    </div>
+    <div class="planbar"><button class="ghost" id="coachOk">Opslaan en model ophalen</button></div>
+    <div id="coachMelding"></div>`;
+  document.getElementById("coachOk").onclick = async () => {
+    const k = document.getElementById("coachSleutel").value.trim();
+    document.getElementById("coachSleutel").value = "";
+    if (!k) return;
+    coachZet({sleutel: k});
+    await coachModellen(k);
+  };
+}
+
+/* De modellen komen bij Anthropic vandaan in plaats van hier in de code te
+   staan. Namen veranderen, en een vastgezette naam die niet meer bestaat is
+   een storing die je pas maanden later merkt. */
+async function coachModellen(sleutel) {
+  const melding = document.getElementById("coachMelding") || document.getElementById("coachSetup");
+  try {
+    const r = await fetch(`${COACH_API}/models?limit=40`, {headers: coachKop(sleutel)});
+    if (r.status === 401) throw new Error("Deze sleutel wordt niet geaccepteerd.");
+    if (!r.ok) throw new Error(`Anthropic gaf HTTP ${r.status}.`);
+    const j = await r.json();
+    const lijst = (j.data || []).map(m => m.id).filter(Boolean);
+    if (!lijst.length) throw new Error("Geen modellen teruggekregen.");
+    const c = coachLees();
+    const nu = c.model && lijst.includes(c.model) ? c.model : lijst[0];
+    melding.innerHTML = `
+      <div class="velden" style="margin-top:14px;grid-template-columns:minmax(240px,1fr)">
+        <div><label for="coachModel">Model</label>
+          <select id="coachModel">${lijst.map(m =>
+            `<option${m === nu ? " selected" : ""}>${veiligeTekst(m)}</option>`).join("")}</select>
+          <div class="bij">Bovenaan staat het nieuwste. Twijfel je: het maakt voor deze
+            vragen weinig uit; een groter model kost meer per bericht.</div></div>
+      </div>
+      <div class="planbar"><button class="ghost" id="coachKies">Deze gebruiken</button></div>`;
+    document.getElementById("coachKies").onclick = () => {
+      coachZet({...coachLees(), model: document.getElementById("coachModel").value});
+      renderCoachSetup();
+    };
+  } catch (e) {
+    fout(melding.id ? "#" + melding.id : "#coachSetup", "Verbinden mislukte.", e.message, "");
+  }
+}
+
+/* ---- markdown, heel klein gehouden ---- */
+function coachOpmaak(tekst) {
+  const e = veiligeTekst(tekst);
+  return e
+    .replace(/```voorstel[\s\S]*?```/g, "")           // voorstellen worden apart getekend
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/^[-*] (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, "<ul>$1</ul>")
+    .split(/<br>\s*<br>/).map(b => b.startsWith("<ul>") ? b : `<p>${b}</p>`).join("");
+}
+
+/* Een voorstel komt van een taalmodel, dus het kan van alles zijn. Alles wat
+   niet klopt gooien we weg in plaats van een kaart te tonen met "undefined"
+   erin -- een knop waarvan je niet weet wat hij doet is erger dan geen knop. */
+const PLAN_SOORTEN = ["rust", "training", "wedstrijd", "extra", "sociaal"];
+const DOEL_VELDEN = ["doelBench", "doelSquat", "doelDead", "doelVo2"];
+const isDatum = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
+  && !isNaN(new Date(d + "T12:00:00").getTime());
+
+function voorstelGeldig(v) {
+  if (!v || typeof v !== "object") return false;
+  if (v.soort === "plan")
+    return isDatum(v.datum) && PLAN_SOORTEN.includes(v.kind)
+      && (v.min == null || (+v.min > 0 && +v.min <= 300))
+      && (v.glazen == null || (+v.glazen >= 0 && +v.glazen <= 30));
+  if (v.soort === "doel")
+    return DOEL_VELDEN.includes(v.veld) && Number.isFinite(+v.waarde) && +v.waarde > 0;
+  return false;
+}
+
+function coachVoorstellen(tekst) {
+  const uit = [];
+  const re = /```voorstel\s*([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(tekst)) !== null) {
+    let v;
+    try { v = JSON.parse(m[1].trim()); } catch (e) { continue; }  // half getypt
+    if (voorstelGeldig(v)) uit.push(v);
+  }
+  return uit;
+}
+
+function voorstelTekst(v) {
+  if (v.soort === "plan") {
+    const wat = v.kind === "rust" ? "rustdag"
+      : v.kind === "sociaal" ? `feestje${v.glazen ? ` (${v.glazen} glazen)` : ""}`
+      : `${v.kind === "wedstrijd" ? "wedstrijd" : v.kind}${v.sport ? " " + v.sport : ""}${v.min ? `, ${v.min} min` : ""}`;
+    return `${langeDatum(v.datum)} als <strong>${wat}</strong> inplannen${v.note ? ` — ${veiligeTekst(v.note)}` : ""}`;
+  }
+  if (v.soort === "doel") {
+    const naam = {doelBench: "bankdrukken", doelSquat: "squat", doelDead: "deadlift",
+                  doelVo2: "VO2max"}[v.veld] || v.veld;
+    return `Je doel voor <strong>${naam}</strong> op <strong>${v.waarde}</strong> zetten`;
+  }
+  return "Onbekend voorstel";
+}
+
+function voorstelUitvoeren(v) {
+  if (v.soort === "plan") {
+    const item = {kind: v.kind};
+    if (v.kind === "sociaal") { if (v.glazen != null) item.glazen = +v.glazen; }
+    else if (v.kind !== "rust") {
+      if (v.sport) item.sport = v.sport;
+      if (v.min) item.min = +v.min;
+    }
+    if (v.note) item.note = String(v.note).slice(0, 60);
+    planSchrijf({...planLees(), [v.datum]: item});
+    allesHertekenen();
+    return true;
+  }
+  if (v.soort === "doel") {
+    instelZet({...instelLees(), [v.veld]: v.waarde});
+    renderDoelen(); renderInstellingen();
+    return true;
+  }
+  return false;
+}
+
+function coachTeken() {
+  const log = document.getElementById("coachLog");
+  log.innerHTML = COACH_GESPREK.map((b, i) => {
+    const voorstellen = b.rol === "coach" ? coachVoorstellen(b.tekst) : [];
+    return `<div class="bericht ${b.rol === "jij" ? "jij" : ""} ${b.bezig ? "bezig" : ""}">
+      <span class="wie">${b.rol === "jij" ? "JIJ" : ic("praat")}</span>
+      <div class="tekst">${coachOpmaak(b.tekst)}
+        ${voorstellen.map((v, j) => `
+          <div class="voorstel" data-b="${i}" data-v="${j}">
+            <div class="k">Voorstel</div>
+            <div class="w">${voorstelTekst(v)}</div>
+            <div class="knoppen">
+              <button data-doe="${i}-${j}">Doen</button>
+              <button class="stil" data-weg="${i}-${j}">Laat maar</button>
+            </div>
+          </div>`).join("")}
+      </div></div>`;
+  }).join("");
+
+  log.querySelectorAll("[data-doe]").forEach(b => b.onclick = () => {
+    const [i, j] = b.dataset.doe.split("-").map(Number);
+    const v = coachVoorstellen(COACH_GESPREK[i].tekst)[j];
+    const kaart = b.closest(".voorstel");
+    if (voorstelUitvoeren(v)) {
+      kaart.classList.add("gedaan");
+      kaart.querySelector(".k").textContent = "Gedaan";
+      kaart.querySelector(".knoppen").remove();
+    }
+  });
+  log.querySelectorAll("[data-weg]").forEach(b => b.onclick = () =>
+    b.closest(".voorstel").remove());
+  log.scrollIntoView({block: "end", behavior: "smooth"});
+}
+
+async function coachStuur() {
+  const veld = document.getElementById("coachIn");
+  const vraag = veld.value.trim();
+  if (!vraag || COACH_BEZIG) return;
+  const c = coachLees();
+  if (!c.sleutel || !c.model) { renderCoachSetup(); return; }
+
+  veld.value = ""; veld.style.height = "auto";
+  COACH_GESPREK.push({rol: "jij", tekst: vraag});
+  COACH_GESPREK.push({rol: "coach", tekst: "", bezig: true});
+  coachTeken();
+
+  const knop = document.getElementById("coachStuur");
+  knop.disabled = true; knop.textContent = "Bezig";
+  COACH_BEZIG = new AbortController();
+  const antwoord = COACH_GESPREK[COACH_GESPREK.length - 1];
+
+  try {
+    const r = await fetch(`${COACH_API}/messages`, {
+      method: "POST", headers: coachKop(c.sleutel), signal: COACH_BEZIG.signal,
+      body: JSON.stringify({
+        model: c.model,
+        max_tokens: 1500,
+        stream: true,
+        system: COACH_SYSTEEM + "\n\nZIJN HUIDIGE STAND (JSON):\n" +
+                JSON.stringify(coachContext()),
+        messages: COACH_GESPREK.filter(b => b.tekst).map(b => ({
+          role: b.rol === "jij" ? "user" : "assistant", content: b.tekst})),
+      }),
+    });
+    if (!r.ok) {
+      let reden = `HTTP ${r.status}`;
+      try { reden = (await r.json()).error?.message || reden; } catch (e) { /* laat staan */ }
+      if (r.status === 401) reden = "Je sleutel wordt niet geaccepteerd.";
+      if (r.status === 429) reden = "Te veel verzoeken of je tegoed is op. Kijk in je Anthropic-account.";
+      throw new Error(reden);
+    }
+
+    const lezer = r.body.getReader();
+    const decoder = new TextDecoder();
+    let rest = "", gebruik = null;
+    antwoord.bezig = true;
+    while (true) {
+      const {done, value} = await lezer.read();
+      if (done) break;
+      rest += decoder.decode(value, {stream: true});
+      const regels = rest.split("\n");
+      rest = regels.pop();
+      for (const regel of regels) {
+        if (!regel.startsWith("data:")) continue;
+        let d;
+        try { d = JSON.parse(regel.slice(5).trim()); } catch (e) { continue; }
+        if (d.type === "content_block_delta" && d.delta?.text) {
+          antwoord.tekst += d.delta.text;
+          coachTeken();
+        }
+        if (d.type === "message_delta" && d.usage) gebruik = d.usage;
+        if (d.type === "message_start" && d.message?.usage) gebruik = {...d.message.usage};
+      }
+    }
+    antwoord.bezig = false;
+    coachTeken();
+    if (gebruik) {
+      document.getElementById("coachVoet").textContent =
+        `${gebruik.input_tokens ?? "?"} tokens erheen, ${gebruik.output_tokens ?? "?"} terug. ` +
+        `Je stand gaat elke vraag opnieuw mee; dat is wat het meeste kost.`;
+    }
+  } catch (e) {
+    antwoord.bezig = false;
+    antwoord.tekst = (antwoord.tekst ? antwoord.tekst + "\n\n" : "") +
+      (e.name === "AbortError" ? "_Afgebroken._" : `**Het lukte niet.** ${e.message}`);
+    coachTeken();
+  } finally {
+    COACH_BEZIG = null;
+    knop.disabled = false; knop.textContent = "Vraag";
+  }
+}
+
+document.getElementById("coachStuur").addEventListener("click", coachStuur);
+document.getElementById("coachIn").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); coachStuur(); }
+});
+document.getElementById("coachIn").addEventListener("input", e => {
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+});
 
 document.getElementById("btnInstel").addEventListener("click", () =>
   paneelWissel("tab-instellingen", "btnInstel"));
