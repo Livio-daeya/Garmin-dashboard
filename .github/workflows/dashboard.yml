@@ -43,7 +43,7 @@ jobs:
           python-version: "3.12"
 
       - name: Pakketten installeren
-        run: pip install --quiet --upgrade garminconnect cryptography pynacl
+        run: pip install --quiet --upgrade garminconnect cryptography
 
       - name: Ophalen en bouwen
         env:
