@@ -8,6 +8,8 @@ name: Dashboard bijwerken
 #   * elke 20 minuten in het avondvenster, dus rond en na je trainingen
 #   * elke ochtend, zodat je slaap en HRV van die nacht erbij komen
 #   * en zodra jij op de verversknop in het dashboard tikt (workflow_dispatch)
+#   * en zodra er nieuwe code naar GitHub gaat, zodat een wijziging meteen
+#     zichtbaar wordt zonder dat je zelf een bouw hoeft te starten
 #
 # De tijden staan in UTC; dat schrijft GitHub voor. In de zomer is dat twee uur
 # eerder dan de klok in Nederland, in de winter een uur.
@@ -19,9 +21,17 @@ on:
     # 05:10 UTC = 07:10 zomertijd, 06:10 wintertijd
     - cron: "10 5 * * *"
   workflow_dispatch:
+  # Duw je nieuwe code naar GitHub, dan bouwt hij meteen een keer. Zonder dit
+  # moest je daarna zelf op 'Run workflow' klikken. index.html staat erbuiten:
+  # dat bestand schrijft de bouw zelf, en dat hoeft niet nog een bouw te
+  # starten. (GitHub start sowieso niets van een duw met de eigen
+  # GITHUB_TOKEN, dus een lus kan hier niet ontstaan.)
+  push:
+    paths-ignore:
+      - "index.html"
 
 # Twee tegelijk zou de cache door elkaar husselen en het tokenbestand kunnen
-# verminken. Een tegelijk, en een wachtende run mag vervallen: een verse run
+# verminken. Eén tegelijk, en een wachtende run mag vervallen: een verse run
 # doet toch hetzelfde werk.
 concurrency:
   group: dashboard
