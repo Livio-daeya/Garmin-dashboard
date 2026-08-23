@@ -651,6 +651,48 @@ tbody tr:last-child td { border-bottom: 0; }
   .gvk .w { font-size: 9px; }
 }
 
+.day .add.rustknop { margin-top: 2px; }
+.day .add.rustknop:hover { color: var(--good); }
+
+/* ---- wat je vandaag deed --------------------------------------------- */
+.gedaanchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--sp5); }
+.gsessie { display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
+  padding: 7px 12px; border-radius: 999px; background: var(--bg2);
+  border: 1px solid var(--line); color: var(--ink); }
+.gsessie i.swatch { width: 8px; height: 8px; }
+.gsessie small { color: var(--muted); }
+
+.gedaanrijen { border-top: 1px solid var(--line); }
+.grij { display: grid; grid-template-columns: 132px 1fr; gap: var(--sp3) var(--sp4);
+  align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.grij:last-child { border-bottom: 0; }
+.grij .l { font-size: 10.5px; font-weight: 620; letter-spacing: .085em;
+  text-transform: uppercase; color: var(--muted); }
+.grij .v { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.45; }
+.grij .v em { font-style: normal; font-weight: 400; color: var(--muted); font-size: 13.5px; }
+.grij .v .op { color: var(--good); }
+.grij .v .neer { color: var(--serious); }
+.grij .v .let { color: var(--warning); }
+.grij .v strong { color: var(--ink); }
+.grij.leeg .v { font-weight: 400; color: var(--muted); font-size: 13.5px; }
+@media (max-width: 520px) {
+  .grij { grid-template-columns: 1fr; gap: 3px; padding: 11px 0; }
+}
+
+/* ---- wat er al op een dag staat -------------------------------------- */
+.alstaat { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--sp4); }
+.alrij { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 12.5px;
+  min-height: 40px; padding: 0 10px 0 12px; cursor: pointer; color: var(--ink-2);
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 999px; }
+.alrij.aan { border-color: var(--accent); color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg2)); }
+.alrij .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.alrij .w { font-weight: 550; }
+.alrij .x { display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 999px; color: var(--muted); font-size: 15px; line-height: 1; }
+.alrij .x:hover { background: var(--bg0); color: var(--critical); }
+.alrij.nieuw { color: var(--muted); border-style: dashed; }
+
 /* ---- coach ----------------------------------------------------------- */
 .coachwrap { display: flex; flex-direction: column; gap: var(--sp4); }
 .coachlog { display: flex; flex-direction: column; gap: var(--sp4); min-height: 40vh; }
@@ -1043,6 +1085,62 @@ footer { color: var(--muted); font-size: 12px; line-height: 1.6;
 
   <div class="tiles" id="tiles"></div>
   <div id="eenDing"></div>
+  <div class="card" id="gedaanCard" style="display:none">
+    <div class="card-head">
+      <div><h2>Wat je vandaag deed</h2>
+      <p class="hint" id="gedaanHint"></p></div>
+      <span class="spacer"></span>
+      <button class="info" data-how="howGedaan" aria-expanded="false"
+              title="Hoe zijn deze getallen berekend?">i</button>
+    </div>
+    <div id="gedaanChips" class="gedaanchips"></div>
+    <div id="gedaanRijen" class="gedaanrijen"></div>
+    <p class="cbij" id="gedaanSlot" style="margin-top:14px"></p>
+    <div class="how" id="howGedaan">
+      <strong>Vermoeidheid en fitheid</strong> zijn exact. Op een trainingsdag wordt de dag twee
+      keer doorgerekend, met en zonder de sessies van vandaag; op een rustdag staat het verschil
+      met gisteren. Een sessie van L belastingpunten tilt je vermoeidheid met ongeveer L/7 en je
+      fitheid met L/42 — dat zijn de tijdconstanten van 7 en 42 dagen uit het impuls-responsmodel.
+      Op een rustdag zakken ze met dezelfde breuk, en dáár zit de winst van rust: vermoeidheid
+      valt zes keer zo snel weg als fitheid.<br><br>
+
+      <strong>Het oordeel bij rust is een regel, geen gevoel.</strong> De grenzen komen uit
+      onderzoek:<br>
+      &bull; <strong>tot 3 dagen</strong> — niets aangetoond wat achteruitgaat. Sprongkracht is
+      24 tot 48 uur na een zware beensessie tot 9% lager en op 72 uur terug
+      (Kadlubowski e.a., 2026).<br>
+      &bull; <strong>vanaf 5 dagen</strong> — bij 17 tot 21 semi-professionele voetballers was na
+      een pauze van vijf dagen een herhaalde sprinttest 1,0 seconde trager (p&nbsp;=&nbsp;0,009),
+      het piekvermogen 55 watt lager en de maximale snelheid 0,65 km/u lager. Kracht, sprongkracht
+      en lichaamssamenstelling bleven wél gelijk (Saldanha e.a., <em>BMC Sports Sci Med Rehabil</em>
+      2026). Herhaald sprinten is voor een handballer precies de kwaliteit die telt.<br>
+      &bull; <strong>kracht houdt langer stand</strong> — één zware sessie per week hield bij
+      profvoetballers het squat-niveau vast; bij één per twee weken zakte het 10% in twaalf weken
+      (Rønnestad e.a., 2011).<br><br>
+
+      <strong>Elke dag zonder gemeten sessie telt als rust</strong>, of je hem nu had ingepland of
+      niet. Je lichaam kent dat verschil niet. Wel staat erbij hoeveel van die dagen je zelf als
+      rustdag had gezet.<br><br>
+
+      <strong>Conditie is een prikkel, geen verbetering.</strong> Er staat wat je aan minuten in
+      zone 4-5 hebt gemaakt. Hoevéél je conditie erdoor stijgt kan dit dashboard niet zeggen:
+      daarvoor zou je VO₂max gemeten moeten worden, en dat doet jouw band niet — nul metingen over
+      85 dagen. Elk getal daar zou verzonnen zijn.<br><br>
+
+      <strong>Herstel</strong> vergelijkt de eerste en laatste HRV- en rusthartslagmeting van de
+      reeks. Puur gemeten, geen duiding: is je herstel tijdens die dagen ook echt op gang gekomen,
+      of niet.<br><br>
+
+      <strong>Kracht heeft geen getal.</strong> "Deze sessie maakte je 2 kg sterker" bestaat niet.
+      Wat er staat is wat je deed vergeleken met de vorige keer dezelfde oefening, en je
+      fractionele setvolume deze week. Direct werk telt als 1, indirect als 0,5
+      (Pelland e.a., 2026).<br><br>
+
+      <strong>Alleen gemeten sessies.</strong> De belasting komt uit Garmin, niet uit je eigen RPE.
+      Train je 's avonds, dan verschijnt het oordeel zodra de volgende ophaalronde langs is
+      geweest — in het avondvenster binnen twintig minuten.
+    </div>
+  </div>
   <div class="tilelegend" id="tilelegend"></div>
 
   <div class="card">
@@ -2209,40 +2307,83 @@ function schatBelasting(sport, minuten) {
 }
 
 /* ---- wat staat er op een dag: eigen invoer, anders je vaste ritme ---- */
-function dagPlan(iso) {
-  const eigen = planLees()[iso];
-  const std = ((DATA.planbasis || {}).standaard || {})[String(isoNaarPy(iso))];
-  const basis = {date: iso, weekday: WEEKDAG_KORT[isoNaarPy(iso)]};
+/* Een dag kan meer dan één ding zijn: een oefenwedstrijd om twee uur en een
+   feestje om tien uur. Vroeger paste er maar één ding in een dag en overschreef
+   het tweede het eerste -- stilletjes, zonder waarschuwing.
 
-  if (eigen) {
-    if (eigen.kind === "rust")
-      return {...basis, kind: "rust", label: eigen.note || "rust", sport: null,
-              load: 0, bron: "zelf ingepland als rustdag", eigen: true};
-    /* Een feestje is geen training: belasting 0. Zonder deze regel zou de
-       generieke tak eronder er een sportsessie van maken en je projectie
-       vervuilen met belasting die er nooit komt. Het aantal glazen doet zijn
-       werk pas de ochtend erna, op het tabblad Herstel. */
-    if (eigen.kind === "sociaal")
-      return {...basis, kind: "sociaal",
-              label: eigen.glazen ? `Feestje (${eigen.glazen})` : "Feestje",
-              sport: null, load: 0, glazen: eigen.glazen || null, eigen: true,
-              bron: "zelf ingepland, telt niet als belasting",
-              note: eigen.note, tijd: eigen.tijd};
-    const sport = eigen.sport || (std && std.sport) || "Handbal";
-    const schat = (eigen.load !== null && eigen.load !== undefined)
-      ? {load: eigen.load, bron: "belasting zelf ingevuld"}
-      : schatBelasting(sport, eigen.min);
-    let label = eigen.kind === "wedstrijd" ? "Wedstrijd" : (eigen.label || sport);
-    if (eigen.kind === "wedstrijd" && eigen.thuis) label += ` (${eigen.thuis})`;
-    return {...basis, kind: eigen.kind, label, sport, load: schat.load, bron: schat.bron,
-            doel: eigen.kind === "wedstrijd", eigen: true,
-            note: eigen.note, tijd: eigen.tijd, focus: eigen.focus, min: eigen.min};
-  }
+   Vorm op schijf: items[datum] is een object, want de synchronisatie zet daar
+   een tijdstempel op en dat kan niet op een lijst. De lijst zit er dus in.
+   Oude opslag (één plat object per dag) wordt bij het lezen omgezet, zodat er
+   niets verloren gaat van wat je al had ingepland. */
+function planItems(iso) {
+  const rauw = planLees()[iso];
+  if (!rauw) return [];
+  if (Array.isArray(rauw.lijst)) return rauw.lijst.filter(Boolean);
+  if (rauw.kind) return [rauw];                 // van vóór deze wijziging
+  return [];
+}
+
+function planZetItems(iso, lijst) {
+  const items = {...planLees()};
+  const schoon = (lijst || []).filter(x => x && x.kind);
+  if (schoon.length) items[iso] = {lijst: schoon};
+  else delete items[iso];
+  planSchrijf(items);
+}
+
+/* Eén item omzetten naar wat het dashboard ervan moet weten. */
+function itemUit(item, iso, std) {
+  const basis = {date: iso, weekday: WEEKDAG_KORT[isoNaarPy(iso)], eigen: true,
+                 note: item.note, tijd: item.tijd};
+  if (item.kind === "rust")
+    return {...basis, kind: "rust", label: item.note || "rust", sport: null,
+            load: 0, bron: "zelf ingepland als rustdag"};
+  /* Een feestje is geen training: belasting 0. Het aantal glazen doet zijn werk
+     pas de ochtend erna, op het tabblad Herstel. */
+  if (item.kind === "sociaal")
+    return {...basis, kind: "sociaal",
+            label: item.glazen ? `Feestje (${item.glazen})` : "Feestje",
+            sport: null, load: 0, glazen: item.glazen || null,
+            bron: "zelf ingepland, telt niet als belasting"};
+  const sport = item.sport || (std && std.sport) || "Handbal";
+  const schat = (item.load !== null && item.load !== undefined)
+    ? {load: item.load, bron: "belasting zelf ingevuld"}
+    : schatBelasting(sport, item.min);
+  let label = item.kind === "wedstrijd" ? "Wedstrijd" : (item.label || sport);
+  if (item.kind === "wedstrijd" && item.thuis) label += ` (${item.thuis})`;
+  return {...basis, kind: item.kind, label, sport, load: schat.load, bron: schat.bron,
+          doel: item.kind === "wedstrijd", focus: item.focus, min: item.min};
+}
+
+/* Alles wat er op een dag staat, op tijd gesorteerd. */
+function dagDelen(iso) {
+  const std = ((DATA.planbasis || {}).standaard || {})[String(isoNaarPy(iso))];
+  const eigen = planItems(iso);
+  if (eigen.length)
+    return eigen.map(i => itemUit(i, iso, std))
+      .sort((a, b) => (a.tijd || "99:99") < (b.tijd || "99:99") ? -1 : 1);
+  const basis = {date: iso, weekday: WEEKDAG_KORT[isoNaarPy(iso)], eigen: false};
   if (std)
-    return {...basis, kind: std.doel ? "wedstrijd" : "training", label: std.label,
-            sport: std.sport, load: std.load, bron: std.bron, doel: std.doel, eigen: false};
-  return {...basis, kind: "rust", label: "rust", sport: null, load: 0,
-          bron: "vaste rustdag in je weekritme", eigen: false};
+    return [{...basis, kind: std.doel ? "wedstrijd" : "training", label: std.label,
+             sport: std.sport, load: std.load, bron: std.bron, doel: std.doel}];
+  return [{...basis, kind: "rust", label: "rust", sport: null, load: 0,
+           bron: "vaste rustdag in je weekritme"}];
+}
+
+/* De dag als geheel: belasting is de som, want twee dingen op een dag kosten
+   samen meer dan één. Het label komt van het zwaarste onderdeel -- een
+   wedstrijd hoort bovenaan te staan, niet het feestje erna. */
+const RANG_KIND = {wedstrijd: 0, training: 1, extra: 2, sociaal: 3, rust: 4};
+
+function dagPlan(iso) {
+  const delen = dagDelen(iso);
+  const hoofd = delen.slice().sort((a, b) =>
+    (RANG_KIND[a.kind] ?? 9) - (RANG_KIND[b.kind] ?? 9))[0];
+  const load = delen.reduce((t, d) => t + (d.load || 0), 0);
+  const glazen = delen.reduce((t, d) => t + (d.glazen || 0), 0) || null;
+  return {...hoofd, load, glazen, delen,
+          doel: delen.some(d => d.doel),
+          meer: delen.length > 1};
 }
 
 const WEEKDAG_KORT = ["ma", "di", "wo", "do", "vr", "za", "zo"];
@@ -2321,6 +2462,7 @@ function planAdviesJS(opties, doel) {
 /* =======================================================================
    De editor
    ======================================================================= */
+let EDIT_INDEX = null;
 let EDIT_DATUM = null, EDIT_HOST = null;
 
 function editorSluit() {
@@ -2331,22 +2473,39 @@ function editorSluit() {
   document.querySelectorAll(".day.bezig").forEach(e => e.classList.remove("bezig"));
 }
 
-function editorOpen(iso, hostId) {
+function editorOpen(iso, hostId, index) {
   EDIT_DATUM = iso; EDIT_HOST = hostId;
   ["weekEditor", "plannerEditor"].forEach(id => {
     const el = document.getElementById(id); if (el && id !== hostId) el.innerHTML = "";
   });
-  const eigen = planLees()[iso] || null;
+  const lijst = planItems(iso);
+  /* index === null betekent: iets nieuws erbij op deze dag. */
+  EDIT_INDEX = (index === undefined) ? (lijst.length ? 0 : null) : index;
+  const eigen = EDIT_INDEX === null ? null : (lijst[EDIT_INDEX] || null);
   const huidig = dagPlan(iso);
-  const kind = eigen ? eigen.kind : (huidig.doel ? "wedstrijd" : (huidig.load ? "training" : "rust"));
+  const kind = eigen ? eigen.kind
+    : (lijst.length ? "sociaal" : (huidig.doel ? "wedstrijd" : (huidig.load ? "training" : "rust")));
   const sporten = (DATA.planbasis || {}).sporten || ["Handbal"];
   const opt = (lijst, gekozen) => lijst.map(([w, t]) =>
     `<option value="${w}"${w === gekozen ? " selected" : ""}>${t}</option>`).join("");
 
   const host = document.getElementById(hostId);
+  const alStaat = lijst.length ? `
+    <div class="alstaat">
+      ${lijst.map((it, i) => {
+        const d = itemUit(it, iso, null);
+        return `<button class="alrij ${i === EDIT_INDEX ? "aan" : ""}" data-bewerk="${i}">
+          <span class="t">${it.tijd || "&mdash;"}</span>
+          <span class="w">${veiligeTekst(d.label)}</span>
+          <span class="x" data-weg="${i}" role="presentation">&times;</span>
+        </button>`;
+      }).join("")}
+      <button class="alrij nieuw ${EDIT_INDEX === null ? "aan" : ""}" data-bewerk="nieuw">+ nog iets</button>
+    </div>` : "";
   host.innerHTML = `
     <div class="editor">
       <h4>${langeDatum(iso)}</h4>
+      ${alStaat}
       <div class="velden">
         <div><label>Soort</label><select id="eKind">${opt([
           ["wedstrijd","Wedstrijd"],["training","Training"],["extra","Losse extra"],
@@ -2423,9 +2582,22 @@ function editorOpen(iso, hostId) {
   document.getElementById("eAnn").onclick = editorSluit;
   const weg = document.getElementById("eWeg");
   if (weg) weg.onclick = () => {
-    const items = {...planLees()}; delete items[iso]; planSchrijf(items);
+    planZetItems(iso, []);
     editorSluit(); planHertekenen();
   };
+
+  /* Wisselen tussen wat er al op deze dag staat, of er iets bij zetten. */
+  host.querySelectorAll("[data-bewerk]").forEach(b => b.onclick = e => {
+    if (e.target.dataset.weg !== undefined) {
+      const nu = planItems(iso);
+      nu.splice(+e.target.dataset.weg, 1);
+      planZetItems(iso, nu);
+      planHertekenen();
+      if (nu.length) editorOpen(iso, hostId, 0); else editorSluit();
+      return;
+    }
+    editorOpen(iso, hostId, b.dataset.bewerk === "nieuw" ? null : +b.dataset.bewerk);
+  });
   document.getElementById("eOk").onclick = () => {
     const k = document.getElementById("eKind").value;
     const item = {kind: k};
@@ -2443,7 +2615,10 @@ function editorOpen(iso, hostId) {
       if (item.sport === "Kracht" && val("eFocus")) item.focus = val("eFocus");
     }
     if (val("eNote")) item.note = val("eNote");
-    const items = {...planLees()}; items[iso] = item; planSchrijf(items);
+    const nu = planItems(iso);
+    if (EDIT_INDEX === null || EDIT_INDEX >= nu.length) nu.push(item);
+    else nu[EDIT_INDEX] = item;
+    planZetItems(iso, nu);
     editorSluit(); planHertekenen();
   };
 
@@ -2473,7 +2648,20 @@ function dagKaart(iso, gemeten, opties) {
     if (gemeten.sleep_h) meta.push(`${gemeten.sleep_h.toFixed(1)}u slaap`);
   } else if (toekomst || (iso === vandaag && opties.knop)) {
     const p = dagPlan(iso);
-    if (p.kind === "sociaal") {
+    if (p.delen && p.delen.length > 1) {
+      /* Meer dan één ding op een dag: elk onderdeel een eigen chip, op tijd.
+         De belasting eronder is de som. */
+      chips = p.delen.map(d => {
+        const kort = d.kind === "wedstrijd" ? "Wedstrijd"
+          : d.kind === "sociaal" ? "Feestje"
+          : d.kind === "rust" ? "Rust" : (d.sport || d.label);
+        const kleur = d.kind === "sociaal" ? "--s5" : (SPORT_VAR[d.sport] || "--muted");
+        const titel = [d.label, d.tijd, d.note].filter(Boolean).join(" · ");
+        return `<span class="chip gepland eigen" style="--chipkleur:var(${kleur});color:var(${kleur})"
+                  title="${titel.replace(/"/g, "&quot;")}">${d.tijd ? d.tijd + " " : ""}${kort}</span>`;
+      }).join("");
+      if (p.load) meta.push(`~${Math.round(p.load)} belasting`);
+    } else if (p.kind === "sociaal") {
       /* Geen belasting, wel iets om te zien staan: het verklaart de ochtend
          erna en het is geen gemiste trainingsdag. */
       chips = `<span class="chip gepland eigen" style="--chipkleur:var(--s5);color:var(--s5)"
@@ -2508,7 +2696,9 @@ function dagKaart(iso, gemeten, opties) {
     ${chips}
     ${meta.length ? `<div class="meta">${meta.join(" · ")}</div>` : ""}
     ${opties.knop ? `<button class="add" data-plan="${iso}">${
-        planLees()[iso] ? "wijzigen" : "+ plannen"}</button>` : ""}
+        planItems(iso).length ? "wijzigen" : "+ plannen"}</button>` : ""}
+    ${opties.knop && !planItems(iso).length
+        ? `<button class="add rustknop" data-rust="${iso}">rustdag</button>` : ""}
   </div>`;
 }
 
@@ -2624,7 +2814,7 @@ function planOverlay() {
 function allesHertekenen() {
   belastingHerberekenen();
   planOverlay();
-  renderCheckRegel(); renderReady(); renderAttn(); renderTiles(); renderEenDing();
+  renderCheckRegel(); renderReady(); renderAttn(); renderTiles(); renderEenDing(); renderGedaan();
   renderWeek(); renderPlanner(); renderPlan(); renderWorkout(); renderDoelen(); renderExplos();
   renderAlcohol();
 }
@@ -3201,7 +3391,11 @@ function renderPlan() {
 
   const verder = doel && rij.indexOf(doel) >= TOON ? doel : null;
   document.getElementById("planDagen").innerHTML = rij.slice(0, TOON).map(d => {
-    const extra = [d.bron, d.note, d.focus, d.tijd].filter(Boolean).join(" · ");
+    const rest = (d.delen || []).filter(x => x !== d.delen[0]);
+    const erbij = d.meer
+      ? (d.delen || []).slice(1).map(x => `${x.tijd ? x.tijd + " " : ""}${x.label}`).join(" + ")
+      : "";
+    const extra = [erbij, d.bron, d.note, d.focus, d.tijd].filter(Boolean).join(" · ");
     return `<div class="planrow ${d.doel?"doel":""} ${d.load?"":"rust"}">
       <div><div class="dag">${d.weekday} ${(+d.date.split("-")[2])}/${(+d.date.split("-")[1])}</div></div>
       <div class="wat">${d.label}${d.eigen?' <small style="display:inline;color:var(--s1)">● zelf ingepland</small>':""}
@@ -4014,9 +4208,10 @@ function glazenOp(iso) {
   const c = checkLees()[iso];
   if (c && c.alcohol != null && c.alcohol !== "")
     return {glazen: +c.alcohol, bron: "ingevuld"};
-  const pl = planLees()[iso];
-  if (pl && pl.kind === "sociaal" && pl.glazen)
-    return {glazen: +pl.glazen, bron: "gepland"};
+  const uitPlan = planItems(iso)
+    .filter(i => i.kind === "sociaal" && i.glazen)
+    .reduce((t, i) => t + (+i.glazen || 0), 0);
+  if (uitPlan) return {glazen: uitPlan, bron: "gepland"};
   return null;
 }
 
@@ -4435,6 +4630,297 @@ function checkTeken() {
     checkSluit();
     allesHertekenen();
   };
+}
+
+/* =======================================================================
+   Wat je vandaag deed
+   -----------------------------------------------------------------------
+   Vier vragen, en bij twee ervan is het eerlijke antwoord "dat kan ik niet
+   meten":
+
+   Vermoeidheid en fitheid zijn exact. De dag wordt twee keer doorgerekend --
+   met en zonder de sessies van vandaag -- en het verschil is wat je vandaag
+   hebt toegevoegd. Geen schatting: precies wat de grafiek straks laat zien.
+
+   Conditie kan hier geen verbetering tonen. Daarvoor zou VO2max gemeten
+   moeten worden en dat doet de band niet (0 van 85 dagen). Wat er staat is
+   de prikkel: minuten in zone 4-5 tegen je eigen gemiddelde. Dat is iets
+   anders dan winst, en dat zegt het blokje er ook bij.
+
+   Kracht heeft evenmin een getal. "Deze sessie maakte je 2 kg sterker"
+   bestaat niet. Wat er staat is de vergelijking met de vorige keer dezelfde
+   oefening, en je fractionele setvolume deze week.
+
+   Bewuste keuze: alleen gemeten belasting uit Garmin, niet je eigen RPE. Dus
+   na een avondtraining verschijnt dit blokje pas als de volgende ophaalronde
+   langs is geweest. In het avondvenster is dat binnen twintig minuten.
+   ======================================================================= */
+
+/* Fitheid en vermoeidheid zonder de sessies van vandaag: dezelfde reeks, maar
+   met de belasting van vandaag op nul. Het verschil met de echte reeks is de
+   bijdrage van vandaag. */
+function zonderVandaag(vandaag) {
+  const bb = DATA.belastingbasis;
+  if (!bb || !FITHEID || !FITHEID.length) return null;
+  const g = gecorrigeerdeBelasting();
+  if (!g) return null;
+  const loads = {...g.loads};
+  delete loads[vandaag];
+  const reeks = ewmaReeks(loads, bb.calc_days, bb.ctl_tc, bb.atl_tc);
+  return reeks[reeks.length - 1];
+}
+
+function vandaagGedaan() {
+  const vandaag = (DATA.planbasis || {}).vandaag || DATA.days[DATA.days.length - 1];
+  const sessies = (DATA.activities || []).filter(a => a.date === vandaag);
+  const kracht = logLees().filter(r => r.datum === vandaag);
+  return {vandaag, sessies, kracht};
+}
+
+/* Hoeveel dagen op rij zonder gemeten sessie, en hoeveel daarvan je zelf als
+   rustdag had ingepland. Elke dag zonder sessie telt: je lichaam kent het
+   verschil tussen "bewust gerust" en "training ging niet door" niet. */
+function rustReeks(vandaag, loads) {
+  let n = 0, gepland = 0;
+  for (let i = 0; i < 21; i++) {
+    const d = isoPlus(vandaag, -i);
+    if ((loads[d] || 0) > 0) break;
+    n++;
+    if (planItems(d).some(x => x.kind === "rust")) gepland++;
+  }
+  return {dagen: n, gepland};
+}
+
+/* Dagen sinds je laatste krachtsessie -- uit je logboek en uit Garmin, want
+   allebei kunnen hem kennen. */
+function dagenSindsKracht(vandaag) {
+  const data = [
+    ...logLees().map(r => r.datum),
+    ...(DATA.activities || []).filter(a => a.sport === "Kracht").map(a => a.date),
+  ].filter(d => d && d <= vandaag).sort();
+  if (!data.length) return null;
+  const laatste = data[data.length - 1];
+  return Math.round((new Date(vandaag + "T12:00:00") - new Date(laatste + "T12:00:00")) / 86400000);
+}
+
+/* Is het herstel tijdens deze rust ook echt op gang gekomen? Gemeten, geen
+   interpretatie: eerste tegen laatste meting van de reeks. */
+function herstelVerloop(vandaag, dagen) {
+  const van = isoPlus(vandaag, -(Math.max(dagen, 1)));
+  const rij = (DATA.daily || []).filter(d => d.date >= van && d.date <= vandaag);
+  const uit = [];
+  /* Drempels zodat ruis geen oordeel wordt: onder deze verschillen zeggen we
+     "vlak" in plaats van "beter" of "slechter". */
+  [["hrv", "HRV", " ms", true, 3], ["rhr", "rusthartslag", "", false, 2]].forEach(
+      ([veld, naam, eh, hogerBeter, drempel]) => {
+    const m = rij.filter(d => d[veld] != null);
+    if (m.length < 2) return;
+    const a = m[0][veld], b = m[m.length - 1][veld];
+    if (Math.abs(b - a) < drempel) { uit.push({naam, tekst: `${naam} vlak op ${komma(String(b))}${eh}`, goed: null}); return; }
+    const beter = hogerBeter ? b > a : b < a;
+    uit.push({naam, goed: beter,
+      tekst: `${naam} van ${komma(String(a))} naar ${komma(String(b))}${eh}`});
+  });
+  return uit;
+}
+
+function renderGedaan() {
+  const kaart = document.getElementById("gedaanCard");
+  if (!kaart) return;
+  const {vandaag, sessies, kracht} = vandaagGedaan();
+  kaart.style.display = "";                 // altijd: ook rust is een uitkomst
+
+  /* Rust of niet bepalen we uit dezelfde belasting waarmee het model rekent.
+     Zou je het uit de activiteitenlijst halen, dan kan de kaart "rustdag"
+     zeggen terwijl de vermoeidheid stijgt -- dan klopt er iets niet en zie je
+     het niet. */
+  const gec = gecorrigeerdeBelasting();
+  const loads = (gec && gec.loads) || (DATA.belastingbasis || {}).daily_load || {};
+  const rust = (loads[vandaag] || 0) === 0;
+  const reeks = rust ? rustReeks(vandaag, loads) : {dagen: 0, gepland: 0};
+  const nu = FITHEID && FITHEID.length ? FITHEID[FITHEID.length - 1] : null;
+  const gisteren = FITHEID && FITHEID.length > 1 ? FITHEID[FITHEID.length - 2] : null;
+  const zonder = zonderVandaag(vandaag);
+
+  /* ---- kop ---- */
+  const loadVandaag = sessies.reduce((t, a) => t + (a.load || 0), 0);
+  document.querySelector("#gedaanCard h2").textContent =
+    rust ? "Wat rust vandaag deed" : "Wat je vandaag deed";
+  document.getElementById("gedaanHint").textContent = rust
+    ? `${reeks.dagen === 1 ? "Eerste dag" : reeks.dagen + "e dag op rij"} zonder gemeten sessie` +
+      (reeks.gepland ? `, waarvan ${reeks.gepland} als rustdag ingepland.` : ".")
+    : `${sessies.length === 1 ? "Eén sessie" : sessies.length + " sessies"}, samen ` +
+      `${Math.round(loadVandaag)} belastingpunten.`;
+
+  const chips = sessies.map(a => {
+    const km = a.distance_m > 300 ? `${Math.round(a.distance_m / 100) / 10} km` : null;
+    const min = Math.round((a.duration_s || 0) / 60);
+    return `<span class="gsessie">
+      <i class="swatch" style="background:var(${SPORT_VAR[a.sport] || "--muted"})"></i>
+      ${veiligeTekst(a.name || a.sport)}
+      <small>${[min ? min + " min" : null, km, a.grade].filter(Boolean).join(" · ")}</small></span>`;
+  }).join("") + (kracht.length && !sessies.some(a => a.sport === "Kracht")
+    ? `<span class="gsessie"><i class="swatch" style="background:var(--s3)"></i>
+        Krachttraining <small>uit je logboek</small></span>` : "");
+  document.getElementById("gedaanChips").innerHTML = chips;
+
+  const rijen = [];
+  const pijl = d => d > 0.05 ? `<span class="op">+${komma(d.toFixed(1))}</span>`
+    : d < -0.05 ? `<span class="neer">${komma(d.toFixed(1))}</span>` : "0";
+
+  /* ---- vermoeidheid en fitheid ---- */
+  if (rust && nu && gisteren) {
+    const dAtl = nu.atl - gisteren.atl, dCtl = nu.ctl - gisteren.ctl;
+    rijen.push({l: "Vermoeidheid", v:
+      `${pijl(dAtl)} <em>&rarr; van ${Math.round(gisteren.atl)} naar ${Math.round(nu.atl)}. ` +
+      `Dit is wat rust je oplevert.</em>`});
+    rijen.push({l: "Fitheid", v:
+      `${pijl(dCtl)} <em>&rarr; van ${Math.round(gisteren.ctl)} naar ${Math.round(nu.ctl)}. ` +
+      `${Math.abs(dCtl) < 2 ? "Verwaarloosbaar" : "Merkbaar"}.</em>`});
+  } else if (nu && zonder) {
+    const dAtl = nu.atl - zonder.atl, dCtl = nu.ctl - zonder.ctl;
+    rijen.push({l: "Vermoeidheid", v: `${pijl(dAtl)} <em>&rarr; van ${Math.round(zonder.atl)} naar ${Math.round(nu.atl)}</em>`});
+    rijen.push({l: "Fitheid", v: `${pijl(dCtl)} <em>&rarr; van ${Math.round(zonder.ctl)} naar ${Math.round(nu.ctl)}. Dit is de opbouw.</em>`});
+  } else {
+    rijen.push({leeg: true, l: "Vermoeidheid en fitheid",
+      v: "wachten op de meting uit Garmin — die komt bij de volgende ophaalronde"});
+  }
+
+  /* ---- conditie ----
+     Bij rust hangt het oordeel aan het aantal dagen. De grenzen komen uit
+     onderzoek, niet uit een gevoel: tot 72 uur is sprongkracht terug
+     (Kadlubowski e.a. 2026), en bij vijf dagen pauze was bij semi-prof
+     voetballers het herhaald sprintvermogen meetbaar slechter terwijl kracht
+     en sprongkracht behouden bleven (Saldanha e.a. 2026). Herhaald sprinten is
+     voor een handballer precies de kwaliteit die telt. */
+  if (rust) {
+    const n = reeks.dagen;
+    let v;
+    if (n <= 3) v = `<span class="op">Geen verlies</span> <em>&rarr; dit is herstel. Onder de drie dagen is er ` +
+      `niets aangetoond wat achteruitgaat.</em>`;
+    else if (n === 4) v = `<span class="let">Nog niets, maar je nadert de grens</span> <em>&rarr; bij vijf dagen ` +
+      `pauze zakte herhaald sprintvermogen meetbaar (Saldanha e.a. 2026).</em>`;
+    else v = `<span class="neer">Dit kost je nu iets</span> <em>&rarr; ${n} dagen. Bij vijf dagen pauze was een ` +
+      `herhaalde sprinttest 1,0 seconde trager en het piekvermogen 55 watt lager (Saldanha e.a. 2026). ` +
+      `Kracht en sprongkracht bleven daar wél behouden.</em>`;
+    rijen.push({l: "Conditie", v});
+  } else {
+    const hardSec = sessies.reduce((t, a) => t + (a.z4_s || 0) + (a.z5_s || 0), 0);
+    const totaalSec = sessies.reduce((t, a) =>
+      t + [1,2,3,4,5].reduce((x, z) => x + (a[`z${z}_s`] || 0), 0), 0);
+    if (!totaalSec) {
+      rijen.push({leeg: true, l: "Conditieprikkel", v: "geen hartslagzones gemeten bij deze sessie"});
+    } else {
+      const hardMin = Math.round(hardSec / 60);
+      const deel = hardSec / totaalSec;
+      const type = deel > 0.25 ? "harde sessie" : deel >= 0.08 ? "gemengd" : "rustige sessie";
+      const gem = (DATA.hard || {}).gemiddeld, week = (DATA.hard || {}).week;
+      const oordeel = hardMin >= 10
+        ? `<span class="op">prikkel geleverd</span>`
+        : `<span>onderhoud, geen prikkel</span>`;
+      rijen.push({l: "Conditieprikkel",
+        v: `${hardMin} min in zone 4-5 &middot; ${oordeel} <em>&rarr; ${type}` +
+           (gem && week != null ? ` &middot; je week staat op ${week} van gemiddeld ${gem}` : "") +
+           `. Of je conditie er echt van stijgt kan dit dashboard niet meten.</em>`});
+    }
+  }
+
+  /* ---- kracht ----
+     Rustdagen worden hier tegen de ondergrens gelegd: een zware sessie per week
+     hield bij profvoetballers het squat-niveau vast, bij een per twee weken
+     zakte het 10% in twaalf weken (Ronnestad e.a. 2011). */
+  const sindsKracht = dagenSindsKracht(vandaag);
+  if (kracht.length) {
+    const eerder = logLees().filter(r => r.datum < vandaag);
+    const regels = [];
+    kracht.forEach(w => {
+      Object.entries(w.oefeningen || {}).forEach(([sleutel, v]) => {
+        if (!v || !v.kg || !v.reps) return;
+        const naam = (OEF[sleutel] || {}).naam || sleutel;
+        const vorig = eerder
+          .filter(x => x.oefeningen && x.oefeningen[sleutel] && x.oefeningen[sleutel].kg)
+          .sort((a, b) => a.datum < b.datum ? 1 : -1)[0];
+        let hoe = "eerste keer gelogd";
+        if (vorig) {
+          const o = vorig.oefeningen[sleutel];
+          if (v.kg > o.kg) hoe = `<span class="op">+${komma((v.kg - o.kg).toFixed(1))} kg</span> t.o.v. ${kortDatum(vorig.datum)}`;
+          else if (v.kg === o.kg && v.reps > o.reps) hoe = `<span class="op">+${v.reps - o.reps} herhaling${v.reps - o.reps === 1 ? "" : "en"}</span> bij hetzelfde gewicht`;
+          else if (v.kg === o.kg && v.reps === o.reps) hoe = `gelijk aan ${kortDatum(vorig.datum)}`;
+          else hoe = `<span class="neer">lichter</span> dan ${kortDatum(vorig.datum)}`;
+        }
+        regels.push(`${veiligeTekst(naam)} ${komma(String(v.kg))}&times;${v.reps} <em>&rarr; ${hoe}</em>`);
+      });
+    });
+    const wv = (typeof weekVolume === "function") ? weekVolume() : null;
+    const band = instelLees().fase === "off" ? [10, 20] : [4, 6];
+    const volume = wv ? Object.entries(wv).filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([spier, n]) => `${spier} ${komma(n.toFixed(1))}`).join(" · ") : "";
+    rijen.push(regels.length
+      ? {l: "Kracht", v: regels.join("<br>") + (volume
+          ? `<br><em>deze week: ${volume} fractionele sets (doel ${band[0]}–${band[1]})</em>` : "")}
+      : {leeg: true, l: "Kracht", v: "wel afgevinkt, maar zonder gewicht en herhalingen"});
+  } else if (sindsKracht == null) {
+    rijen.push({leeg: true, l: "Kracht", v: "nog geen krachtsessie gelogd"});
+  } else if (sindsKracht <= 7) {
+    rijen.push({l: "Kracht", v: `<span class="op">Behouden</span> <em>&rarr; ${sindsKracht} ` +
+      `${sindsKracht === 1 ? "dag" : "dagen"} sinds je laatste sessie. Eén zware sessie per week ` +
+      `hield bij profvoetballers het squat-niveau vast (Rønnestad e.a. 2011).</em>`});
+  } else if (sindsKracht <= 14) {
+    rijen.push({l: "Kracht", v: `<span class="let">Boven de week</span> <em>&rarr; ${sindsKracht} dagen ` +
+      `sinds je laatste sessie. Eén per week was de ondergrens die het niveau vasthield.</em>`});
+  } else {
+    rijen.push({l: "Kracht", v: `<span class="neer">Dit kost je</span> <em>&rarr; ${sindsKracht} dagen ` +
+      `sinds je laatste sessie. Bij één sessie per twee weken zakte het squat-niveau 10% in twaalf ` +
+      `weken (Rønnestad e.a. 2011).</em>`});
+  }
+
+  /* ---- herstel: is het er ook echt geweest ---- */
+  const hv = herstelVerloop(vandaag, Math.max(reeks.dagen, 3));
+  if (hv.length) {
+    const goed = hv.filter(x => x.goed === true).length;
+    const slecht = hv.filter(x => x.goed === false).length;
+    const kop = goed && !slecht ? `<span class="op">Meegegroeid</span>`
+      : slecht && !goed ? `<span class="neer">Niet meegegroeid</span>`
+      : (!goed && !slecht) ? `<span>Vlak</span>`
+      : `<span>Gemengd</span>`;
+    rijen.push({l: "Herstel", v: `${kop} <em>&rarr; ${hv.map(x => x.tekst).join(" · ")}.` +
+      (slecht && !goed ? " Rust alleen is blijkbaar niet genoeg." : "") + `</em>`});
+  } else {
+    rijen.push({leeg: true, l: "Herstel", v: "te weinig metingen om iets over te zeggen"});
+  }
+
+  /* ---- de netto conclusie ---- */
+  const v = DATA.vandaag || {};
+  let slot = "";
+  if (rust && nu && gisteren) {
+    const dTsb = nu.tsb - gisteren.tsb;
+    const lang = reeks.dagen >= 5;
+    const netto = lang ? "Netto kost dit je iets"
+      : dTsb > 0 ? "Netto bijgedragen" : "Netto neutraal";
+    slot = `<strong>${netto}.</strong> Je vorm ging van ${gisteren.tsb > 0 ? "+" : ""}` +
+           `${Math.round(gisteren.tsb)} naar ${nu.tsb > 0 ? "+" : ""}${Math.round(nu.tsb)}` +
+           (lang && dTsb > 0
+             ? " — maar dat is de winst van uitrusten, niet van opbouwen. Je fitheid zakt intussen door."
+             : ".");
+  } else if (sessies.length && nu && zonder) {
+    const morgen = Math.round(nu.ctl - nu.atl);
+    const zonderMorgen = Math.round(zonder.ctl - zonder.atl);
+    slot = `<strong>Je vorm loopt een dag achter:</strong> die van vandaag ` +
+           `(${nu.tsb > 0 ? "+" : ""}${Math.round(nu.tsb)}) staat op de stand van gisteren. ` +
+           `Morgen kom je uit op ${morgen > 0 ? "+" : ""}${morgen}` +
+           (Math.abs(morgen - zonderMorgen) >= 1
+             ? ` in plaats van ${zonderMorgen > 0 ? "+" : ""}${zonderMorgen} zonder deze sessie. ` : ". ");
+  }
+  if (v.dagen_tot_doel != null && v.doel_tsb != null)
+    slot += ` Op je ${v.doel_label || "wedstrijd"} over ${v.dagen_tot_doel} ` +
+            `${v.dagen_tot_doel === 1 ? "dag" : "dagen"} kom je op ` +
+            `${v.doel_tsb > 0 ? "+" : ""}${v.doel_tsb.toFixed(0)} uit als je je planning zo laat staan.`;
+
+  document.getElementById("gedaanRijen").innerHTML = rijen.map(r =>
+    `<div class="grij ${r.leeg ? "leeg" : ""}"><div class="l">${r.l}</div><div class="v">${r.v}</div></div>`
+  ).join("");
+  document.getElementById("gedaanSlot").innerHTML = slot;
 }
 
 /* De regel bovenaan Vandaag: uitnodiging als je nog niets invulde, anders
@@ -5036,7 +5522,7 @@ function boot() {
   if (DATA.demo) document.getElementById("demoBanner").style.display = "";
   belastingHerberekenen();
   planOverlay();
-  renderCheckRegel(); renderReady(); renderAttn(); renderTiles(); renderEenDing(); coverageNote(); renderAdvice(); renderWeek(); renderSleep(); renderPredictions(); renderAlcohol();
+  renderCheckRegel(); renderReady(); renderAttn(); renderTiles(); renderEenDing(); coverageNote(); renderAdvice(); renderWeek(); renderSleep(); renderPredictions(); renderAlcohol(); renderGedaan();
   renderBelasting(); renderHerstel(); renderHardlopen(); renderActiviteiten();
   renderPlanner(); renderPlan(); renderUitleg();
   renderInstellingen(); renderDoelen(); renderWorkout(); renderExplos();
@@ -5080,6 +5566,14 @@ function boot() {
 /* ---- klikken op een dag, en de knoppen boven de planner ---- */
 function planKnoppen() {
   const klik = (hostId) => (e) => {
+    /* Eén tik voor de meest voorkomende keuze. De volle editor blijft voor
+       alles wat een sport, tijd of aantal glazen nodig heeft. */
+    const rust = e.target.closest("button[data-rust]");
+    if (rust) {
+      planZetItems(rust.dataset.rust, [{kind: "rust"}]);
+      editorSluit(); planHertekenen();
+      return;
+    }
     const knop = e.target.closest("button[data-plan]");
     const dag = e.target.closest(".day[data-datum]");
     const iso = knop ? knop.dataset.plan : (dag && dag.dataset.datum);
@@ -5581,8 +6075,11 @@ formaat. Hij ziet dan een knop en beslist zelf. Verzin geen voorstel als hij er 
 \`\`\`
 
 Geldige vormen:
-- {"soort":"plan","datum":"...","kind":"rust|training|wedstrijd|extra|sociaal","sport":"Handbal|Kracht|Hardlopen|Fietsen|Overig","min":90,"glazen":4,"note":"..."}
-  (sport en min alleen bij training/wedstrijd/extra; glazen alleen bij sociaal)
+- {"soort":"plan","datum":"...","kind":"rust|training|wedstrijd|extra|sociaal","sport":"Handbal|Kracht|Hardlopen|Fietsen|Overig","min":90,"tijd":"14:00","glazen":4,"note":"..."}
+  (sport en min alleen bij training/wedstrijd/extra; glazen alleen bij sociaal;
+   tijd mag altijd. Een dag kan meer dan één ding bevatten: een wedstrijd om
+   14:00 en een feestje om 22:00 kunnen naast elkaar. "rust" vervangt de dag,
+   de rest komt erbij.)
 - {"soort":"doel","veld":"doelBench|doelSquat|doelDead|doelVo2","waarde":100}
 
 Eén blok per voorstel, meerdere blokken mag.`;
@@ -5734,7 +6231,14 @@ function voorstelUitvoeren(v) {
       if (v.min) item.min = +v.min;
     }
     if (v.note) item.note = String(v.note).slice(0, 60);
-    planSchrijf({...planLees(), [v.datum]: item});
+    if (v.tijd && /^\d{2}:\d{2}$/.test(v.tijd)) item.tijd = v.tijd;
+    /* Erbij zetten, niet overschrijven. Stelt de coach een rustdag voor op een
+       dag waar al een wedstrijd staat, dan hoort dat op te vallen -- niet de
+       wedstrijd stilletjes te wissen. Een rustdag naast iets anders slaat
+       nergens op, dus die vervangt wel. */
+    const nu = v.kind === "rust" ? [] : planItems(v.datum);
+    nu.push(item);
+    planZetItems(v.datum, nu);
     allesHertekenen();
     return true;
   }
