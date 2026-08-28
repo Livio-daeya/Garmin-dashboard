@@ -1545,6 +1545,15 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
       </div>
       <div class="tablewrap" id="tblHrv"></div>
     </div>
+    <div class="card" id="nachtCard" style="display:none">
+      <div class="card-head">
+        <div><h2>Deze nacht van dichtbij</h2>
+        <p class="hint" id="nachtHint"></p></div>
+        <span class="spacer"></span>
+        <span class="chip m"><span class="cd"></span>Gemeten</span>
+      </div>
+      <div class="chartbox short"><canvas id="chNacht"></canvas></div>
+    </div>
     <div class="card">
       <div class="card-head">
         <div><h2>Rusthartslag</h2><p class="hint">Per dag met 7-daags gemiddelde.</p></div>
@@ -3197,6 +3206,12 @@ function renderUitleg() {
         stort de betrouwbaarheid in (Mayhew e.a., 2008). Getoond met een marge van ongeveer
         &plusmn;9%, de gemiddelde fout van Epley in een vergelijking van elf formules
         (Simonsen e.a., 2025). Bewust niet Brzycki: die had in diezelfde vergelijking 16% fout.</td></tr>
+      <tr><td>HRV door de nacht</td><td>De losse metingen zoals je apparaat ze levert, ongewijzigd
+        overgenomen (<code>hrvData</code> uit de slaaprespons, anders <code>hrvReadings</code>).
+        Het nachtgemiddelde ernaast komt uit <code>avgOvernightHrv</code> en wordt door Garmin zelf
+        berekend; hoe dat precies gebeurt is niet gedocumenteerd, dus dit dashboard doet daar geen
+        uitspraak over. Metingen boven anderhalf keer het nachtgemiddelde worden rood gemarkeerd als
+        vermoedelijke ruis. Levert je apparaat geen losse metingen, dan blijft de kaart weg.</td></tr>
       <tr><td>VO2max</td><td>Alleen wat Garmin zelf vastlegt, ongewijzigd overgenomen. Er wordt
         niets geschat. De schatting uit je shuttlerun stond hier eerder w&eacute;l; die is eruit,
         omdat de standaardschattingsfout van L&eacute;ger 5,4&nbsp;ml/kg/min is &mdash; een band van
@@ -5153,6 +5168,51 @@ function renderHerstelKop() {
     </div>`;
 }
 
+/* De nachtcurve. Per nacht toont het dashboard normaal één getal -- het
+   gemiddelde -- en dat is de juiste samenvatting. Maar het verbergt hoe de
+   nacht verliep, en daar zit informatie: een enkele piek tussen vlakke waarden
+   is meetruis, dezelfde uitslag verspreid over de nacht is iets anders.
+
+   De losse metingen zitten alleen in de payload als je apparaat ze levert.
+   Doet het dat niet, dan blijft deze kaart weg -- net als VO2max. Een lege
+   grafiek zou suggereren dat er niets te meten viel. */
+function renderNachtcurve() {
+  const kaart = document.getElementById("nachtCard");
+  if (!kaart) return;
+  const reeks = DATA.hrv_nacht;
+  if (!reeks || reeks.length < 8) { kaart.style.display = "none"; return; }
+  kaart.style.display = "";
+
+  const waarden = reeks.map(p => p[1]);
+  const gem = waarden.reduce((a, b) => a + b, 0) / waarden.length;
+  /* Een uitschieter is hier niet "hoog" maar zo ver van de rest af dat hij
+     niet meer als variatie te lezen is. Anderhalf keer het gemiddelde is een
+     ruime grens die de echte pieken pakt zonder halve nachten rood te maken. */
+  const grens = gem * 1.5;
+  const pieken = waarden.filter(v => v > grens).length;
+
+  document.getElementById("nachtHint").innerHTML =
+    `Losse metingen door de nacht, gemiddeld <b>${Math.round(gem)}</b> over
+     ${reeks.length} punten.` +
+    /* Wél zeggen dat het er een is, niet claimen wat Garmin ermee doet: het
+       nachtgemiddelde komt uit avgOvernightHrv en hoe dat is opgebouwd staat
+       nergens gedocumenteerd. */
+    (pieken ? ` ${pieken === 1 ? "Eén meting springt" : pieken + " metingen springen"}
+       er ver bovenuit — dat is vrijwel zeker meetruis en geen echte uitslag.` : "");
+
+  mk("chNacht", {type: "line", data: {labels: reeks.map(p => p[0]), datasets: [{
+      label: "HRV", data: waarden,
+      borderColor: css("--s1"), borderWidth: 2, tension: .3, fill: true,
+      backgroundColor: "color-mix(in srgb, " + css("--s1") + " 12%, transparent)",
+      pointRadius: waarden.map(v => v > grens ? 4 : 0),
+      pointBackgroundColor: css("--critical"), pointBorderColor: css("--critical")}]},
+    /* Zes tijdstippen op de as is genoeg; 96 labels zijn onleesbaar en
+       vertellen niets extra's -- de vorm van de lijn is het punt. */
+    options: {scales: {
+      x: {...xAxisCat(), ticks: {...xAxisCat().ticks, maxTicksLimit: 6}},
+      y: axis()}}});
+}
+
 function renderFases() {
   const kaart = document.getElementById("fasesCard");
   const grid = document.getElementById("fasesGrid");
@@ -6000,7 +6060,7 @@ function boot() {
   belastingHerberekenen();
   planOverlay();
   renderCheckRegel(); renderVandaag(); renderAlcohol(); renderGedaan();
-  renderBelDials(); renderLoadrijen(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderHardlopen(); renderActiviteiten();
+  renderBelDials(); renderLoadrijen(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
   renderPlanner(); renderPlan(); renderUitleg();
   renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout(); renderExplos();
   renderExplain(); renderInsights();

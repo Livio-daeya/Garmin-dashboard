@@ -182,6 +182,53 @@ def _num(value):
     return value if isinstance(value, (int, float)) else None
 
 
+def nacht_hrv_reeks(raw: dict[str, Any]) -> list[list] | None:
+    """De losse HRV-metingen van een nacht, als [["23:50", 77], ...].
+
+    Het dashboard toont per nacht normaal één getal: het gemiddelde uit
+    avgOvernightHrv. Dat is de juiste samenvatting, maar het verbergt hoe die
+    nacht verliep -- en juist daar zit informatie. Een enkele uitschieter van
+    198 tussen waarden rond de 100 is meetruis; datzelfde gemiddelde met een
+    vlakke lijn eronder is iets heel anders.
+
+    Twee bronnen, in volgorde van beschikbaarheid:
+      1. get_sleep_data -> hrvData: [{value, startGMT}, ...]
+      2. get_hrv_data -> hrvReadings: [{hrvValue, readingTimeLocal}, ...]
+
+    De tweede is bij een opstelling zonder horloge meestal leeg; de eerste
+    hoeft er ook niet te zijn. Geeft geen van beide iets, dan levert deze
+    functie None en laat het dashboard het blok weg -- net als bij VO2max.
+    Een lege grafiek tonen zou suggereren dat er niets te meten viel, terwijl
+    het apparaat het simpelweg niet levert.
+    """
+    def klok(tekst: str) -> str:
+        # "2026-08-27T23:50:00.0" of "2026-08-27 23:50:00" -> "23:50"
+        t = str(tekst or "")
+        for scheider in ("T", " "):
+            if scheider in t:
+                return t.split(scheider)[1][:5]
+        return t[:5]
+
+    bronnen = [
+        ((raw.get("sleep") or {}).get("hrvData") or [], "value", "startGMT"),
+        ((raw.get("hrv") or {}).get("hrvReadings") or [], "hrvValue", "readingTimeLocal"),
+    ]
+    for lijst, waardeveld, tijdveld in bronnen:
+        punten = []
+        for item in lijst:
+            if not isinstance(item, dict):
+                continue
+            waarde = _num(item.get(waardeveld))
+            tijd = item.get(tijdveld)
+            if waarde is None or not tijd:
+                continue
+            punten.append([klok(tijd), round(waarde, 1)])
+        # Onder de acht metingen valt er geen curve te tekenen, alleen ruis.
+        if len(punten) >= 8:
+            return punten
+    return None
+
+
 def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str, Any]]:
     """Trek uit de ruwe dagresponses de velden die het dashboard gebruikt."""
     out: dict[str, dict[str, Any]] = {}

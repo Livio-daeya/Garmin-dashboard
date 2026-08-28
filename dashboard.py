@@ -779,6 +779,12 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
                              "resp_waking", "resp_sleep",
                              "readiness", "readiness_level", "readiness_feedback")}}
              for d in reversed(days) if daily[d].get("sleep_h") is not None), None),
+        # De losse HRV-metingen van de jongste gemeten nacht. Alleen die ene
+        # nacht: 85 nachten x ~100 metingen zou de pagina met megabytes laten
+        # groeien voor een grafiek die je alleen over vannacht bekijkt.
+        "hrv_nacht": next(
+            (r for r in (A.nacht_hrv_reeks(cache.get("daily", {}).get(d) or {})
+                         for d in reversed(days)) if r), None),
         "sleep_nights": fill("sleep_h"),
         "explain": EXPLAIN,
         "sport_order": A.SPORT_ORDER,
@@ -812,7 +818,16 @@ def demo_cache(weeks: int) -> dict[str, Any]:
                 "lightSleepSeconds": int((3.5 + random.random()) * 3600),
                 "remSleepSeconds": int((1.1 + random.random() * 0.6) * 3600),
                 "awakeSleepSeconds": int(random.random() * 0.5 * 3600),
-                "sleepScores": {"overall": {"value": random.randint(62, 91)}}}},
+                "sleepScores": {"overall": {"value": random.randint(62, 91)}}},
+                # Losse HRV-metingen door de nacht, zoals get_sleep_data ze
+                # levert als het apparaat ze meestuurt. Eens in de zoveel nacht
+                # een uitschieter, want die zitten er in het echt ook in -- en
+                # de grafiek moet laten zien dat het er een is.
+                "hrvData": [
+                    {"startGMT": f"{ds}T{(23 + h // 12) % 24:02d}:{(h * 5) % 60:02d}:00",
+                     "value": round(58 + 12 * math.sin(h / 7) + random.uniform(-9, 9)
+                                    + (95 if (i % 6 == 0 and h == 24) else 0))}
+                    for h in range(0, 96)]},
             "hrv": {"hrvSummary": {"lastNightAvg": round(58 + 9 * math.sin(i / 9) + random.uniform(-5, 5)),
                                    "baseline": {"lowUpper": 52, "balancedUpper": 68},
                                    "status": "BALANCED"}},
