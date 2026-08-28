@@ -207,12 +207,6 @@
 .dial.b .dlt { font-size: var(--t-klein); margin-top: var(--sp1); }
 .dial .dlt.op { color: var(--good); } .dial .dlt.neer { color: var(--critical); }
 .dial .dlt.vlak { color: var(--muted); }
-/* Een lijntje van zeven dagen onder de ring. Eén cijfer plus een verschil met
-   gisteren zegt niets over of dit normaal is vóór jou; zeven punten wel. Geen
-   assen, geen labels -- de vorm is de hele boodschap. */
-.dial .vonk { display: block; width: 100%; max-width: 92px; height: 18px;
-  margin-top: var(--sp1); opacity: .8; }
-.dial.b .vonk { max-width: 112px; height: 22px; }
 .dial .cap { font-size: var(--t-micro); letter-spacing: .12em; color: var(--muted);
              font-weight: var(--w-nadruk); text-transform: uppercase; }
 .dial .subt { font-size: var(--t-klein); color: var(--ink-2); font-weight: var(--w-nadruk);
@@ -4596,31 +4590,6 @@ const uurMin = h => {
   return m >= 60 ? `${Math.floor(m / 60)}u${String(m % 60).padStart(2, "0")}` : `${m} min`;
 };
 
-/* Een sparkline als los SVG-pad. Chart.js zou hier een compleet grafiekobject
-   optuigen voor zeven punten, met assen die we toch uitzetten -- dat is meer
-   werk voor de browser dan het hele scherm. */
-function vonk(reeks, kleur) {
-  const w = (reeks || []).filter(v => v != null);
-  if (w.length < 4) return "";
-  const min = Math.min(...w), max = Math.max(...w), bereik = (max - min) || 1;
-  const bx = 100, by = 30;
-  const punten = w.map((v, i) => [
-    (i / (w.length - 1)) * bx,
-    by - ((v - min) / bereik) * (by - 6) - 3,
-  ]);
-  const pad = punten.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
-  const [lx, ly] = punten[punten.length - 1];
-  return `<svg class="vonk" viewBox="0 0 ${bx} ${by}" preserveAspectRatio="none" aria-hidden="true">
-    <path d="${pad}" fill="none" stroke="${kleur}" stroke-width="2.5"
-          stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="${kleur}"/></svg>`;
-}
-
-/* De laatste n dagen van een veld uit de dagreeks. */
-function laatsteReeks(veld, n) {
-  return (DATA.daily || []).map(d => d[veld]).filter(v => v != null).slice(-(n || 7));
-}
-
 function dialHtml(d) {
   const kleur = d.kleur || BANDVAR[d.band];
   /* Vier tekens passen niet op dezelfde maat als twee. De trap is met opzet
@@ -4647,7 +4616,6 @@ function dialHtml(d) {
       <div class="rw">${teken}<div class="val">${binnen}${dlt}</div></div>
       <div class="cap">${d.cap}</div>
       <div class="subt ${d.band}">${d.subt}</div>
-      ${d.vonk ? vonk(d.vonk, BANDVAR[d.band] || "var(--muted)") : ""}
     </button>`;
 }
 
@@ -4698,7 +4666,7 @@ function renderDials() {
   const slaapVorig = slaapDag ? vorigeMet("sleep_score", slaapDag.date) : null;
   const slaap = {
     cap: "Slaap", num: sl.sleep_score ?? null, deel: (sl.sleep_score || 0) / 100,
-    band: slaapBand, ga: "herstel", vonk: laatsteReeks("sleep_score", 7),
+    band: slaapBand, ga: "herstel",
     delta: deltaVan(sl.sleep_score ?? null, slaapVorig ? slaapVorig.sleep_score : null, true, 1),
     subt: sl.sleep_h ? `${uurMin(sl.sleep_h)} · ${({EXCELLENT:"uitstekend", GOOD:"goed",
             FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten"}`
@@ -4726,7 +4694,7 @@ function renderDials() {
   const bbVorig = laatste.date ? vorigeMet("bb_now", laatste.date) : null;
   const batterij = {
     cap: "Body Battery", num: bb, deel: (bb || 0) / 100, ga: "herstel",
-    vonk: laatsteReeks("bb_now", 7), delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
+    delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
     band: bb == null ? "n" : bb >= 50 ? "g" : bb >= 25 ? "a" : "r",
     subt: bb == null ? "niet gemeten"
         : (laatste.date !== ((DATA.planbasis || {}).vandaag)
@@ -5130,7 +5098,6 @@ function renderBelDials() {
     gaugeDeel: tsb == null ? 0 : Math.max(-1, Math.min(1, tsb / 30)),
     kleur: vormKleur, band: tsb == null ? "n" : tsb >= 0 ? "g" : (tsb > -25 ? "" : "r"),
     delta: deltaVan(tsb, eerder.tsb, true, 0.5),
-    vonk: reeks.slice(-7).map(x => x.tsb).filter(v => v != null),
     subt: tsb == null ? "geen model"
         : tsb >= 0 ? "uitgerust"
         : tsb > -25 ? "normale trainingsdruk" : "vermoeidheid loopt voor",
@@ -5307,12 +5274,11 @@ function renderHerstelKop() {
   const kolommen = [
     {v: rhrW, l: "Rusthartslag", st: statusTegenBand(rhrW, rhrB),
      deel: bandVulling(rhrW, rhrB, -1), band: bandKleur(rhrW, rhrB, -1),
-     vonk: laatsteReeks("rhr", 7), delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
+     delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
     {v: hrvW, l: "HRV", groot: true, st: statusTegenBand(hrvW, hrvB),
      deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
-     vonk: laatsteReeks("hrv", 7), delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
+     delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
     {v: sl.sleep_score ?? null, l: "Slaapscore", deel: (sl.sleep_score || 0) / 100,
-     vonk: laatsteReeks("sleep_score", 7),
      delta: deltaVan(sl.sleep_score ?? null, slVorig ? slVorig.sleep_score : null, true, 1),
      band: sl.sleep_score == null ? "n" : BAND(sl.sleep_score),
      st: {tekst: ({EXCELLENT:"uitstekend", GOOD:"goed", FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten",
@@ -5320,7 +5286,6 @@ function renderHerstelKop() {
   ];
   host.innerHTML = kolommen.map(k => dialHtml({
       cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot,
-      vonk: k.vonk,
       subt: k.v == null ? "geen meting" : k.st.tekst,
     })).join("");
 
