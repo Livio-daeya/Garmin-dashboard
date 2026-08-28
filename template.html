@@ -323,6 +323,58 @@
 .zn .zt { flex: 1; height: 24px; background: var(--bg2); border-radius: var(--r-sm); overflow: hidden; }
 .zn .zf { height: 100%; border-radius: var(--r-sm); }
 .zn .zv { width: 62px; font-size: var(--t-label); color: var(--ink-2); text-align: right; }
+/* ---- tegel -----------------------------------------------------------
+   Een metriek met zijn eigen kleine grafiek erin, twee naast elkaar.
+
+   Hiervoor kreeg elke metriek een eigen kaart met een titel, een alinea uitleg,
+   een canvas van 260 px, een legenda en een tabelknop -- zes stuks onder elkaar
+   maakten Herstel 4,6 schermen lang, ofwel ongeveer twee metrieken per
+   schermhoogte. In deze vorm zijn het er vier, en beantwoordt elke tegel drie
+   vragen tegelijk: wat is het nu, waar hoort het te liggen, en welke kant gaat
+   het op.
+
+   De volle grafiek is niet weg: tikken op een tegel vouwt hem eronder open,
+   met de tabel erbij. Hij wordt pas gebouwd bij het openen -- Chart.js meet de
+   ouder, en in een verborgen blok is die nul pixels breed. */
+.tegels { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp2);
+  margin: 0 0 var(--sp3); }
+.tegel { background: var(--bg1); border: 1px solid var(--hair);
+  border-radius: var(--r-lg); padding: var(--sp4); text-align: left;
+  font: inherit; color: inherit; cursor: pointer; display: flex;
+  flex-direction: column; gap: var(--sp1); min-width: 0;
+  transition: border-color var(--snel) var(--ease), background var(--snel) var(--ease); }
+.tegel:hover { border-color: var(--hair-strong); }
+/* Bij een oneven aantal zou de laatste tegel halfbreed alleen komen te staan.
+   Dan pakt hij de volle breedte -- een gat naast een tegel leest als een fout.
+   Dit gaat via een klasse en niet via :last-child: het uitklapblok is ook een
+   kind van het raster en schuift bovendien tussen de tegels door. */
+.tegel--breed { grid-column: 1 / -1; }
+.tegel[aria-expanded="true"] { border-color: var(--hair-strong); background: var(--bg2); }
+.tegel .tkop { display: flex; align-items: center; gap: var(--sp2); color: var(--tkleur, var(--muted)); }
+.tegel .tkop svg { width: 15px; height: 15px; flex: none; }
+.tegel .tlabel { font-size: var(--t-micro); font-weight: var(--w-nadruk);
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tegel .tgetal { font-size: 30px; font-weight: var(--w-cijfer); letter-spacing: -.03em;
+  line-height: 1.05; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tegel .tgetal small { font-size: var(--t-label); font-weight: var(--w-nadruk);
+  color: var(--muted); margin-left: 2px; }
+.tegel .tbij { font-size: var(--t-micro); color: var(--muted); line-height: 1.4;
+  min-height: 2.8em; }
+.tegel .tbij b { color: var(--tkleur, var(--ink-2)); font-weight: var(--w-nadruk); }
+.tegel .tvonk { display: block; width: 100%; height: 34px; margin-top: auto; }
+.tegel .tdagen { display: flex; justify-content: space-between; font-size: 9.5px;
+  color: var(--muted); letter-spacing: .04em; margin-top: 2px; }
+.tegel.leeg { cursor: default; opacity: .6; }
+
+/* De uitgeklapte grafiek zit ín het raster, over de volle breedte, en wordt
+   verplaatst naar direct onder de rij waarin je hebt getikt. In de tegel zelf
+   zou hij 160 px breed zijn en dus onleesbaar; onderaan het hele raster zou je
+   het verband met je tik kwijtraken. */
+.tegeluit { display: none; }
+.tegeluit.open { display: block; grid-column: 1 / -1;
+  animation: opkomen var(--traag) var(--ease); }
+
 /* ---- metriek ---------------------------------------------------------
    Een label met een getal eronder. Er stonden twee varianten: .stat met .k/.v
    op bg2 en .statg .stat met .l/.v op bg1 -- zelfde component, andere naam
@@ -549,6 +601,18 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 /* De kaarten binnen het raster hebben hun eigen marge afgestaan aan de gap;
    het raster zelf moet die afstand dan wel teruggeven aan wat erna komt. */
 .grid2 { margin-bottom: var(--sp3); }
+
+/* ---- twee kolommen op Vandaag --------------------------------------
+   Wat je deed en wat het opleverde horen bij elkaar. Onder elkaar staan ze
+   twee schermen uit elkaar; naast elkaar lees je ze als één antwoord. Op een
+   telefoon is daar geen ruimte voor, dus daar blijft het onder elkaar -- een
+   kolom van 180 px maakt van een sessierij een puzzel. */
+.duokolom { display: grid; grid-template-columns: 1fr; gap: var(--sp3);
+  align-items: start; margin-bottom: var(--sp3); }
+@media (min-width: 860px) {
+  .duokolom { grid-template-columns: 1fr 1fr; }
+  .duokolom > * { margin-bottom: 0; }
+}
 
 /* ---- knop ------------------------------------------------------------
    Drie soorten en niet meer: primair is de bevestigende actie, secundair is
@@ -1350,13 +1414,21 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
   <div class="dials" id="dials"></div>
   <div class="opbouw" id="opbouw"></div>
 
+  <!-- Stappen, intensieve minuten en calorieen zijn 85 van 85 dagen gevuld en
+       stonden nergens in de app. Gemeten, dagelijks, met een verloop -- precies
+       waar dit component voor is. -->
+  <div class="sectiontitle">Vandaag gemeten</div>
+  <div class="tegels" id="vandaagTegels"><div class="tegeluit" id="vandaagTegelUit"></div></div>
   <div id="slotKaart"></div>
   <div class="melding" id="verversMelding" style="display:none"></div>
   <div class="chips" id="herkomst"></div>
 
+  <div class="duokolom">
+    <div>
   <div class="sectiontitle" id="secGetraind" style="display:none">Vandaag getraind</div>
   <div id="vandaagAct"></div>
-
+    </div>
+    <div>
   <div class="card" id="gedaanCard" style="display:none">
     <div class="card-head">
       <div><h2>Wat je vandaag deed</h2>
@@ -1417,7 +1489,8 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
       geweest — in het avondvenster binnen twintig minuten.
     </div>
   </div>
-
+    </div>
+  </div>
   <div class="sectiontitle">Vooruitblik</div>
   <div class="fc" id="vooruit"></div>
   <div id="vooruitPred"></div>
@@ -1438,21 +1511,11 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     <div class="dials" id="belDials"></div>
     <div class="duiding duiding--kaart" id="belLees"></div>
     <div class="chips" id="belHerkomst"></div>
-    <div class="card"><div id="loadrijen"></div></div>
+    <!-- Fitheid en vermoeidheid stonden hier als tekstrijen met een pijl: een
+         getal en een richting, zonder vorm. Als tegel zie je ook hoe ze zijn
+         gelopen, en zit de volle grafiek er nog steeds achter. -->
+    <div class="tegels" id="belTegels"><div class="tegeluit" id="belTegelUit"></div></div>
 
-  <div class="card">
-    <div class="card-head">
-      <div><h2>Fitheid en vermoeidheid</h2>
-      <p class="hint">Staven zijn je fitheid, de lijn je vermoeidheid; de stippellijn is je eigen gemiddelde over deze periode. Alles hier komt uitsluitend uit je trainingen — slaap en herstelmetingen zitten er niet in. Fitheid is een traag gemiddelde over 42 dagen, vermoeidheid een snel gemiddelde over 7 dagen van dezelfde dagelijkse belasting.</p></div>
-      <span class="spacer"></span><button class="knop knop--secundair knop--klein" data-table="tblFitness">Tabel</button>
-    </div>
-    <div class="chartbox"><canvas id="chFitness"></canvas></div>
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--s1)"></i>Fitheid (CTL)</span>
-      <span><i class="swatch" style="background:var(--s2)"></i>Vermoeidheid (ATL)</span>
-    </div>
-    <div class="tablewrap" id="tblFitness"></div>
-  </div>
 
   <div class="card">
     <div class="card-head">
@@ -1469,21 +1532,6 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     <div class="tablewrap" id="tblTsb"></div>
   </div>
 
-  <div class="card">
-    <div class="card-head">
-      <div><h2 id="weekTitel">Weekbelasting per sport</h2>
-      <p class="hint" id="weekHint">Optelsom van de belasting per activiteit, gegroepeerd per kalenderweek.</p></div>
-      <span class="spacer"></span>
-      <div class="seg" id="weekToggle">
-        <button data-view="sport" aria-pressed="true">Per sport</button>
-        <button data-view="zone" aria-pressed="false">Per zone</button>
-      </div>
-      <button class="knop knop--secundair knop--klein" data-table="tblWeek">Tabel</button>
-    </div>
-    <div class="chartbox"><canvas id="chWeekLoad"></canvas></div>
-    <div class="legend" id="sportLegend2"></div>
-    <div class="tablewrap" id="tblWeek"></div>
-  </div>
 
   <div class="card" id="richtingCard">
     <div class="card-head">
@@ -1533,6 +1581,10 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
        anders moet je twee keer leren kijken. Hier alle drie even groot --
        geen van de drie is de hoofdzaak. -->
   <div class="dials" id="herstelTriple"></div>
+  <!-- Zes losse grafiekkaarten zijn zes tegels geworden. De volle grafiek zit
+       nog steeds achter elke tegel, maar pas als je erom vraagt. -->
+  <div class="sectiontitle">Je metingen over 28 dagen</div>
+  <div class="tegels" id="herstelTegels"><div class="tegeluit" id="herstelTegelUit"></div></div>
   <div class="card" id="herstelConc" style="display:none"></div>
   <div id="herstelBasis"></div>
 
@@ -1548,15 +1600,6 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     <div class="phasegrid" id="fasesGrid"></div>
   </div>
 
-  <div class="card" id="stressCard" style="display:none">
-    <div class="card-head">
-      <div><h2>Stress overdag</h2>
-        <p class="hint" id="stressHint"></p></div>
-      <span class="spacer"></span>
-      <span class="chip m"><span class="cd"></span>Gemeten</span>
-    </div>
-    <div class="chartbox short"><canvas id="chStress"></canvas></div>
-  </div>
 
   <div class="card" id="weekNachtCard" style="display:none">
     <div class="card-head"><div><h2>Deze week</h2>
@@ -1602,20 +1645,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
       niet een standaarddeviatie, want die reageert te sterk op één late avond.</div>
   </div>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="card-head">
-        <div><h2>HRV</h2><p class="hint">Nachtelijk gemiddelde met je 7-daags gemiddelde.</p></div>
-        <span class="spacer"></span><button class="knop knop--secundair knop--klein" data-table="tblHrv">Tabel</button>
-      </div>
-      <div class="chartbox short"><canvas id="chHrv"></canvas></div>
-      <div class="legend">
-        <span><i class="swatch" style="background:var(--s1)"></i>HRV per nacht</span>
-        <span><i class="swatch" style="background:var(--s2)"></i>7-daags gemiddelde</span>
-      </div>
-      <div class="tablewrap" id="tblHrv"></div>
-    </div>
-    <div class="card" id="nachtCard" style="display:none">
+  <div class="card" id="nachtCard" style="display:none">
       <div class="card-head">
         <div><h2>Deze nacht van dichtbij</h2>
         <p class="hint" id="nachtHint"></p></div>
@@ -1640,31 +1670,6 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
   
   
 
-  <div class="card">
-    <div class="card-head">
-      <div><h2>Slaap per fase</h2><p class="hint"><b>Met voorbehoud.</b> Horloges en banden herkennen sl&aacute;&aacute;p tegen w&aacute;&aacute;k goed (ongeveer 87%), maar de fases niet: in onafhankelijk onderzoek haalde de best presterende band een specificiteit van 40% op wakker-zijn. Lees dit als grove verhouding, niet als meting. Diep, licht, REM en wakker, in uren per nacht. Bij meer dan 28 nachten worden de laatste 28 getoond; de tabelknop geeft altijd de volledige periode.</p></div>
-      <span class="spacer"></span><button class="knop knop--secundair knop--klein" data-table="tblSleep">Tabel</button>
-    </div>
-    <div class="chartbox"><canvas id="chSleep"></canvas></div>
-    <div class="legend">
-      <span><i class="swatch" style="background:var(--sl-diep)"></i>Diep</span>
-      <span><i class="swatch" style="background:var(--sl-licht)"></i>Licht</span>
-      <span><i class="swatch" style="background:var(--sl-rem)"></i>REM</span>
-      <span><i class="swatch" style="background:var(--sl-wakker)"></i>Wakker</span>
-    </div>
-    <div class="tablewrap" id="tblSleep"></div>
-  </div>
-
-  <div class="card" id="cardVo2">
-    <div class="card-head">
-      <div><h2>VO2max</h2><p class="hint">Alleen wat Garmin zelf heeft vastgelegd — hier wordt
-        niets geschat of afgeleid. Heeft je opstelling geen VO2max gemeten, dan blijft deze kaart
-        weg in plaats van een getal te verzinnen.</p></div>
-      <span class="spacer"></span><button class="knop knop--secundair knop--klein" data-table="tblVo2">Tabel</button>
-    </div>
-    <div class="chartbox short"><canvas id="chVo2"></canvas></div>
-    <div class="tablewrap" id="tblVo2"></div>
-  </div>
 </section>
 
 
@@ -2819,7 +2824,8 @@ function planOverlay() {
 function allesHertekenen() {
   belastingHerberekenen();
   planOverlay();
-  renderVandaag(); renderCheckRegel(); renderGedaan(); renderBelDials();
+  renderVandaag(); renderCheckRegel(); renderGedaan(); renderBelDials(); renderBelTegels();
+  renderVandaagTegels();
   renderPlanner(); renderPlan(); renderWorkout(); renderDoelen(); renderExplos();
   renderAlcohol();
 }
@@ -2835,137 +2841,59 @@ function planHertekenen() {
 /* =======================================================================
    Belasting
    ======================================================================= */
+/* Belasting bouwt bij het laden alleen nog de vormgrafiek: dat is het enige
+   beeld dat rechtstreeks op de pagina staat. Fitheid, vermoeidheid en de
+   weekbelasting zitten achter hun tegel en krijgen hun eigen bouwer, zodat het
+   openen van de ene niet de andere meebouwt. */
 function renderBelasting() {
-  /* De gecorrigeerde reeks: gemeten belasting plus wat jij zelf toevoegde. */
   const f = FITHEID || DATA.fitness, labels = f.map(x => short(x.date));
-
-  /* Fitheid als staven, vermoeidheid als lijn erover. Twee reeksen staven
-     naast elkaar levert bij ruim tachtig dagen twee rijen van één pixel op --
-     dat is geen grafiek meer maar ruis. Zo blijft de massa (wat je hebt
-     opgebouwd) leesbaar en zie je de dagkoers (wat deze week doet) eroverheen.
-
-     De stippellijn is je basislijn: het gemiddelde van je fitheid over deze
-     hele periode. Zonder die lijn zegt "56" niets; ermee zie je meteen of je
-     boven of onder je eigen normaal zit. */
-  const ctlWaarden = f.map(x => x.ctl).filter(v => v != null);
-  const basisCtl = ctlWaarden.length
-    ? ctlWaarden.reduce((a, b) => a + b, 0) / ctlWaarden.length : null;
-
-  mk("chFitness", {type:"bar", data:{labels, datasets:[
-    {label:"Fitheid (CTL)", type:"bar", data:f.map(x=>x.ctl),
-     backgroundColor:css("--s1")+"66", borderColor:css("--s1"),
-     borderWidth:0, borderRadius:1, barPercentage:1, categoryPercentage:1, order:3},
-    {label:"Vermoeidheid (ATL)", type:"line", data:f.map(x=>x.atl),
-     borderColor:css("--s2"), borderWidth:2, pointRadius:0, tension:.3, fill:false, order:1},
-    ...(basisCtl == null ? [] : [{label:`Basislijn fitheid (${fmt(basisCtl,0)})`, type:"line",
-     data:f.map(()=>basisCtl), borderColor:css("--muted"), borderWidth:1.5,
-     borderDash:[5,4], pointRadius:0, fill:false, order:0}]),
-  ]}, options:{scales:{x:xAxisCat(), y:axis({beginAtZero:true})}}});
-  table(document.getElementById("tblFitness"),
-    [{label:"Datum"},{label:"Belasting",num:true},{label:"CTL",num:true},{label:"ATL",num:true},{label:"TSB",num:true}],
-    f.slice().reverse().map(x=>[x.date, fmt(x.load,0), fmt(x.ctl,1), fmt(x.atl,1), fmt(x.tsb,1)]));
-
-  /* Drie tinten in plaats van twee. Elke dag onder nul rood kleuren maakt
-     bijna de hele grafiek rood en daarmee betekenisloos; het onderscheid dat
-     ertoe doet zit tussen "normale trainingsdruk" en "te ver doorgeschoten".
-     De grens van -25 is dezelfde die de duiding onder de grafiek gebruikt. */
   const tsbKleur = v => v >= 0 ? css("--good") : (v > -25 ? css("--ord3") : css("--critical"));
-  mk("chTsb", {data:{labels, datasets:[
-    {label:"Vorm (TSB)", type:"bar", data:f.map(x=>x.tsb),
-     backgroundColor: f.map(x => tsbKleur(x.tsb)),
-     borderRadius:3, borderSkipped:false, order:2},
-    /* De nullijn is hier de basislijn: boven nul uitgerust, eronder niet.
-       Chart.js tekent geen as op nul als de reeks er niet doorheen loopt,
-       dus zetten we hem er expliciet in. */
-    {label:"Basislijn (0)", type:"line", data:f.map(()=>0),
-     borderColor:css("--muted"), borderWidth:1.5, borderDash:[5,4],
-     pointRadius:0, fill:false, order:1},
-  ]}, options:{scales:{x:xAxisCat(), y:axis()}}});
+  if (CHARTS.chTsb) { CHARTS.chTsb.destroy(); delete CHARTS.chTsb; }
+  mk("chTsb", {data: {labels, datasets: [
+    {label: "Vorm (TSB)", type: "bar", data: f.map(x => x.tsb),
+     backgroundColor: f.map(x => tsbKleur(x.tsb)), borderRadius: 3, borderSkipped: false, order: 2},
+    {label: "Basislijn (0)", type: "line", data: f.map(() => 0),
+     borderColor: css("--muted"), borderWidth: 1.5, borderDash: [5, 4],
+     pointRadius: 0, fill: false, order: 1}]},
+    options: {scales: {x: xAxisCat(), y: axis()}}});
   table(document.getElementById("tblTsb"),
-    [{label:"Datum"},{label:"TSB",num:true}],
-    f.slice().reverse().map(x=>[x.date, fmt(x.tsb,1)]));
+    [{label: "Datum"}, {label: "TSB", num: true}],
+    f.slice().reverse().map(x => [x.date, fmt(x.tsb, 1)]));
+}
 
-  const wl = DATA.weekly;
-  const ZLAB = ["Zone 1 — heel licht","Zone 2 — rustig duurwerk","Zone 3 — stevig",
-                "Zone 4 — zwaar","Zone 5 — maximaal"];
+/* ---- de grafieken achter de tegels op Belasting ---- */
+function tegelGrafiekFitheid() {
+  const f = FITHEID || DATA.fitness, labels = f.map(x => short(x.date));
+  const ctl = f.map(x => x.ctl).filter(v => v != null);
+  const basis = ctl.length ? ctl.reduce((a, b) => a + b, 0) / ctl.length : null;
+  mk("chFitness", {type: "bar", data: {labels, datasets: [
+    {label: "Fitheid (CTL)", type: "bar", data: f.map(x => x.ctl),
+     backgroundColor: css("--s1") + "66", borderColor: css("--s1"), borderWidth: 0,
+     borderRadius: 1, barPercentage: 1, categoryPercentage: 1, order: 3},
+    {label: "Vermoeidheid (ATL)", type: "line", data: f.map(x => x.atl),
+     borderColor: css("--s2"), borderWidth: 2, pointRadius: 0, tension: .3, fill: false, order: 1},
+    ...(basis == null ? [] : [{label: "Basislijn", type: "line", data: f.map(() => basis),
+     borderColor: css("--muted"), borderWidth: 1.5, borderDash: [5, 4],
+     pointRadius: 0, fill: false, order: 0}])]},
+    options: {scales: {x: xAxisCat(), y: axis({beginAtZero: true})}}});
+}
 
-  function weekData(view) {
-    if (view === "zone") {
-      return {
-        datasets: [1,2,3,4,5].map(z => ({
-          label: ZLAB[z-1],
-          data: wl.map(w => (w.zones && w.zones["z"+z]) || 0),
-          backgroundColor: css("--z"+z), borderColor: css("--surface"), borderWidth:2,
-          borderRadius:3, borderSkipped:false})),
-        as: "minuten in zone",
-        titel: "Weekbelasting per hartslagzone",
-        hint: "Hoeveel minuten je per week in elke hartslagzone doorbracht. Dit toont hoe hard je hebt gewerkt, niet waarmee.",
-        legenda: [1,2,3,4,5].map(z => [ZLAB[z-1], "--z"+z]),
-      };
-    }
-    return {
-      datasets: DATA.sport_order.map(s => ({
-        label: s, data: wl.map(w => w.load[s] || 0),
-        backgroundColor: css(SPORT_VAR[s]), borderColor: css("--surface"), borderWidth:2,
-        borderRadius:3, borderSkipped:false})),
-      as: "belasting",
-      titel: "Weekbelasting per sport",
-      hint: "Optelsom van de belasting per activiteit, gegroepeerd per kalenderweek.",
-      legenda: DATA.sport_order.map(s => [s, SPORT_VAR[s]]),
-    };
-  }
+function tegelGrafiekWeek() {
+  const wl = DATA.weekly || [];
+  mk("chWeekLoad", {type: "bar", data: {labels: wl.map(w => short(w.week)),
+    datasets: A_SPORTEN().map(sp => ({label: sp, data: wl.map(w => (w.load || {})[sp] || 0),
+      backgroundColor: css(SPORT_VAR[sp] || "--s5"), stack: "s",
+      borderRadius: 3, borderSkipped: false}))},
+    options: {scales: {x: {...xAxisCat(), stacked: true},
+      y: axis({stacked: true, beginAtZero: true})}}});
+}
 
-  function toonWeek(view) {
-    const d = weekData(view);
-    document.getElementById("weekTitel").textContent = d.titel;
-    document.getElementById("weekHint").textContent = d.hint;
-    document.getElementById("sportLegend2").innerHTML = d.legenda
-      .map(([l,v]) => `<span><i class="swatch" style="background:var(${v})"></i>${l}</span>`).join("");
-
-    const c = CHARTS.chWeekLoad;
-    if (c) {
-      c.data.datasets = d.datasets;
-      c.options.scales.y.title = {display:true, text:d.as, color:css("--muted")};
-      c.update();
-    }
-
-    // tabel meeschakelen
-    if (view === "zone") {
-      table(document.getElementById("tblWeek"),
-        [{label:"Week van"},...ZLAB.map(l=>({label:l.split(" — ")[0],num:true})),{label:"Totaal min",num:true}],
-        wl.slice().reverse().map(w => {
-          const z = w.zones || {};
-          const tot = [1,2,3,4,5].reduce((a,i)=>a+(z["z"+i]||0),0);
-          return [w.week, ...[1,2,3,4,5].map(i=>fmt(z["z"+i],0)), fmt(tot,0)];
-        }));
-    } else {
-      table(document.getElementById("tblWeek"),
-        [{label:"Week van"},...DATA.sport_order.map(s=>({label:s,num:true})),
-         {label:"Totaal",num:true},{label:"km",num:true}],
-        wl.slice().reverse().map(w=>[w.week, ...DATA.sport_order.map(s=>fmt(w.load[s],0)),
-          fmt(DATA.sport_order.reduce((a,s)=>a+(w.load[s]||0),0),0), fmt(w.km,1)]));
-    }
-  }
-
-  mk("chWeekLoad", {type:"bar", data:{labels: wl.map(w=>short(w.week)),
-    datasets: weekData("sport").datasets},
-    options:{scales:{x:Object.assign(xAxisCat(),{stacked:true}),
-      y:axis({stacked:true, beginAtZero:true,
-              title:{display:true, text:"belasting", color:css("--muted")}})},
-      interaction:{mode:"index", intersect:false}}});
-  toonWeek("sport");
-
-  document.getElementById("weekToggle").addEventListener("click", e => {
-    const b = e.target.closest("button[data-view]"); if (!b) return;
-    document.querySelectorAll("#weekToggle button").forEach(x =>
-      x.setAttribute("aria-pressed", x === b ? "true" : "false"));
-    toonWeek(b.dataset.view);
-  });
-
-  // harde minuten: zelfde logica als ACWR maar alleen op zone 4 en 5
-  const H = DATA.hard || {};
-
-  renderRichting();
+/* Welke sporten komen er in je weken voor -- lege reeksen laten we weg. */
+function A_SPORTEN() {
+  const gezien = new Set();
+  (DATA.weekly || []).forEach(w => Object.entries(w.load || {})
+    .forEach(([sp, v]) => { if (v > 0) gezien.add(sp); }));
+  return (DATA.sport_order || [...gezien]).filter(sp => gezien.has(sp));
 }
 
 /* -----------------------------------------------------------------------
@@ -3047,82 +2975,66 @@ function movavg(vals, w) {
   });
 }
 
+/* Herstel bouwt bij het laden alleen nog wat er zichtbaar op de pagina staat.
+   De vier trendgrafieken zitten achter hun tegel en worden pas gebouwd als je
+   die opent -- elk met zijn eigen functie hieronder, zodat het openen van HRV
+   niet de andere drie meebouwt. */
 function renderHerstel() {
-  const d = DATA.daily, labels = d.map(x => short(x.date));
-
-  const hrv = d.map(x=>x.hrv ?? null);
-  if (hrv.some(v=>v!==null)) {
-    mk("chHrv", {type:"line", data:{labels, datasets:[
-      {label:"HRV", data:hrv, borderColor:css("--s1"), fill:false, spanGaps:true, pointRadius:2.5},
-      {label:"7-daags gemiddelde", data:movavg(hrv,7), borderColor:css("--s2"), fill:false,
-       borderDash:[4,3], spanGaps:true}
-    ]}, options:{scales:{x:xAxisCat(), y:axis()}}});
-  } else { document.getElementById("chHrv").parentElement.innerHTML =
-      '<div class="empty">Geen HRV-data. Alleen nieuwere Garmin-toestellen meten dit \'s nachts.</div>'; }
-  table(document.getElementById("tblHrv"), [{label:"Datum"},{label:"HRV (ms)",num:true}],
-    d.slice().reverse().filter(x=>x.hrv!=null).map(x=>[x.date, fmt(x.hrv,0)]));
-
-  const rhr = d.map(x=>x.rhr ?? null);
-  if (rhr.some(v=>v!==null)) {
-    mk("chRhr", {type:"line", data:{labels, datasets:[
-      {label:"Rusthartslag", data:rhr, borderColor:css("--s1"), fill:false, spanGaps:true, pointRadius:2.5},
-      {label:"7-daags gemiddelde", data:movavg(rhr,7), borderColor:css("--s2"), fill:false,
-       borderDash:[4,3], spanGaps:true}
-    ]}, options:{scales:{x:xAxisCat(), y:axis()}}});
-  } else { document.getElementById("chRhr").parentElement.innerHTML =
-      '<div class="empty">Geen rusthartslagdata gevonden.</div>'; }
-  table(document.getElementById("tblRhr"), [{label:"Datum"},{label:"RHR (bpm)",num:true}],
-    d.slice().reverse().filter(x=>x.rhr!=null).map(x=>[x.date, fmt(x.rhr,0)]));
-
-  const phases = [["sleep_deep_h","Diep","--sl-diep"],["sleep_light_h","Licht","--sl-licht"],
-                  ["sleep_rem_h","REM","--sl-rem"],["sleep_awake_h","Wakker","--sl-wakker"]];
-  const withSleep = d.filter(x => x.sleep_h);
-  // Bij weinig nachten alles tonen; bij veel de laatste 28 (anders te dun).
-  const dS = withSleep.length <= 28 ? withSleep : d.slice(-28);
-  const labelsS = dS.map(x => short(x.date));
-  if (dS.some(x=>x.sleep_h)) {
-    mk("chSleep", {type:"bar", data:{labels: labelsS, datasets: phases.map(([k,l,c]) => ({
-      label:l, data:dS.map(x=>x[k]??0), backgroundColor:css(c),
-      borderColor:css("--surface"), borderWidth:2, borderRadius:3, borderSkipped:false}))},
-      options:{scales:{x:Object.assign(xAxisCat(),{stacked:true}),
-        y:axis({stacked:true, beginAtZero:true, title:{display:true,text:"uren",color:css("--muted")}})}}});
-  } else { document.getElementById("chSleep").parentElement.innerHTML =
-      '<div class="empty">Geen slaapdata gevonden.</div>'; }
-  table(document.getElementById("tblSleep"),
-    [{label:"Datum"},{label:"Totaal",num:true},{label:"Diep",num:true},{label:"Licht",num:true},
-     {label:"REM",num:true},{label:"Wakker",num:true},{label:"Score",num:true}],
-    d.slice().reverse().filter(x=>x.sleep_h).map(x=>[x.date, fmt(x.sleep_h,1), fmt(x.sleep_deep_h,1),
-      fmt(x.sleep_light_h,1), fmt(x.sleep_rem_h,1), fmt(x.sleep_awake_h,1), fmt(x.sleep_score,0)]));
-
-  // slaapregelmaat
   const R = DATA.regelmaat;
-  if (R && R.genoeg) {
+  if (R && R.n >= 5) {
     document.getElementById("regelCard").style.display = "";
-    const cel = (k,v,u) => `<div class="sleepcell"><div class="k">${k}</div>
-      <div class="v">${v}${u?`<small>${u}</small>`:""}</div></div>`;
+    const cel = (k, v, u) => `<div class="sleepcell"><div class="k">${k}</div>
+      <div class="v">${v}<small>${u}</small></div></div>`;
     document.getElementById("regelGrid").innerHTML =
-      cel("Meestal naar bed", R.bed_mediaan, "") +
-      cel("Spreiding bedtijd", "±" + R.bed_spreiding, "min") +
+      (R.bed_mediaan ? cel("Meestal naar bed", R.bed_mediaan, "") : "") +
+      (R.bed_spreiding != null ? cel("Spreiding bedtijd", "±" + R.bed_spreiding, "min") : "") +
       (R.op_mediaan ? cel("Meestal op", R.op_mediaan, "") : "") +
       (R.op_spreiding != null ? cel("Spreiding opstaan", "±" + R.op_spreiding, "min") : "") +
       cel("Nachten gemeten", R.n, "");
   }
+}
 
-  const vo2 = d.map(x=>x.vo2max ?? null);
-  if (vo2.some(v=>v!==null)) {
-    mk("chVo2", {type:"line", data:{labels, datasets:[{label:"VO2max", data:vo2,
-      borderColor:css("--s1"), fill:false, spanGaps:true}]},
-      options:{scales:{x:xAxisCat(), y:axis()}}});
-  } else {
-    /* Geen enkele meting: het paneel helemaal weglaten. De banner bovenaan
-       vertelt al dat VO2max op 0 van de dagen is vastgelegd; een lege kaart
-       zou dat alleen herhalen en ruimte kosten. */
-    const kaart = document.getElementById("cardVo2");
-    if (kaart) kaart.style.display = "none";
-    return;
-  }
-  table(document.getElementById("tblVo2"), [{label:"Datum"},{label:"VO2max",num:true}],
-    d.slice().reverse().filter(x=>x.vo2max!=null).map(x=>[x.date, fmt(x.vo2max,1)]));
+/* ---- de grafieken achter de tegels ---- */
+function tegelGrafiekHrv() {
+  const d = DATA.daily, labels = d.map(x => short(x.date));
+  const hrv = d.map(x => x.hrv ?? null);
+  mk("chHrv", {type: "line", data: {labels, datasets: [
+    {label: "HRV", data: hrv, borderColor: css("--s1"), fill: false, spanGaps: true, pointRadius: 2},
+    {label: "7-daags gemiddelde", data: movavg(hrv, 7), borderColor: css("--s2"),
+     fill: false, borderDash: [4, 3], spanGaps: true, pointRadius: 0}]},
+    options: {scales: {x: xAxisCat(), y: axis()}}});
+}
+
+function tegelGrafiekRhr() {
+  const d = DATA.daily, labels = d.map(x => short(x.date));
+  const rhr = d.map(x => x.rhr ?? null);
+  mk("chRhr", {type: "line", data: {labels, datasets: [
+    {label: "Rusthartslag", data: rhr, borderColor: css("--s1"), fill: false, spanGaps: true, pointRadius: 2},
+    {label: "7-daags gemiddelde", data: movavg(rhr, 7), borderColor: css("--s2"),
+     fill: false, borderDash: [4, 3], spanGaps: true, pointRadius: 0}]},
+    options: {scales: {x: xAxisCat(), y: axis()}}});
+}
+
+function tegelGrafiekSlaap() {
+  const d = DATA.daily;
+  const phases = [["sleep_deep_h", "Diep", "--sl-diep"], ["sleep_light_h", "Licht", "--sl-licht"],
+                  ["sleep_rem_h", "REM", "--sl-rem"], ["sleep_awake_h", "Wakker", "--sl-wakker"]];
+  const met = d.filter(x => x.sleep_h);
+  const dS = met.length <= 28 ? met : d.slice(-28);
+  mk("chSleep", {type: "bar", data: {labels: dS.map(x => short(x.date)),
+    datasets: phases.map(([k, l, c]) => ({label: l, data: dS.map(x => x[k] ?? 0),
+      backgroundColor: css(c), stack: "s", borderRadius: 2, borderSkipped: false}))},
+    options: {scales: {x: {...xAxisCat(), stacked: true},
+      y: axis({stacked: true, beginAtZero: true,
+        title: {display: true, text: "uren", color: css("--muted")}})}}});
+}
+
+function tegelGrafiekVo2() {
+  const d = DATA.daily, labels = d.map(x => short(x.date));
+  mk("chVo2", {type: "line", data: {labels, datasets: [{label: "VO2max",
+    data: d.map(x => x.vo2max ?? null), borderColor: css("--s1"), fill: false,
+    spanGaps: true, pointRadius: 2}]},
+    options: {scales: {x: xAxisCat(), y: axis()}}});
 }
 
 /* =======================================================================
@@ -4257,7 +4169,7 @@ function gereedheidNu() {
   if (b && tsb != null) b.deel = Math.max(0, Math.min(1, (tsb + 35) / 40));
 
   if (c && c.gevoel)
-    delen.unshift({naam: "Gevoel", gewicht: 0.40, deel: (c.gevoel - 1) / 4});
+    delen.unshift({naam: "Gevoel", gewicht: 0.20, deel: (c.gevoel - 1) / 4});
 
   if (!delen.length) return {...g, score: null};
   const tot = delen.reduce((a, d) => a + d.gewicht, 0);
@@ -4708,7 +4620,8 @@ function renderDials() {
   if (laatste.bb_charged != null) stukjes.push(`+${laatste.bb_charged} nacht`);
   const bbVorig = laatste.date ? vorigeMet("bb_now", laatste.date) : null;
   const batterij = {
-    cap: "Body Battery", num: bb, deel: (bb || 0) / 100, ga: "herstel",
+    cap: "Body Battery", num: bb, deel: (bb || 0) / 100,
+    ga: bb == null ? "herstel" : "battery-open",
     delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
     band: bb == null ? "n" : bb >= 50 ? "g" : bb >= 25 ? "a" : "r",
     subt: bb == null ? "niet gemeten"
@@ -4717,16 +4630,18 @@ function renderDials() {
   };
 
   host.innerHTML = [slaap, ready, batterij].map(dialHtml).join("");
+  const opb = document.getElementById("opbouw");
+  if (opb) { opb.classList.remove("open"); OPBOUW_WAT = null; }
   host.querySelectorAll("button[data-ga]").forEach(b => {
     if (!b.dataset.ga) return;
     /* De gereedheidsring sprong naar Belasting -- en beantwoordde daarmee niet
        de vraag die je stelt als je erop tikt: waaróm is dit 89? De opbouw zit
        al in de data; hij hoort onder de ring open te vouwen, niet op een ander
        scherm te staan. */
-    b.onclick = b.dataset.ga === "gereedheid-open"
-      ? () => opbouwWisselen(b) : () => naarTab(b.dataset.ga);
+    if (b.dataset.ga === "gereedheid-open") b.onclick = () => opbouwWisselen(b, "gereedheid");
+    else if (b.dataset.ga === "battery-open") b.onclick = () => opbouwWisselen(b, "battery");
+    else b.onclick = () => naarTab(b.dataset.ga);
   });
-  opbouwTekenen(g);
 }
 
 /* De onderdelen van gereedheid, met hun gewicht. Elke balk toont hoe goed dat
@@ -4744,14 +4659,48 @@ function opbouwTekenen(g) {
       <div class="v">${d.deel}</div>
     </div>`).join("")
     + (g.gevoelIn ? "" : `<p class="cbij">Je eigen gevoel telt nog niet mee — vul de check-in
-        bovenaan in, dan weegt dat voor 40%.</p>`) + `</div>`;
+        bovenaan in, dan weegt dat voor 20%.</p>`) + `</div>`;
 }
 
-function opbouwWisselen(knop) {
+let OPBOUW_WAT = null;
+
+function opbouwWisselen(knop, wat) {
   const host = document.getElementById("opbouw");
   if (!host) return;
-  const open = host.classList.toggle("open");
-  knop.setAttribute("aria-expanded", String(open));
+  const zelfde = OPBOUW_WAT === wat && host.classList.contains("open");
+  document.querySelectorAll("#dials button[data-ga]").forEach(b =>
+    b.setAttribute("aria-expanded", String(!zelfde && b === knop)));
+  if (zelfde) { host.classList.remove("open"); OPBOUW_WAT = null; return; }
+  OPBOUW_WAT = wat;
+  if (wat === "battery") batterijTekenen(); else opbouwTekenen(gereedheidNu());
+  host.classList.add("open");
+}
+
+/* Wat Garmin over je body battery weet, in dezelfde volgorde als hun eigen
+   scherm: hoeveel erbij kwam, hoeveel eraf ging, en waar je nu staat. Alle
+   vier de getallen komen rechtstreeks uit de dagsamenvatting -- wij rekenen
+   er niets aan. */
+function batterijTekenen() {
+  const host = document.getElementById("opbouw");
+  const dag = laatsteMet("bb_now") || {};
+  const op = dag.bb_charged, af = dag.bb_drained;
+  const rij = (label, waarde, kleur, uitleg) => `
+    <div class="opbouwrij">
+      <div class="n">${label}<small>${uitleg}</small></div>
+      <div class="spoor"><i style="width:${Math.min(100, Math.abs(waarde || 0))}%;
+        background:${kleur}"></i></div>
+      <div class="v" style="color:${kleur}">${waarde == null ? "–" : (waarde > 0 && label === "Opgeladen" ? "+" : "") + waarde}</div>
+    </div>`;
+
+  host.innerHTML = `<div class="card">
+    ${op != null ? rij("Opgeladen", op, "var(--good)", "wat je nacht en rust opleverden") : ""}
+    ${af != null ? rij("Verbruikt", af == null ? null : -af, "var(--warning)", "training, stress en activiteit") : ""}
+    ${dag.bb_wake != null ? rij("Bij het ontwaken", dag.bb_wake, "var(--ink-2)", "waar je de dag mee begon") : ""}
+    ${dag.bb_now != null ? rij("Nu", dag.bb_now, BANDVAR[dag.bb_now >= 50 ? "g" : dag.bb_now >= 25 ? "a" : "r"], "wat er op dit moment nog in zit") : ""}
+    <p class="cbij">Dit zijn Garmins eigen cijfers, ongewijzigd overgenomen. Hij leidt ze de
+      hele dag door af uit je hartslagvariabiliteit; slaap laadt op, inspanning en stress
+      ontladen.</p>
+  </div>`;
 }
 
 /* Naar een tabblad springen vanaf een tegel of wijzer. */
@@ -5189,25 +5138,213 @@ function renderBelDials() {
     `<span class="chip d"><span class="cd"></span>Vorm en fitheid: afgeleid</span>`;
 }
 
-function renderLoadrijen() {
-  const host = document.getElementById("loadrijen");
-  if (!host) return;
-  const reeks = (typeof FITHEID !== "undefined" && FITHEID && FITHEID.length)
-                ? FITHEID : (DATA.fitness || []);
-  const laatst = reeks[reeks.length - 1] || {};
-  const rijen = [
-    ["Fitheid", "Traag gemiddelde over 42 dagen van je trainingsbelasting (CTL). Loopt langzaam op en zakt langzaam weg.",
-     laatst.ctl, trendPijl(reeks, "ctl", true), ""],
-    ["Vermoeidheid", "Snel gemiddelde over 7 dagen van dezelfde belasting (ATL). Reageert op deze week.",
-     laatst.atl, trendPijl(reeks, "atl", false), ""],
+/* De vier cijfers waar dit tabblad over gaat. Fitheid en vermoeidheid openen
+   dezelfde grafiek: die toont ze samen, want hun verhouding is het punt. */
+function renderBelTegels() {
+  const host = document.getElementById("belTegels");
+  const uit = document.getElementById("belTegelUit");
+  if (!host || !uit) return;
+  const f = (typeof FITHEID !== "undefined" && FITHEID && FITHEID.length)
+            ? FITHEID : (DATA.fitness || []);
+  const laatst = f[f.length - 1] || {};
+  const wl = DATA.weekly || [];
+  const week = wl[wl.length - 1] || {};
+  const somLoad = w => Object.values((w && w.load) || {}).reduce((a, b) => a + b, 0);
+  const somUur = w => Object.values((w && w.hours) || {}).reduce((a, b) => a + b, 0);
+  const gem = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const ctlR = f.map(x => x.ctl).filter(v => v != null).slice(-28);
+  const atlR = f.map(x => x.atl).filter(v => v != null).slice(-28);
+  const dagen = ["28 dagen terug", "nu"];
+  const weken = ["12 weken terug", "nu"];
+
+  const gemCtl = gem(ctlR);
+  const fitGraf = {titel: "Fitheid en vermoeidheid", canvas: "chFitness",
+    uitleg: "Staven zijn je fitheid, de lijn je vermoeidheid, de stippellijn je eigen gemiddelde over deze periode. Alles komt uit je trainingen — slaap en herstel zitten er niet in.",
+    legenda: `<span><i class="swatch" style="background:var(--s1)"></i>Fitheid (CTL)</span>
+              <span><i class="swatch" style="background:var(--s2)"></i>Vermoeidheid (ATL)</span>`,
+    teken: tegelGrafiekFitheid};
+
+  const defs = [
+    {id: "fitheid", label: "Fitheid", icoon: "belasting",
+     waarde: laatst.ctl == null ? null : Math.round(laatst.ctl),
+     reeks: ctlR, dagen, kleur: "var(--s1)",
+     bij: gemCtl ? `je eigen gemiddelde <b>${Math.round(gemCtl)}</b>` : "",
+     ...fitGraf},
+
+    {id: "vermoeidheid", label: "Vermoeidheid", icoon: "klok",
+     waarde: laatst.atl == null ? null : Math.round(laatst.atl),
+     reeks: atlR, dagen,
+     kleur: (laatst.atl != null && laatst.ctl != null && laatst.atl > laatst.ctl)
+            ? "var(--warning)" : "var(--good)",
+     bij: (laatst.atl != null && laatst.ctl != null)
+       ? (laatst.atl > laatst.ctl ? "ligt <b>boven</b> je fitheid" : "ligt <b>onder</b> je fitheid") : "",
+     ...fitGraf},
+
+    {id: "weekload", label: "Belasting week", icoon: "vlam",
+     waarde: Math.round(somLoad(week)) || null,
+     reeks: wl.map(somLoad), dagen: weken, kleur: "var(--s2)",
+     bij: (() => { const g = gem(wl.slice(0, -1).map(somLoad));
+       return g ? `normaal <b>${Math.round(g)}</b> per week` : ""; })(),
+     titel: "Weekbelasting per sport", canvas: "chWeekLoad",
+     uitleg: "Optelsom van de belasting per activiteit, per kalenderweek.",
+     teken: tegelGrafiekWeek},
+
+    {id: "weekuur", label: "Uren week", icoon: "klok",
+     waarde: somUur(week) ? komma(somUur(week).toFixed(1)) : null, eenheid: "u",
+     reeks: wl.map(somUur), dagen: weken, kleur: "var(--s3)",
+     bij: (() => { const g = gem(wl.slice(0, -1).map(somUur));
+       return g ? `normaal <b>${komma(g.toFixed(1))}u</b> per week` : ""; })(),
+     titel: "Weekbelasting per sport", canvas: "chWeekLoad2",
+     uitleg: "Dezelfde weken, maar dan in uren per sport.",
+     teken: () => tegelLijn("chWeekLoad2", wl.map(somUur), "--s3", 0, null)},
   ];
-  host.innerHTML = rijen.map(([naam, uitleg, waarde, pijl, stijl]) => `
-    <div class="loadrow">
-      <div class="lm"><div class="ln">${naam}</div><div class="ld2">${uitleg}</div></div>
-      <div class="lv"><span class="lval" style="${stijl}">${
-        waarde == null ? "–" : komma(Math.round(waarde))}</span>
-        <span class="pijl ${pijl.klasse}">${pijl.teken}</span></div>
-    </div>`).join("");
+
+  host.innerHTML = defs.map((t, i) =>
+    tegelHtml(defs.length % 2 && i === defs.length - 1 ? {...t, breed: true} : t)).join("");
+  tegelsWireOp(host, uit, defs);
+}
+
+/* =======================================================================
+   Tegels
+   -----------------------------------------------------------------------
+   Eén component voor "een metriek met zijn eigen verloop erin". Elke tegel
+   krijgt een definitie mee; het tekenen en het uitklappen is gedeeld.
+   ======================================================================= */
+function tegelVonk(reeks, kleur) {
+  const w = (reeks || []).filter(v => v != null);
+  if (w.length < 4) return "";
+  const min = Math.min(...w), max = Math.max(...w), bereik = (max - min) || 1;
+  const bx = 100, by = 32;
+  const pt = w.map((v, i) => [
+    (i / (w.length - 1)) * bx,
+    by - ((v - min) / bereik) * (by - 8) - 4,
+  ]);
+  const lijn = pt.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const vlak = `M0 ${by} L` + pt.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L") +
+               ` L${bx} ${by} Z`;
+  const [lx, ly] = pt[pt.length - 1];
+  return `<svg class="tvonk" viewBox="0 0 ${bx} ${by}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${vlak}" fill="${kleur}" opacity=".12"/>
+    <path d="${lijn}" fill="none" stroke="${kleur}" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="2.6" fill="${kleur}"
+            vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function tegelHtml(t) {
+  const kleur = t.kleur || "var(--muted)";
+  if (t.waarde == null) {
+    return `<div class="tegel leeg ${t.breed ? "tegel--breed" : ""}" style="--tkleur:${kleur}">
+      <div class="tkop">${ic(t.icoon)}<span class="tlabel">${t.label}</span></div>
+      <div class="tgetal">–</div>
+      <div class="tbij">${t.leegtekst || "niet gemeten"}</div></div>`;
+  }
+  return `<button class="tegel ${t.breed ? "tegel--breed" : ""}" style="--tkleur:${kleur}" data-tegel="${t.id}"
+            aria-expanded="false" aria-controls="tegeluit">
+      <div class="tkop">${ic(t.icoon)}<span class="tlabel">${t.label}</span></div>
+      <div class="tgetal">${t.waarde}${t.eenheid ? `<small>${t.eenheid}</small>` : ""}</div>
+      <div class="tbij">${t.bij || ""}</div>
+      ${tegelVonk(t.reeks, kleur)}
+      ${t.dagen ? `<div class="tdagen"><span>${t.dagen[0]}</span><span>${t.dagen[1]}</span></div>` : ""}
+    </button>`;
+}
+
+/* Welke tegel staat open, en welke grafiek hoort erbij. De grafiek wordt pas
+   gebouwd als je hem opent: in een verborgen blok meet Chart.js nul breedte. */
+let TEGEL_OPEN = null;
+
+function tegelsWireOp(host, uithost, defs) {
+  /* Het raster wordt met innerHTML gevuld, en dat gooit het uitklapblok eruit.
+     Hier zetten we hem terug -- hij moet een kind van het raster zijn om er
+     tussen de tegels in te kunnen staan. */
+  if (uithost.parentElement !== host) host.appendChild(uithost);
+  uithost.classList.remove("open");
+  TEGEL_OPEN = null;
+
+  host.querySelectorAll("button[data-tegel]").forEach(knop => {
+    knop.onclick = () => {
+      const id = knop.dataset.tegel;
+      const zelfde = TEGEL_OPEN === id;
+      host.querySelectorAll("button[data-tegel]").forEach(k =>
+        k.setAttribute("aria-expanded", String(!zelfde && k === knop)));
+      if (zelfde) { uithost.classList.remove("open"); TEGEL_OPEN = null; return; }
+      TEGEL_OPEN = id;
+
+      /* Onder de rij van de aangetikte tegel, niet onderaan het raster. Bij
+         twee kolommen betekent dat: na de rechterbuur, of na de tegel zelf als
+         die al rechts staat. */
+      const tegels = [...host.querySelectorAll("button[data-tegel]")];
+      const idx = tegels.indexOf(knop);
+      const eindeRij = tegels[idx % 2 === 0 ? Math.min(idx + 1, tegels.length - 1) : idx];
+      eindeRij.insertAdjacentElement("afterend", uithost);
+
+      const def = defs.find(d => d.id === id);
+      uithost.innerHTML = `<div class="card">
+          <div class="card-head"><div><h2>${def.titel || def.label}</h2>
+            <p class="hint">${def.uitleg || ""}</p></div></div>
+          <div class="chartbox short"><canvas id="${def.canvas}"></canvas></div>
+          ${def.legenda ? `<div class="legend">${def.legenda}</div>` : ""}
+        </div>`;
+      uithost.classList.add("open");
+      /* Eerst zichtbaar maken, dan pas tekenen -- anders meet Chart.js een ouder
+         van nul pixels. Een timeout en geen requestAnimationFrame: die laatste
+         wordt niet overal betrouwbaar uitgevoerd, onder meer niet in een
+         achtergrondtab of bij geautomatiseerd testen. */
+      setTimeout(() => {
+        try { def.teken(); }
+        catch (e) { console.error("tegelgrafiek " + id + " faalde:", e); }
+      }, 0);
+    };
+  });
+}
+
+/* De gemeten dagcijfers op Vandaag. Alle drie komen rechtstreeks uit Garmin en
+   stonden tot nu toe nergens in de app, terwijl ze elke dag gevuld zijn. */
+function renderVandaagTegels() {
+  const host = document.getElementById("vandaagTegels");
+  const uit = document.getElementById("vandaagTegelUit");
+  if (!host || !uit) return;
+  const d = DATA.daily || [];
+  const reeks = veld => d.map(x => x[veld]).filter(v => v != null).slice(-28);
+  const nu = veld => { const r = reeks(veld); return r.length ? r[r.length - 1] : null; };
+  const gem = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const dagen = ["28 dagen terug", "nu"];
+
+  const stap = nu("steps"), intens = nu("intensity_min"), kcal = nu("calories");
+  const gemStap = gem(reeks("steps")), gemInt = gem(reeks("intensity_min"));
+
+  /* De WHO houdt 150 minuten matige inspanning per week aan; Garmin telt
+     stevige minuten dubbel. Dat is de enige streefwaarde hier die niet van
+     onszelf komt, en daarom staat de bron erbij. */
+  const WEEKDOEL = 150;
+
+  const defs = [
+    {id: "stappen", label: "Stappen", icoon: "sprong", waarde: stap == null ? null : komma(stap.toLocaleString("nl-NL")),
+     reeks: reeks("steps"), dagen, kleur: "var(--s1)",
+     bij: gemStap ? `gemiddeld <b>${Math.round(gemStap).toLocaleString("nl-NL")}</b> per dag` : "",
+     titel: "Stappen per dag", canvas: "chStappen",
+     uitleg: "Rechtstreeks uit Garmin, over de laatste 28 dagen.",
+     teken: () => tegelLijn("chStappen", reeks("steps"), "--s1", 0, null)},
+
+    {id: "intens", label: "Intensieve minuten", icoon: "vlam", waarde: intens,
+     reeks: reeks("intensity_min"), dagen,
+     kleur: intens == null ? null : (intens >= 30 ? "var(--good)" : "var(--muted)"),
+     bij: gemInt ? `<b>${Math.round(gemInt * 7)}</b> per week — richtlijn ${WEEKDOEL}` : "",
+     titel: "Intensieve minuten", canvas: "chIntens",
+     uitleg: "Garmin telt matige minuten enkel en stevige dubbel. De richtlijn van 150 per week komt van de WHO, niet uit je eigen data.",
+     teken: () => tegelLijn("chIntens", reeks("intensity_min"), "--good", 0, null)},
+
+    {id: "kcal", label: "Calorieën", icoon: "vlam", waarde: kcal == null ? null : komma(kcal.toLocaleString("nl-NL")),
+     reeks: reeks("calories"), dagen, kleur: "var(--s4)",
+     bij: "totaal, rust plus actief",
+     titel: "Calorieën per dag", canvas: "chKcal",
+     uitleg: "Rustverbruik plus wat je bewoog, zoals Garmin het optelt.",
+     teken: () => tegelLijn("chKcal", reeks("calories"), "--s4", 0, null)},
+  ];
+
+  host.innerHTML = defs.map((t, i) =>
+    tegelHtml(defs.length % 2 && i === defs.length - 1 ? {...t, breed: true} : t)).join("");
+  tegelsWireOp(host, uit, defs);
 }
 
 /* =======================================================================
@@ -5398,19 +5535,12 @@ function renderFases() {
           ? ` <span style="font-size:var(--t-label);font-weight:var(--w-nadruk);color:var(--muted)">· ${s.sleep_awakenings}× wakker</span>` : ""}</div></div></div>`;
 }
 
-function renderStress() {
-  const kaart = document.getElementById("stressCard");
-  if (!kaart) return;
+/* De stresskaart is een tegel geworden. Wat overblijft is de grafiek die
+   achter die tegel zit. */
+function tegelGrafiekStress() {
   const rijen = (DATA.daily || []).filter(d => d.stress_avg != null).slice(-28);
-  if (rijen.length < 3) { kaart.style.display = "none"; return; }
-  kaart.style.display = "";
-  const laatste = rijen[rijen.length - 1];
-  document.getElementById("stressHint").innerHTML =
-    `Garmin meet dit de hele dag door uit je hartslagvariabiliteit. Gemiddeld ` +
-    `<b>${laatste.stress_avg}</b> op de laatste gemeten dag — ` +
-    `${laatste.stress_avg < 26 ? "rustig" : laatste.stress_avg < 51 ? "gemiddeld" : "hoog"}. ` +
-    `Schaal 0–100.`;
-  mk("chStress", {type: "bar", data: {labels: rijen.map(d => short(d.date)), datasets: [{
+  if (rijen.length < 3) return;
+  mk("chStress2", {type: "bar", data: {labels: rijen.map(d => short(d.date)), datasets: [{
       label: "Stress", data: rijen.map(d => d.stress_avg),
       backgroundColor: rijen.map(d => d.stress_avg > 50 ? css("--critical")
                        : d.stress_avg > 25 ? css("--warning") : css("--good")),
@@ -5450,7 +5580,113 @@ function renderWeekNacht() {
 }
 
 function renderHerstelNieuw() {
-  renderHerstelKop(); renderFases(); renderStress(); renderWeekNacht();
+  renderHerstelKop(); renderFases(); renderWeekNacht();
+  renderHerstelTegels();
+}
+
+/* De zes metingen die eerst elk een eigen grafiekkaart hadden. Elke tegel toont
+   de laatste waarde, waar die hoort te liggen, en het verloop over 28 dagen.
+   De volle grafiek zit erachter. */
+function renderHerstelTegels() {
+  const host = document.getElementById("herstelTegels");
+  const uit = document.getElementById("herstelTegelUit");
+  if (!host || !uit) return;
+  const d = DATA.daily || [];
+  const laatste28 = veld => d.map(x => x[veld]).filter(v => v != null).slice(-28);
+  const nu = veld => { const r = laatste28(veld); return r.length ? r[r.length - 1] : null; };
+  const gem = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const band = naam => bandVan(naam);
+  const dagen = ["28 dagen terug", "nu"];
+
+  const hrvB = band("hrv"), rhrB = band("rust");
+  const hrvNu = nu("hrv"), rhrNu = nu("rhr"), slNu = nu("sleep_h");
+  const strNu = nu("stress_avg"), vo2Nu = nu("vo2max"), scoreNu = nu("sleep_score");
+
+  const defs = [
+    {id: "hrv", label: "HRV", icoon: "puls", waarde: hrvNu, eenheid: "ms",
+     reeks: laatste28("hrv"), dagen,
+     kleur: hrvNu == null ? null : BANDVAR[bandKleur(hrvNu, hrvB, +1)],
+     bij: hrvB && hrvB.genoeg
+       ? `jouw band <b>${Math.round(hrvB.onder)}–${Math.round(hrvB.boven)}</b>`
+       : "band nog in opbouw",
+     titel: "HRV per nacht", canvas: "chHrv",
+     uitleg: "Nachtelijk gemiddelde met je 7-daags gemiddelde.",
+     legenda: `<span><i class="swatch" style="background:var(--s1)"></i>per nacht</span>
+               <span><i class="swatch" style="background:var(--s2)"></i>7-daags gemiddelde</span>`,
+     teken: tegelGrafiekHrv},
+
+    {id: "rhr", label: "Rusthartslag", icoon: "hart", waarde: rhrNu == null ? null : Math.round(rhrNu),
+     reeks: laatste28("rhr"), dagen,
+     kleur: rhrNu == null ? null : BANDVAR[bandKleur(rhrNu, rhrB, -1)],
+     bij: rhrB && rhrB.genoeg
+       ? `jouw band <b>${Math.round(rhrB.onder)}–${Math.round(rhrB.boven)}</b>`
+       : "band nog in opbouw",
+     titel: "Rusthartslag", canvas: "chRhr",
+     uitleg: "Per dag, met je 7-daags gemiddelde.",
+     teken: tegelGrafiekRhr},
+
+    {id: "slaap", label: "Slaapduur", icoon: "maan",
+     waarde: slNu == null ? null : uurMin(slNu), reeks: laatste28("sleep_h"), dagen,
+     kleur: "var(--sl-licht)",
+     bij: (() => { const g = gem(laatste28("sleep_h"));
+       return g ? `gemiddeld <b>${uurMin(g)}</b> per nacht` : ""; })(),
+     titel: "Slaap per fase", canvas: "chSleep",
+     uitleg: "Diep, licht, REM en wakker per nacht. Lees dit als grove verhouding — de fases zijn minder betrouwbaar dan de totale duur.",
+     legenda: `<span><i class="swatch" style="background:var(--sl-diep)"></i>Diep</span>
+               <span><i class="swatch" style="background:var(--sl-licht)"></i>Licht</span>
+               <span><i class="swatch" style="background:var(--sl-rem)"></i>REM</span>
+               <span><i class="swatch" style="background:var(--sl-wakker)"></i>Wakker</span>`,
+     teken: tegelGrafiekSlaap},
+
+    {id: "score", label: "Slaapscore", icoon: "bed", waarde: scoreNu,
+     reeks: laatste28("sleep_score"), dagen,
+     kleur: scoreNu == null ? null : BANDVAR[BAND(scoreNu)],
+     bij: (() => { const g = gem(laatste28("sleep_score"));
+       return g ? `gemiddeld <b>${Math.round(g)}</b> van 100` : ""; })(),
+     titel: "Slaapscore", canvas: "chSleep2",
+     uitleg: "Garmins eigen slaapscore per nacht, van 0 tot 100.",
+     teken: () => tegelLijn("chSleep2", laatste28("sleep_score"), "--good", 0, 100)},
+
+    {id: "stress", label: "Stress overdag", icoon: "wolk", waarde: strNu,
+     reeks: laatste28("stress_avg"), dagen,
+     kleur: strNu == null ? null : (strNu > 50 ? "var(--critical)" : strNu > 25 ? "var(--warning)" : "var(--good)"),
+     bij: "schaal <b>0–100</b>, continu gemeten via je HRV",
+     titel: "Stress overdag", canvas: "chStress2",
+     uitleg: "Garmin meet dit de hele dag door uit je hartslagvariabiliteit.",
+     teken: tegelGrafiekStress},
+
+    {id: "vo2", label: "VO2max", icoon: "meter", waarde: vo2Nu,
+     reeks: laatste28("vo2max"), dagen, kleur: "var(--s1)",
+     leegtekst: "je opstelling meet dit niet — een borstband levert geen VO2max",
+     bij: "alleen wat Garmin zelf vastlegt",
+     titel: "VO2max", canvas: "chVo2", uitleg: "Garmins eigen schatting. Beweegt langzaam.",
+     teken: tegelGrafiekVo2},
+  ];
+
+  host.innerHTML = defs.map((t, i) =>
+    tegelHtml(defs.length % 2 && i === defs.length - 1 ? {...t, breed: true} : t)).join("");
+  tegelsWireOp(host, uit, defs);
+}
+
+/* Een doorzichtige variant van een themakleur. Chart.js tekent op canvas en
+   snapt daar geen color-mix(), dus rekenen we de hex zelf om naar rgba. */
+function doorzichtig(hex, deel) {
+  const h = (hex || "").trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(h);
+  if (!m) return h;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${deel})`;
+}
+
+/* Een simpele lijn voor de twee tegels die geen bestaande grafiek hadden. */
+function tegelLijn(id, reeks, kleurnaam, min, max) {
+  if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; }
+  const d = (DATA.daily || []).slice(-28);
+  mk(id, {type: "line", data: {labels: d.map(x => short(x.date)), datasets: [{
+      data: reeks, borderColor: css(kleurnaam), borderWidth: 2, tension: .3,
+      pointRadius: 0, fill: true,
+      backgroundColor: doorzichtig(css(kleurnaam), .10)}]},
+    options: {scales: {x: xAxisCat(), y: axis({min, max})}}});
 }
 
 function renderGedaan() {
@@ -6243,7 +6479,8 @@ function boot() {
   belastingHerberekenen();
   planOverlay();
   renderCheckRegel(); renderVandaag(); renderAlcohol(); renderGedaan();
-  renderBelDials(); renderLoadrijen(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
+  renderVandaagTegels();
+  renderBelDials(); renderBelTegels(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
   renderPlanner(); renderPlan(); renderUitleg();
   renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout(); renderExplos();
   renderExplain(); renderInsights(); langeTekstInklappen();

@@ -1087,18 +1087,20 @@ def gereedheid(hrv_nu: float | None, hrv_basis: dict[str, Any] | None,
                tsb: float | None) -> dict[str, Any]:
     """Samengestelde gereedheidsscore van 0 tot 100.
 
-    Drie bouwstenen, elk met een gewicht: hoe je je voelt (0,40), je
-    nachtelijk herstel (0,35) en je belasting (0,25). Ontbreekt er een, dan
-    worden de gewichten van de overige herverdeeld en zegt het dashboard
-    erbij waarop de score dan stoelt -- een score die doet alsof hij drie
-    signalen weegt terwijl hij er een heeft, is misleidend.
+    Drie bouwstenen, elk met een gewicht: je nachtelijk herstel (0,50), je
+    belasting (0,30) en hoe je je voelt (0,20). Ontbreekt er een, dan worden
+    de gewichten van de overige herverdeeld en zegt het dashboard erbij
+    waarop de score dan stoelt -- een score die doet alsof hij drie signalen
+    weegt terwijl hij er een heeft, is misleidend.
 
-    Het gevoel weegt het zwaarst, en dat is geen aanname: in een review van
-    56 studies volgden subjectieve maten de acute en chronische belasting
-    gevoeliger en consistenter dan objectieve metingen, terwijl ze er niet
-    mee correleerden (Saw, Main & Gastin, BJSM 2016). Het is dus geen
-    vervanging van de meting maar aanvullende informatie -- en de enige die
-    je elke dag hebt.
+    Over dat gewicht van het gevoel: het stond eerst op 0,40, met een beroep
+    op Saw, Main & Gastin (BJSM 2016), waar subjectieve maten in een review
+    van 56 studies de belasting gevoeliger volgden dan objectieve metingen.
+    Dat onderzoek staat nog steeds, maar het gaat over gestructureerde,
+    gevalideerde vragenlijsten die dagelijks worden afgenomen -- niet over
+    een schuifje van 1 tot 5 dat je zelf invult als je eraan denkt. Bij deze
+    invoer weegt de meting zwaarder dan de indruk, en daarom staat het gevoel
+    nu op 0,20: het telt mee, maar het kan de gemeten nacht niet overstemmen.
 
     Dit deel van de score wordt in de BROWSER opnieuw doorgerekend zodra je
     de dagelijkse check hebt ingevuld; Python levert alleen de objectieve
@@ -1128,11 +1130,11 @@ def gereedheid(hrv_nu: float | None, hrv_basis: dict[str, Any] | None,
     if slaap_score is not None:
         herstel.append(klem(slaap_score / 100))
     if herstel:
-        delen.append(("Herstel", 0.35, sum(herstel) / len(herstel)))
+        delen.append(("Herstel", 0.50, sum(herstel) / len(herstel)))
 
     # Vorm: hoe ver loopt je vermoeidheid voor op je fitheid
     if tsb is not None:
-        delen.append(("Belasting", 0.25, klem((tsb + 35) / 40)))
+        delen.append(("Belasting", 0.30, klem((tsb + 35) / 40)))
 
     if not delen:
         return {"score": None, "band": "onbekend", "gebruikt": [], "ruw": [],

@@ -837,7 +837,16 @@ def demo_cache(weeks: int) -> dict[str, Any]:
             "training_status": {"mostRecentTrainingStatus": {"latestTrainingStatusData": {
                 "x": {"trainingStatusFeedbackPhrase": "PRODUCTIVE_1"}}}},
             "readiness": [{"score": random.randint(45, 90)}],
-            "summary": {"totalSteps": random.randint(7000, 16000),
+            # Body Battery: waar je mee wakker werd, wat er nu nog in zit, en
+            # hoeveel er die dag bij kwam en af ging. Zonder deze velden leek
+            # het in de demo alsof de opstelling het niet meet.
+            "summary": {"bodyBatteryAtWakeTime": random.randint(58, 92),
+                        "bodyBatteryMostRecentValue": random.randint(12, 55),
+                        "bodyBatteryChargedValue": random.randint(35, 62),
+                        "bodyBatteryDrainedValue": random.randint(38, 70),
+                        "bodyBatteryHighestValue": random.randint(70, 96),
+                        "bodyBatteryLowestValue": random.randint(5, 22),
+                        "totalSteps": random.randint(7000, 16000),
                         "totalKilocalories": random.randint(2600, 4100),
                         "moderateIntensityMinutes": random.randint(10, 60),
                         "vigorousIntensityMinutes": random.randint(5, 70),
