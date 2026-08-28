@@ -773,13 +773,18 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
             ({"date": d, **{k: daily[d].get(k) for k in
                             ("sleep_h", "sleep_deep_h", "sleep_light_h", "sleep_rem_h",
                              "sleep_awake_h", "sleep_score", "sleep_quality",
-                             "sleep_awakenings", "sleep_stress", "hrv")}}
+                             "sleep_awakenings", "sleep_stress", "hrv",
+                             "sleep_start", "sleep_end", "rhr",
+                             "bb_wake", "bb_now", "bb_charged", "bb_drained",
+                             "resp_waking", "resp_sleep",
+                             "readiness", "readiness_level", "readiness_feedback")}}
              for d in reversed(days) if daily[d].get("sleep_h") is not None), None),
         "sleep_nights": fill("sleep_h"),
         "explain": EXPLAIN,
         "sport_order": A.SPORT_ORDER,
         "coverage": {f: fill(f) for f in
-                     ("sleep_h", "rhr", "hrv", "vo2max", "stress_avg", "body_battery_high")},
+                     ("sleep_h", "rhr", "hrv", "vo2max", "stress_avg",
+                      "body_battery_high", "bb_now", "resp_waking", "readiness")},
         "support": (cache.get("meta") or {}).get("support", {}),
     }
 

@@ -274,6 +274,28 @@ def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str,
         row["body_battery_low"] = _num(summ.get("bodyBatteryLowestValue"))
         row["stress_avg"] = _num(summ.get("averageStressLevel"))
 
+        # Body Battery is het enige gemeten dagcijfer dat op- en ontlaadt. Twee
+        # waardes zijn los bruikbaar: waar je mee wakker werd, en waar je nu
+        # staat. Die eerste zegt iets over je nacht, die tweede over wat er nog
+        # in zit. Ze door elkaar halen levert 's avonds een veel te rooskleurig
+        # getal op -- 96 bij het ontwaken is om negen uur 's avonds vaak 26.
+        row["bb_wake"] = _num(summ.get("bodyBatteryAtWakeTime"))
+        row["bb_now"] = _num(summ.get("bodyBatteryMostRecentValue"))
+        row["bb_charged"] = _num(summ.get("bodyBatteryChargedValue"))
+        row["bb_drained"] = _num(summ.get("bodyBatteryDrainedValue"))
+
+        # Ademhaling overdag. Een stijgende nachtwaarde is een vroeg signaal
+        # van ziekte of onvoldoende herstel; los gelezen zegt hij weinig.
+        row["resp_waking"] = _num(summ.get("avgWakingRespirationValue"))
+        row["resp_sleep"] = _num(dto.get("averageRespirationValue"))
+
+        # Garmin's eigen readiness. Anders dan VO2max en trainingsstatus komt
+        # deze op dit account wel binnen. Het is een gemeten cijfer van Garmin,
+        # naast -- niet in plaats van -- de eigen gereedheidsscore.
+        if isinstance(rd, list) and rd and isinstance(rd[0], dict):
+            row["readiness_level"] = rd[0].get("level")
+            row["readiness_feedback"] = rd[0].get("feedbackShort")
+
         out[d] = row
     return out
 
