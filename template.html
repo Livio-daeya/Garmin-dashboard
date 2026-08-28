@@ -1206,6 +1206,23 @@ tbody tr:last-child td { border-bottom: 0; }
 .doeltekst { grid-column: 1 / -1; font-size: var(--t-label); color: var(--muted); margin-top: var(--sp2);
   line-height: 1.5; }
 
+/* ---- bewerkbare oefeningregel ---------------------------------------- */
+.oefbewerk { display: grid; grid-template-columns: 1fr; gap: var(--sp2);
+  padding-top: var(--sp3); margin-top: var(--sp3); border-top: 1px solid var(--hair); }
+.oefvelden { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp2); }
+.oefvelden label { display: block; font-size: var(--t-micro); font-weight: var(--w-nadruk);
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  margin-bottom: var(--sp1); }
+.oefvelden input { width: 100%; font: inherit; font-size: var(--t-body); color: var(--ink);
+  padding: var(--sp2); min-height: 44px; text-align: center;
+  border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--bg2); }
+.oefvelden input:focus { outline: none; border-color: var(--accent); }
+.oefvelden input.eigen { border-color: var(--accent); }
+.oefwissel { width: 100%; font: inherit; font-size: var(--t-klein); color: var(--ink);
+  padding: var(--sp2) var(--sp3); min-height: 44px;
+  border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--bg2); }
+.oefeigen { font-size: var(--t-micro); color: var(--accent); font-weight: var(--w-nadruk); }
+
 /* ---- workoutkeuze ---------------------------------------------------- */
 /* Drie rijen in plaats van drie segmentknopjes: op een telefoon paste
    "Bovenlichaam" niet in een derde van de breedte, en met een rij is er ruimte
@@ -1218,6 +1235,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .wkkeuze .act .mid, .wkkeuze .act .nm, .wkkeuze .act .mt { display: block; }
 .wkkeuze .act[aria-pressed="true"] { border-color: var(--hair-strong); }
 .wkkeuze .act[aria-pressed="true"] .ic { color: var(--accent); }
+/* Een voorstel dat nu niet kan blijft staan maar vraagt geen aandacht. */
+.wkkeuze .act[data-blok] { opacity: .55; }
+.wkkeuze .act[data-blok] .mt { color: var(--warning); }
 
 /* ---- workouts -------------------------------------------------------- */
 
@@ -1745,36 +1765,9 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     </div>
     <div class="how" id="howDoel"></div>
     <div id="doelBalken"></div>
-  </div>
-
-
-  <div class="card" id="explosCard">
-    <div class="card-head">
-      <div><h2>Explosiviteit</h2>
-      <p class="hint">De kwaliteit die bij handbal als eerste wegvalt — en precies wat
-        krachttraining naast veel duurwerk raakt. Eén meting per week is genoeg.</p></div>
-      <span class="spacer"></span>
-      <button class="knop knop--secundair knop--icoon" data-how="howExplos" aria-expanded="false" title="Waarom dit meten?">i</button>
-    </div>
-    <div class="how" id="howExplos">
-      Bij zestien elite handballers bleef na zeven weken verminderde krachttraining de sprongkracht
-      behouden, terwijl de <strong>worpsnelheid significant daalde</strong> (Marques &amp;
-      Gonz&aacute;lez-Badillo, 2006). Power gaat als eerste, en het is ook precies waar
-      krachttraining naast veel duurwerk aan raakt: in de grootste meta-analyse was de
-      interferentie op maximale kracht en spiermassa niet significant, maar op explosieve kracht
-      w&eacute;l (&minus;0,28; Schumann e.a., 2022). Je maximaalkracht kan dus stijgen terwijl dit
-      zakt &mdash; en dan mis je het zonder deze meting.<br><br>
-      Meet steeds hetzelfde en op hetzelfde moment: staande sprong vanaf de grond, of een worp met
-      dezelfde bal vanaf dezelfde plek. Absolute nauwkeurigheid doet er niet toe; de trend wel.
-      Reken pas op verandering bij meer dan twee centimeter of &eacute;&eacute;n meter verschil.
-    </div>
-    <div class="metriekrij" id="explosStats"></div>
-    <div class="chartbox short" style="margin-top:var(--sp4)"><canvas id="chExplos"></canvas></div>
-    <div id="explosHint" class="melding melding--stil"></div>
-    <div class="knoprij knoprij--ruim">
-      <button class="knop knop--secundair" id="explosAdd">Meting toevoegen</button>
-    </div>
-    <div id="explosVel"></div>
+    <div class="knoprij knoprij--ruim"><button class="knop knop--secundair" id="zesminAdd">
+      6-minutenmeting toevoegen</button></div>
+    <div id="zesminVel"></div>
   </div>
 
 
@@ -1789,20 +1782,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     </div>
     <div class="how" id="howWorkout"></div>
     <div id="wkContext"></div>
-    <div class="wkkeuze" id="wkTabs">
-      <button class="act" data-wk="push" data-ic3="omhoog" aria-pressed="true">
-        <span class="ic"></span>
-        <span class="mid"><span class="nm">Push</span>
-          <span class="mt">borst, schouder, triceps en squat</span></span></button>
-      <button class="act" data-wk="pull" data-ic3="omlaag" aria-pressed="false">
-        <span class="ic"></span>
-        <span class="mid"><span class="nm">Pull</span>
-          <span class="mt">rug, biceps en deadlift</span></span></button>
-      <button class="act" data-wk="boven" data-ic3="halter" aria-pressed="false">
-        <span class="ic"></span>
-        <span class="mid"><span class="nm">Bovenlichaam</span>
-          <span class="mt">geen zware benen — wedstrijdveilig</span></span></button>
-    </div>
+    <div class="wkkeuze" id="wkTabs"></div>
     <div id="wkBlad"></div>
     <div id="wkLogger"></div>
   </div>
@@ -2168,13 +2148,129 @@ const MIN_METINGEN = 7;
    precies die complexiteit. */
 const RANG = {critical: 0, serious: 1, warning: 2, good: 3, neutral: 4};
 
+/* Wat staat er vandaag op de planning, en wat heb je daarvan al gedaan?
+
+   Zonder dit weet het advies niet waarover het gaat. "Ga mee maar niet vol"
+   is een zin over niets; "je hebt een VO2max-blok staan en je vorm staat op
+   -24" is een zin waar je iets mee kunt. */
+function vandaagOpDePlanning() {
+  const vandaag = (DATA.planbasis || {}).vandaag;
+  if (!vandaag) return {open: [], gedaan: [], plan: null};
+  const plan = dagPlan(vandaag);
+  const delen = (plan.delen || []).filter(d => d.kind !== "rust" && d.kind !== "sociaal");
+  const {sessies} = vandaagGedaan();
+
+  /* Een gepland onderdeel geldt als gedaan zodra er een gemeten sessie van
+     dezelfde sport op vandaag staat. Grof, maar preciezer koppelen zou een
+     zekerheid suggereren die er niet is -- Garmin levert geen verwijzing naar
+     wat jij van plan was. */
+  const gedaneSporten = new Set(sessies.map(a => a.sport));
+  const open = delen.filter(d => !gedaneSporten.has(d.sport));
+  return {open, gedaan: delen.filter(d => gedaneSporten.has(d.sport)), plan, sessies};
+}
+
+/* Het advies voor één gepland onderdeel, met de gereedheid van vandaag erover.
+   Kent het onderdeel een concrete workout, dan gaat het advies daarover; weten
+   we alleen de sport, dan blijft het algemener -- en zegt het dat ook. */
+function adviesVoorOnderdeel(deel, ctx, g) {
+  const W = deel.workout ? WORKOUTS[deel.workout] : null;
+  const laag = g.score != null && g.score < 40;
+  const matig = g.score != null && g.score >= 40 && g.score < 60;
+  const vorm = ((FITHEID || DATA.fitness || []).slice(-1)[0] || {}).tsb;
+
+  /* Conditie: hier is vorm het juiste signaal en gaat het over intensiteit. */
+  if (W && W.soort === "conditie") {
+    if (W.zwaarte >= 1) {
+      if (ctx && ctx.wedstrijd && ctx.wedstrijd.over <= 1)
+        return {status: "warning", titel: "Bewaar je intervallen tot na de wedstrijd",
+          body: `Je had ${W.naam} staan, maar je wedstrijd is ` +
+                `${ctx.wedstrijd.over === 0 ? "vandaag" : "morgen"}. Vier keer drie minuten ` +
+                `hard kost je precies de frisheid die je zaterdag nodig hebt. Een rustige ` +
+                `duurloop of niets is vandaag de betere keuze.`};
+      if (laag || (vorm != null && vorm < -20))
+        return {status: "warning", titel: "Ruil je intervallen om voor een rustige duurloop",
+          body: `Je had ${W.naam} staan, maar ${laag ? `je gereedheid is ${g.score}`
+                : `je vorm staat op ${Math.round(vorm)}`}. Vier keer drie minuten haalt zijn ` +
+                `prikkel uit de intensiteit, en die haal je vandaag niet. Zone 2 van 45 minuten ` +
+                `levert je meer op en kost je minder.`};
+      if (matig)
+        return {status: "warning", titel: "Intervallen kunnen, maar houd de laatste in",
+          body: `Gereedheid ${g.score}. Loop drie blokken vol en kijk bij de vierde hoe het ` +
+                `voelt — afbreken is hier geen verlies, half werk wel.`};
+      return {status: "good", titel: "Ga vol op je intervallen",
+        body: `${W.naam} staat gepland en er is niets dat je tegenhoudt` +
+              `${g.score != null ? ` — gereedheid ${g.score}` : ""}. Loop de vier blokken even ` +
+              `hard; dat is waar de winst zit voor je 6 minuten all out.`};
+    }
+    return {status: "good", titel: "Rustig lopen zoals gepland",
+      body: `${W.naam} is licht genoeg voor vandaag${laag ? ", juist nu je gereedheid laag is" : ""}. ` +
+            `Blijf in zone 2 — je moet kunnen praten.`};
+  }
+
+  /* Kracht: hier telt de wedstrijdafstand en je lokale herstel, niet je vorm. */
+  if (deel.sport === "Kracht" || (W && W.soort !== "conditie")) {
+    const naam = W ? W.naam : "je krachttraining";
+    if (ctx && !ctx.zwaarBenenMag)
+      return {status: "warning", titel: `${naam}: laat de zware benen eruit`,
+        body: `${ctx.redenen[0] || "Je wedstrijd staat te dichtbij."} Bovenlichaam kan wel — ` +
+              `die staat er zonder squat en deadlift voor klaar.`};
+    if (laag)
+      return {status: "warning", titel: `${naam} met een set minder`,
+        body: `Gereedheid ${g.score}. Haal een set van elke oefening af en blijf een herhaling ` +
+              `verder van falen. Het patroon houd je warm, de vermoeidheid stapel je niet op.`};
+    if (!W)
+      return {status: "neutral", titel: "Je hebt kracht gepland, maar nog niet welke",
+        body: `Kies op Training welke workout het wordt, dan reken ik de sets en gewichten voor ` +
+              `je door en past het advies zich aan${g.score != null ? ` — gereedheid ${g.score}` : ""}.`};
+    return {status: "good", titel: `${naam} zoals hij klaarstaat`,
+      body: `Niets dat in de weg staat${g.score != null ? ` — gereedheid ${g.score}` : ""}. ` +
+            `De gewichten hieronder komen uit je vorige sessie.`};
+  }
+
+  /* Wedstrijd of teamtraining: daar bepaal jij de intensiteit niet alleen. */
+  if (deel.kind === "wedstrijd")
+    return {status: "good", titel: "Wedstrijddag",
+      body: `Niets zwaars ervoor${g.score != null ? `. Je gereedheid staat op ${g.score}` : ""}.`};
+  return {status: laag ? "warning" : "good",
+    titel: laag ? `${deel.label}: ga mee, maar zoek de rand niet op`
+                : `${deel.label} zoals gepland`,
+    body: laag
+      ? `Je gereedheid is ${g.score}. Meedoen kan, maar spaar je sprints en zeg het als je ` +
+        `eruit wilt.`
+      : `Niets dat je tegenhoudt${g.score != null ? ` — gereedheid ${g.score}` : ""}.`};
+}
+
 function eenDing() {
   const ctx = (typeof workoutContext === "function") ? workoutContext() : null;
   const g = gereedheidNu();
   const v = DATA.vandaag || {};
 
-  /* Volgorde van dringendheid: een wedstrijd vlakbij wint van een advies uit
-     een grafiek, en een lage gereedheid wint van allebei. */
+  /* Volgorde: eerst waar je vandaag voor staat. Een advies over "je dag in het
+     algemeen" is een zin over niets zodra er iets concreets op de planning
+     staat -- en dat concrete onderdeel weet zelf wel dat er een wedstrijd
+     aankomt of dat je gereedheid laag is. Staat er niets gepland, dan vallen
+     we terug op de algemene regels hieronder. */
+  /* Staat er iets op de planning dat je nog moet doen, dan gaat het advies
+     daarover. Dat is concreter dan een algemene uitspraak over je dag, en het
+     is de reden dat je vooruit plant. */
+  const {open, gedaan} = vandaagOpDePlanning();
+  if (open.length) {
+    const eersteOpen = open.slice().sort((a, b) =>
+      (RANG_KIND[a.kind] ?? 9) - (RANG_KIND[b.kind] ?? 9))[0];
+    const advies = adviesVoorOnderdeel(eersteOpen, ctx, g);
+    if (open.length > 1)
+      advies.body += ` Er staat vandaag meer: ${open.filter(d => d !== eersteOpen)
+        .map(d => d.label).join(" en ")}.`;
+    else if (gedaan.length)
+      advies.body += ` ${gedaan.map(d => d.label).join(" en ")} heb je al gehad.`;
+    return advies;
+  }
+  if (gedaan.length)
+    return {status: "good", titel: "Je bent klaar voor vandaag",
+      body: `${gedaan.map(d => d.label).join(" en ")} staat erop. ` +
+            `Wat het met je vorm deed staat hieronder.`};
+
+  /* Geen planning: dan de algemene volgorde van dringendheid. */
   if (g.score != null && g.score < 40)
     return {status: "serious", titel: "Vandaag is een dag om te herstellen",
       body: `Je gereedheid staat op ${g.score}. Ga mee als je wilt, maar zoek nergens de rand op ` +
@@ -2184,6 +2280,7 @@ function eenDing() {
       body: `Je ${v.doel_label || "wedstrijd"} is ${v.dagen_tot_doel === 0 ? "vandaag"
             : v.dagen_tot_doel === 1 ? "morgen" : `over ${v.dagen_tot_doel} dagen`}. Een squat- of ` +
             `deadliftsessie kost je 24 tot 48 uur sprongkracht; de bovenlichaamdag kan wel.`};
+
   const eerste = (DATA.advice || []).slice()
     .sort((a, b) => (RANG[a.level] ?? 9) - (RANG[b.level] ?? 9))[0];
   if (eerste && (eerste.level === "serious" || eerste.level === "warning"))
@@ -2310,6 +2407,30 @@ function planZetItems(iso, lijst) {
 }
 
 /* Eén item omzetten naar wat het dashboard ervan moet weten. */
+/* Wat kost een geplande workout aan belastingpunten?
+
+   Uit je eigen sessies, niet uit een tabel: we pakken de mediaan van je
+   gemeten sessies van de bijbehorende sport en schalen die met de zwaarte van
+   het type. Zo groeit de schatting mee met wat jij daadwerkelijk doet.
+
+   De zwaarte-factoren komen uit de aard van het werk, niet uit een meting:
+   krachttraining levert weinig hartslagbelasting op ondanks de vermoeidheid in
+   je spieren, een rustige duurloop zit rond een normale sessie en een
+   VO2max-blok erboven. Dat is een redenering; staat er eenmaal genoeg van je
+   eigen data, dan is de mediaan per type beter. */
+const WORKOUT_ZWAARTE = {push: 0.45, pull: 0.45, boven: 0.35, duur: 0.8, vo2: 1.25};
+
+function schatWorkout(type, min) {
+  const W = WORKOUTS[type];
+  if (!W) return {load: 0, bron: "onbekende workout"};
+  const sport = W.soort === "conditie" ? "Hardlopen" : "Kracht";
+  const basis = schatBelasting(sport, min);
+  const factor = WORKOUT_ZWAARTE[type] ?? 1;
+  return {load: Math.round(basis.load * factor),
+          bron: `${W.naam} — mediaan van je ${sport.toLowerCase()}sessies, ` +
+                `maal ${komma(factor.toFixed(2))} voor dit type`};
+}
+
 function itemUit(item, iso, std) {
   const basis = {date: iso, weekday: WEEKDAG_KORT[isoNaarPy(iso)], eigen: true,
                  note: item.note, tijd: item.tijd};
@@ -2324,13 +2445,25 @@ function itemUit(item, iso, std) {
             sport: null, load: 0, glazen: item.glazen || null,
             bron: "zelf ingepland, telt niet als belasting"};
   const sport = item.sport || (std && std.sport) || "Handbal";
+
+  /* Heb je een concrete workout gekozen, dan schatten we die en niet de sport
+     in het algemeen. Een krachtsessie kost in belastingpunten weinig -- je hart
+     klopt nauwelijks tijdens drie zware sets -- terwijl een VO2max-blok van
+     vier keer drie minuten er flink inhakt. Dat verschil hoort in je
+     weekprojectie te staan. */
   const schat = (item.load !== null && item.load !== undefined)
     ? {load: item.load, bron: "belasting zelf ingevuld"}
-    : schatBelasting(sport, item.min);
-  let label = item.kind === "wedstrijd" ? "Wedstrijd" : (item.label || sport);
+    : (item.workout ? schatWorkout(item.workout, item.min) : schatBelasting(sport, item.min));
+  let label = item.kind === "wedstrijd" ? "Wedstrijd"
+            : (item.workout && WORKOUTS[item.workout] ? WORKOUTS[item.workout].naam
+            : (item.label || sport));
   if (item.kind === "wedstrijd" && item.thuis) label += ` (${item.thuis})`;
   return {...basis, kind: item.kind, label, sport, load: schat.load, bron: schat.bron,
-          doel: item.kind === "wedstrijd", focus: item.focus, min: item.min};
+          doel: item.kind === "wedstrijd", focus: item.focus, min: item.min,
+          /* Zonder dit weet het advies van vandaag wel dát er iets gepland
+             staat, maar niet wélke workout -- en dan valt het terug op een
+             algemene uitspraak in plaats van op de intervallen die je koos. */
+          workout: item.workout || null};
 }
 
 /* Alles wat er op een dag staat, op tijd gesorteerd. */
@@ -2534,6 +2667,13 @@ function editorOpen(iso, hostId, index) {
           ["sociaal","Feestje / alcohol"],["rust","Rust / vrij"]], kind)}</select></div>
         <div class="veld" data-veld="sport"><label>Sport</label><select id="eSport">${opt(
           sporten.map(s => [s, s]), eigen ? eigen.sport : huidig.sport)}</select></div>
+        <div class="veld" data-veld="workout"><label>Welke workout</label><select id="eWorkout">${opt(
+          [["", "— geen specifieke workout —"],
+           ...Object.entries(WORKOUTS).map(([k, W]) =>
+             [k, `${W.naam}${W.soort === "conditie" ? " · conditie" : " · kracht"}`])],
+          eigen ? (eigen.workout || "") : "")}</select>
+          <div class="bij">Kies je er een, dan rekent de weekprojectie met wat díe workout kost
+            in plaats van met het gemiddelde van je sport.</div></div>
         <div class="veld" data-veld="min"><label>Duur (min)</label><input id="eMin" type="number" min="5" max="300" step="5"
           value="${eigen && eigen.min ? eigen.min : ""}" placeholder="uit je historie"></div>
         <div class="veld" data-veld="tijd"><label>Tijd</label><input id="eTijd" type="time"
@@ -2562,8 +2702,8 @@ function editorOpen(iso, hostId, index) {
     const sport = document.getElementById("eSport").value;
     const zicht = {
       wedstrijd: ["sport", "min", "tijd", "thuis", "note"],
-      training:  ["sport", "min", "tijd", "focus", "note"],
-      extra:     ["sport", "min", "tijd", "focus", "note"],
+      training:  ["sport", "workout", "min", "tijd", "focus", "note"],
+      extra:     ["sport", "workout", "min", "tijd", "focus", "note"],
       sociaal:   ["tijd", "glazen", "note"],
       rust:      ["note"],
     }[k] || ["note"];
@@ -2636,6 +2776,7 @@ function editorOpen(iso, hostId, index) {
       if (val("eTijd")) item.tijd = val("eTijd");
       if (k === "wedstrijd" && val("eThuis")) item.thuis = val("eThuis");
       if (item.sport === "Kracht" && val("eFocus")) item.focus = val("eFocus");
+      if (val("eWorkout")) item.workout = val("eWorkout");
     }
     if (val("eNote")) item.note = val("eNote");
     const nu = planItems(iso);
@@ -2826,7 +2967,7 @@ function allesHertekenen() {
   planOverlay();
   renderVandaag(); renderCheckRegel(); renderGedaan(); renderBelDials(); renderBelTegels();
   renderVandaagTegels();
-  renderPlanner(); renderPlan(); renderWorkout(); renderDoelen(); renderExplos();
+  renderPlanner(); renderPlan(); renderWorkout(); renderDoelen();
   renderAlcohol();
 }
 
@@ -3380,6 +3521,16 @@ const OEF = {
                spieren: {benen: 1, bil: 0.5, rug: 0.5}},
   bench:      {naam: "Bankdrukken", rol: "basis", staaf: true,
                spieren: {borst: 1, triceps: 0.5, schouder: 0.5}},
+  /* Drie bankdrukvarianten uit het programma dat je volgt. Ze staan los in de
+     catalogus en niet als een oefening met een aantekening: je progressie
+     verschilt per variant, en dan hoort je logboek ze ook los bij te houden.
+     De 1 1/4 is zwaarder per kilo -- de extra kwartherhaling onderin verlengt
+     de tijd onder spanning in de zwaarste hoek -- dus daar hoort een lager
+     gewicht bij dan bij dezelfde close grip zonder. */
+  benchcg:    {naam: "Close grip bankdrukken", rol: "basis", staaf: true,
+               spieren: {triceps: 1, borst: 0.5, schouder: 0.5}},
+  benchcg114: {naam: "Close grip bankdrukken 1\u00bc", rol: "tweede", staaf: true,
+               spieren: {triceps: 1, borst: 0.5, schouder: 0.5}},
   ohp:        {naam: "Overhead press", rol: "tweede", staaf: true,
                spieren: {schouder: 1, triceps: 0.5}},
   inclinedb:  {naam: "Incline dumbbellpress", rol: "tweede",
@@ -3419,6 +3570,27 @@ const WORKOUTS = {
           oefeningen: ["deadlift", "row", "pullup", "facepull", "curl", "legcurl"]},
   boven: {naam: "Bovenlichaam", ondertitel: "alles boven de heup, zonder zware benen",
           oefeningen: ["inclinebb", "pullup", "ohp", "seatedrow", "latraise", "curl"]},
+
+  /* Twee conditietrainingen, allebei gericht op je 6 minuten all out. Ze
+     hebben geen oefeningen met sets en reps maar een voorschrift, en ze worden
+     op een ander signaal beoordeeld dan de krachtworkouts: hier is TSB wel de
+     juiste maat, want een duurloop en je vorm komen uit dezelfde hartslagbron. */
+  duur:  {naam: "Duurloop zone 2", soort: "conditie", ondertitel: "45 tot 60 minuten rustig",
+          voorschrift: "45–60 min in zone 2",
+          waarom: "Bouwt de aerobe basis waar je herstel tussen sprints op leunt. Je moet " +
+                  "kunnen praten; gaat dat niet, dan loop je te hard en train je iets anders " +
+                  "dan je bedoelt.",
+          bijdrage: "Verhoogt je 6-minutenafstand indirect: een groter aeroob vermogen laat je " +
+                    "langer op een hoog percentage doorgaan.",
+          zwaarte: 0.55},
+  vo2:   {naam: "VO2max 4×3", soort: "conditie", ondertitel: "vier keer drie minuten hard",
+          voorschrift: "4 × 3 min hard, 3 min dribbelen ertussen",
+          waarom: "Drie minuten is lang genoeg om je zuurstofopname naar het maximum te " +
+                  "duwen en kort genoeg om vier herhalingen vol te houden. Loop de blokken " +
+                  "even hard — beginnen als een held en eindigen als een wrak levert minder op.",
+          bijdrage: "De directste prikkel voor je 6 minuten all out: dezelfde duur en " +
+                    "intensiteit als de test zelf.",
+          zwaarte: 1.0},
 };
 
 const SCHEMA = {
@@ -3593,9 +3765,162 @@ function volgendeSet(sleutel, ctx) {
 
 const kortDatum = iso => `${+iso.split("-")[2]}/${+iso.split("-")[1]}`;
 
+/* =======================================================================
+   Welke drie workouts passen nog in deze week?
+   -----------------------------------------------------------------------
+   Het belangrijkste inzicht hier: KRACHTVERMOEIDHEID EN CONDITIEVERMOEIDHEID
+   ZIJN NIET HETZELFDE, en dit dashboard meet alleen de tweede.
+
+   CTL, ATL en TSB komen uit je hartslag. Een zware krachtsessie van een uur
+   komt daardoor binnen als "rustig, 0,4x je normale sessie" -- je hart klopt
+   nauwelijks tijdens drie zware sets squat. Je vorm zegt dan dat je fris bent
+   terwijl je benen van maandag nog vol zitten. Op TSB sturen welke
+   krachttraining je vandaag doet, is dus op het verkeerde signaal sturen.
+
+   Daarom twee gescheiden bronnen:
+
+     KRACHT  -> fractioneel setvolume per spiergroep over de laatste 7 dagen
+                (Pelland e.a. 2026: direct telt 1, indirect 0,5). In het
+                seizoen volstaan 4-6 sets per groep, daarbuiten loopt de winst
+                door tot 10-20. Een spiergroep die zijn quotum al heeft, hoeft
+                deze week niet meer.
+
+     CONDITIE -> daar is TSB wel de juiste maat, want die komt uit dezelfde
+                 hartslagbron. Die weegt alleen mee voor het VOLUME van de
+                 sessie, niet voor de keuze welke spiergroep aan de beurt is.
+
+   En daarbovenop de wedstrijdregel die er al stond: zware benen niet binnen
+   48 uur voor een wedstrijd (Kadlubowski e.a. 2026).
+   ======================================================================= */
+const SPIERDOEL = {in: 5, off: 14};   // fractionele sets per groep per week
+
+function weekRuimte() {
+  const vandaag = (DATA.planbasis || {}).vandaag;
+  if (!vandaag) return {dagen: 0, gepland: 0};
+  /* Tot en met zondag. getDay(): 0 is zondag, dus 7 gebruiken. */
+  const d = new Date(vandaag + "T12:00:00");
+  const restDagen = 7 - (d.getDay() === 0 ? 7 : d.getDay());
+  let gepland = 0;
+  for (let i = 1; i <= restDagen; i++) {
+    const p = dagPlan(isoPlus(vandaag, i));
+    if (p && p.load) gepland++;
+  }
+  return {dagen: restDagen, gepland};
+}
+
+/* Hoeveel mist elke spiergroep nog deze week? */
+function spierTekort() {
+  const fase = (instelLees().fase || "in");
+  const doel = SPIERDOEL[fase === "off" ? "off" : "in"];
+  const gedaan = weekVolume();
+  const uit = {};
+  Object.values(OEF).forEach(o => Object.keys(o.spieren).forEach(sp => {
+    if (!(sp in uit)) uit[sp] = Math.max(0, doel - (gedaan[sp] || 0));
+  }));
+  return {tekort: uit, doel, gedaan};
+}
+
+/* Drie voorstellen, op volgorde van wat je deze week nog mist. */
+function workoutVoorstellen(ctx) {
+  const {tekort} = spierTekort();
+  const ruimte = weekRuimte();
+  const log = logLees();
+  const vandaag = (DATA.planbasis || {}).vandaag;
+
+  /* Voor conditie is TSB wél het juiste signaal: een intervaltraining en je
+     vorm komen allebei uit je hartslag. Onder -20 is een VO2max-blok
+     kwaliteitswerk op vermoeide benen, en dan haal je de intensiteit niet die
+     de prikkel maakt. */
+  const tsb = ((FITHEID || DATA.fitness || []).slice(-1)[0] || {}).tsb;
+  const hardDezeWeek = (DATA.weekly || []).slice(-1).map(w =>
+    ((w.zones || {}).z4 || 0) + ((w.zones || {}).z5 || 0))[0] || 0;
+
+  const kandidaten = Object.entries(WORKOUTS).map(([sleutel, W]) => {
+    if (W.soort === "conditie") {
+      const redenen = [];
+      let blokkade = null, winst = 0;
+      if (W.zwaarte >= 1) {
+        /* Kwaliteitswerk vraagt frisse benen en niet te dicht op de wedstrijd. */
+        if (ctx.wedstrijd && ctx.wedstrijd.over <= 1) blokkade = "te dicht op je wedstrijd";
+        else if (tsb != null && tsb < -20) blokkade = `je vorm staat op ${Math.round(tsb)}`;
+        else {
+          winst = hardDezeWeek < 25 ? 6 : 2;
+          redenen.push(hardDezeWeek < 25
+            ? `pas ${Math.round(hardDezeWeek)} min hard deze week`
+            : `${Math.round(hardDezeWeek)} min hard deze week`);
+          if (tsb != null) redenen.push(`vorm ${Math.round(tsb)}`);
+        }
+      } else {
+        /* Een rustige duurloop kan bijna altijd; hij kost weinig en herstelt. */
+        winst = 3.5;
+        redenen.push("kan op elke dag");
+        if (tsb != null && tsb < -20) redenen.push("licht genoeg bij deze vorm");
+      }
+      return {sleutel, W, winst, blokkade, redenen, dagenGeleden: null, conditie: true};
+    }
+
+    /* Wat levert deze workout op voor de groepen die nog tekortkomen? */
+    let winst = 0, raakt = {};
+    wkOefeningen(sleutel).forEach(k => {
+      const o = OEF[k]; if (!o) return;
+      Object.entries(o.spieren).forEach(([sp, deel]) => {
+        const bijdrage = Math.min(tekort[sp] || 0, 3 * deel);
+        winst += bijdrage;
+        if (bijdrage > 0.5) raakt[sp] = true;
+      });
+    });
+
+    const laatst = log.filter(x => x.type === sleutel)
+                      .sort((a, b) => a.datum < b.datum ? 1 : -1)[0];
+    const dagenGeleden = laatst ? dagenTussen(laatst.datum, vandaag) : null;
+
+    const redenen = [];
+    let blokkade = null;
+
+    /* Zware benen te dicht op de wedstrijd -- de enige harde blokkade. */
+    const heeftZwareBenen = wkOefeningen(sleutel).some(k => OEF[k] &&
+      OEF[k].onder && OEF[k].rol === "basis");
+    if (heeftZwareBenen && !ctx.zwaarBenenMag) {
+      blokkade = ctx.wedstrijd && ctx.wedstrijd.over === 0
+        ? "wedstrijddag" : "te dicht op je wedstrijd";
+    }
+
+    /* Twee dagen tussen dezelfde workout: minder is lokaal herstel opeten. */
+    if (dagenGeleden !== null && dagenGeleden < 2) {
+      blokkade = blokkade || `pas ${dagenGeleden === 0 ? "vandaag" : "gisteren"} gedaan`;
+    }
+
+    const groepen = Object.keys(raakt);
+    if (groepen.length) redenen.push(`vult ${groepen.slice(0, 3).join(", ")} aan`);
+    if (dagenGeleden !== null && dagenGeleden >= 2)
+      redenen.push(`${dagenGeleden} dagen geleden gedaan`);
+    else if (dagenGeleden === null) redenen.push("nog niet gelogd");
+
+    return {sleutel, W, winst, blokkade, redenen, dagenGeleden};
+  });
+
+  /* Geblokkeerde voorstellen zakken naar onderen maar verdwijnen niet: je moet
+     kunnen zien dat ze bestaan en waarom ze nu niet kunnen. */
+  kandidaten.sort((a, b) =>
+    (a.blokkade ? 1 : 0) - (b.blokkade ? 1 : 0) || b.winst - a.winst);
+  return {lijst: kandidaten.slice(0, 3), ruimte};
+}
+
+function dagenTussen(a, b) {
+  return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5);
+}
+
 function bouwWorkout(type, ctx) {
-  const W = WORKOUTS[type];
-  const rijen = W.oefeningen.map(k => volgendeSet(k, ctx));
+  const rijen = wkOefeningen(type).map(k => {
+    const r = volgendeSet(k, ctx);
+    /* Wat jij zelf hebt ingesteld wint van het voorstel -- maar we onthouden
+       dat het van jou komt, zodat het scherm dat kan laten zien. */
+    const eigen = wkOverride(type, k);
+    if (eigen.sets != null) { r.sets = eigen.sets; r.eigenSets = true; }
+    if (eigen.reps != null) { r.laag = r.hoog = eigen.reps; r.eigenReps = true; }
+    if (eigen.kg != null) { r.kg = eigen.kg; r.eigenKg = true; }
+    return r;
+  });
   /* Kan de zware beenoefening vandaag niet, dan vervangen we hem in plaats
      van hem stil weg te laten -- je moet kunnen zien dat er iets is
      aangepast en waarom. */
@@ -3676,6 +4001,7 @@ const SYNC_VAKKEN = {
   plan:   {sleutel: () => PLAN_KEY,   vorm: "kaart", omhulsel: "items"},
   log:    {sleutel: () => LOG_KEY,    vorm: "lijst"},
   explos: {sleutel: () => EXPLOS_KEY, vorm: "lijst"},
+  zesmin: {sleutel: () => ZESMIN_KEY, vorm: "lijst"},
   instel: {sleutel: () => INSTEL_KEY, vorm: "blok"},
 };
 
@@ -5941,98 +6267,63 @@ function renderCheckRegel() {
    Handmatig, want er is geen apparaat dat dit voor je meet. Eén meting per
    week is genoeg; het gaat om de trend, niet om de precisie.
    ======================================================================= */
+/* De explosiviteitskaart is van Training verdwenen; deze sleutel blijft staan
+   zodat eerder gelogde metingen niet uit je opslag en je synchronisatie vallen.
+   Wil je hem ooit terug, dan staat de data er nog. */
 const EXPLOS_KEY = "sportdashboard.explosiviteit.v1";
-const explosLees = () => lijstLees(EXPLOS_KEY);
-const explosZet  = a => lijstZet(EXPLOS_KEY, a);
 
-function renderExplos() {
-  const rijen = explosLees().slice().sort((a, b) => a.datum < b.datum ? -1 : 1);
-  const stats = document.getElementById("explosStats");
-  const hint = document.getElementById("explosHint");
-  if (!stats) return;
+/* Je 6 minuten all out, in meters. Een losse lijst en geen veld in de
+   instellingen: het is een meting die je herhaalt, dus je wilt de reeks. */
+/* Wat jij zelf aan een workout hebt veranderd: welke oefeningen erin zitten,
+   en per oefening je eigen sets, reps en kg. Losse opslag en geen bewerking
+   van WORKOUTS zelf, zodat een voorstel dat uit het model komt en jouw
+   aanpassing daarop uit elkaar te houden blijven -- en je met een knop terug
+   kunt naar het voorstel. */
+const WKAAN_KEY = "sportdashboard.workoutaanpassing.v1";
+const wkAanLees = () => bewaardLees(WKAAN_KEY, {});
+const wkAanZet  = o => bewaardSchrijf(WKAAN_KEY, o);
 
-  const cel = (k, v, e, d) => `<div class="metriek"><div class="l">${k}</div>
-    <div class="v">${v}<small>${e}</small></div>
-    <div class="bij">${d}</div></div>`;
-
-  const sprongen = rijen.filter(r => r.sprong);
-  const worpen = rijen.filter(r => r.worp);
-  const laatste = sprongen[sprongen.length - 1];
-  const eerder = sprongen.slice(0, -1);
-  const beste = sprongen.reduce((b, r) => (!b || r.sprong > b.sprong) ? r : b, null);
-
-  stats.innerHTML =
-    cel("Sprong", laatste ? laatste.sprong : "–", laatste ? "cm" : "",
-        laatste ? `gemeten op ${kortDatum(laatste.datum)}` : "nog niets gemeten") +
-    cel("Beste", beste ? beste.sprong : "–", beste ? "cm" : "",
-        beste ? `op ${kortDatum(beste.datum)}` : "—") +
-    cel("Worp", worpen.length ? worpen[worpen.length - 1].worp : "–",
-        worpen.length ? "m" : "", worpen.length ? "laatste meting" : "optioneel");
-
-  if (sprongen.length >= 2) {
-    mk("chExplos", {type:"line", data:{labels: sprongen.map(r => kortDatum(r.datum)), datasets:[
-      {label:"sprong (cm)", data: sprongen.map(r => r.sprong), borderColor: css("--s5"), fill:false},
-    ]}, options:{scales:{x:xAxisCat(), y:axis()}}});
-  } else {
-    const cv = document.getElementById("chExplos");
-    if (cv) cv.parentElement.innerHTML =
-      '<div class="empty">Vanaf twee metingen verschijnt hier je lijn. Meet steeds hetzelfde ' +
-      'en op hetzelfde moment van de dag — dan zegt de trend iets, ook als het getal ruw is.</div>';
-  }
-
-  if (beste && laatste && beste.sprong - laatste.sprong >= 3) {
-    hint.className = "melding melding--stil melding--let";
-    hint.innerHTML = `Je zit ${(beste.sprong - laatste.sprong).toFixed(0)} cm onder je beste.
-      Kijk of je maximaalkracht ondertussen wél stijgt — dat is precies het patroon waar je bij
-      handbal op moet letten, want je worp gaat als eerste.`;
-  } else if (rijen.length) {
-    hint.className = "melding melding--stil";
-    hint.textContent = `${rijen.length} meting${rijen.length === 1 ? "" : "en"} vastgelegd. ` +
-      `Reken pas op verandering bij meer dan twee centimeter verschil.`;
-  } else {
-    hint.className = "melding melding--stil";
-    hint.textContent = "Nog niets gemeten. Eén staande sprong per week is genoeg — het gaat om " +
-      "de lijn, niet om het getal.";
-  }
+function wkOefeningen(type) {
+  const eigen = wkAanLees()[type];
+  return (eigen && eigen.oefeningen) || WORKOUTS[type].oefeningen;
 }
 
-function explosOpen() {
-  const vandaag = (DATA.planbasis || {}).vandaag || "";
-  const host = document.getElementById("explosVel");
-  host.innerHTML = `
-    <div class="editor">
-      <h4>Meting toevoegen</h4>
-      <div class="velden">
-        <div class="veld"><label for="exDatum">Wanneer</label>
-          <input id="exDatum" type="date" value="${vandaag}" max="${vandaag}"></div>
-        <div class="veld"><label for="exSprong">Staande sprong</label>
-          <input id="exSprong" type="number" min="10" max="120" step="0.5" placeholder="cm" inputmode="decimal"></div>
-        <div class="veld"><label for="exWorp">Worp (optioneel)</label>
-          <input id="exWorp" type="number" min="5" max="60" step="0.5" placeholder="meter" inputmode="decimal"></div>
-      </div>
-      <p class="schatting">Meet steeds op dezelfde manier en bij voorkeur vóór je training —
-        ná een zware sessie meet je vermoeidheid, niet je explosiviteit.</p>
-      <div class="knoppen">
-        <button class="knop knop--primair" id="exOk">Opslaan</button>
-        <button class="knop knop--secundair" id="exAnn">Annuleren</button>
-      </div>
-    </div>`;
-  document.getElementById("exAnn").onclick = () => { host.innerHTML = ""; };
-  document.getElementById("exOk").onclick = () => {
-    tik(true);
-    const d = document.getElementById("exDatum").value;
-    const sp = parseFloat(document.getElementById("exSprong").value);
-    const wp = parseFloat(document.getElementById("exWorp").value);
-    if (!d || (!Number.isFinite(sp) && !Number.isFinite(wp))) return;
-    const rijen = explosLees().filter(r => r.datum !== d);
-    rijen.push({datum: d, sprong: Number.isFinite(sp) ? sp : null,
-                worp: Number.isFinite(wp) ? wp : null});
-    explosZet(rijen);
-    host.innerHTML = "";
-    renderExplos();
-  };
-  host.scrollIntoView({behavior: "smooth", block: "nearest"});
+function wkOverride(type, sleutel) {
+  const eigen = wkAanLees()[type];
+  return (eigen && eigen.per && eigen.per[sleutel]) || {};
 }
+
+function wkAanpassen(type, muteer) {
+  const alles = wkAanLees();
+  const nu = alles[type] || {oefeningen: [...WORKOUTS[type].oefeningen], per: {}};
+  muteer(nu);
+  alles[type] = nu; wkAanZet(alles);
+}
+
+const ZESMIN_KEY = "sportdashboard.zesminuten.v1";
+const zesminLees = () => lijstLees(ZESMIN_KEY);
+
+/* Een 6-minutentest is gewoon een hardloopactiviteit van zes minuten met een
+   afstand -- die hoef je niet met de hand in te voeren, die staat al in je
+   sessies. Voorwaarde is wel dat je hem als APARTE activiteit opneemt: doe je
+   hem midden in een langere training, dan ziet Garmin een sessie van 50
+   minuten en valt er niets uit te halen. Vandaar dat handmatig invoeren blijft
+   bestaan, en dat een handmatige invoer op dezelfde dag voorgaat. */
+function zesminUitSessies() {
+  return (DATA.activities || [])
+    .filter(a => a.sport === "Hardlopen" && a.distance_m > 700 &&
+                 a.duration_s >= 330 && a.duration_s <= 400)
+    .map(a => ({datum: a.date, meter: Math.round(a.distance_m), auto: true}));
+}
+
+/* Alles bij elkaar: wat je zelf invulde plus wat we in je sessies vonden. */
+function zesminAlles() {
+  const eigen = zesminLees();
+  const eigenDagen = new Set(eigen.map(x => x.datum));
+  return [...eigen, ...zesminUitSessies().filter(x => !eigenDagen.has(x.datum))]
+    .sort((a, b) => a.datum < b.datum ? 1 : -1);
+}
+const zesminZet  = a => lijstZet(ZESMIN_KEY, a);
 
 /* =======================================================================
    Instellingen tekenen
@@ -6108,7 +6399,9 @@ function renderInstellingen() {
   document.getElementById("doelVelden").innerHTML =
     VELD("iBench", "Bankdrukken 1RM-doel", "number", I.doelBench, "kg", 'min="20" max="300" step="2.5"') +
     VELD("iSquat", "Squat 1RM-doel", "number", I.doelSquat, "kg", 'min="20" max="400" step="2.5"') +
-    VELD("iDead", "Deadlift 1RM-doel", "number", I.doelDead, "kg", 'min="20" max="400" step="2.5"');
+    VELD("iDead", "Deadlift 1RM-doel", "number", I.doelDead, "kg", 'min="20" max="400" step="2.5"') +
+    VELD("i6min", "6 minuten all out", "number", I.doel6min, "meter",
+         'min="800" max="2500" step="10"');
 
   document.getElementById("lijfVelden").innerHTML =
     VELD("iGewicht", "Lichaamsgewicht", "number", I.gewicht, "kg", 'min="40" max="180" step="0.5"') +
@@ -6117,7 +6410,7 @@ function renderInstellingen() {
          `<option value="in"${I.fase !== "off" ? " selected" : ""}>In het seizoen</option>
           <option value="off"${I.fase === "off" ? " selected" : ""}>Buiten het seizoen</option>`);
 
-  ["iBench", "iSquat", "iDead", "iGewicht", "iFase"].forEach(id => {
+  ["iBench", "iSquat", "iDead", "i6min", "iGewicht", "iFase"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", instellingenOpslaan);
   });
@@ -6128,9 +6421,10 @@ function instellingenOpslaan() {
   const n = id => { const x = parseFloat(v(id)); return Number.isFinite(x) ? x : null; };
   instelZet({
     doelBench: n("iBench"), doelSquat: n("iSquat"), doelDead: n("iDead"),
+    doel6min: n("i6min"),
     gewicht: n("iGewicht"), fase: v("iFase") || "in",
   });
-  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout(); renderExplos();
+  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout();
 }
 
 /* =======================================================================
@@ -6147,6 +6441,40 @@ function besteE1rm(sleutel) {
   return beste;
 }
 
+/* Invoer voor de veldtest. Datum en meters, meer is er niet: alles wat je
+   erbij zou vragen maakt de drempel hoger om hem te doen. */
+function zesminOpen() {
+  const host = document.getElementById("zesminVel");
+  const vandaag = (DATA.planbasis || {}).vandaag || "";
+  host.innerHTML = `
+    <div class="editor">
+      <h4>6 minuten all out</h4>
+      <div class="velden">
+        <div class="veld"><label for="zmDatum">Wanneer</label>
+          <input id="zmDatum" type="date" value="${vandaag}" max="${vandaag}"></div>
+        <div class="veld"><label for="zmMeter">Afstand</label>
+          <input id="zmMeter" type="number" min="500" max="3000" step="5"
+                 placeholder="meter" inputmode="numeric"></div>
+      </div>
+      <p class="cbij">Loop zes minuten zo hard als je vol kunt houden, op een baan of met GPS.
+        Doe hem steeds op dezelfde ondergrond en bij voorkeur uitgerust — anders meet je je
+        vermoeidheid en niet je conditie.</p>
+      <div class="knoprij knoprij--ruim">
+        <button class="knop knop--primair" id="zmOk">Opslaan</button>
+        <button class="knop knop--secundair" id="zmAnn">Annuleren</button>
+      </div>
+    </div>`;
+  document.getElementById("zmAnn").onclick = () => { host.innerHTML = ""; };
+  document.getElementById("zmOk").onclick = () => {
+    const meter = parseFloat(document.getElementById("zmMeter").value);
+    const datum = document.getElementById("zmDatum").value;
+    if (!Number.isFinite(meter) || !datum) return;
+    tik(true);
+    zesminZet([...zesminLees().filter(x => x.datum !== datum), {datum, meter: Math.round(meter)}]);
+    host.innerHTML = ""; renderDoelen();
+  };
+}
+
 function renderDoelen() {
   /* Hier stond een VO2max-doel met een stand die uit je shuttlerun werd
      geschat. Die is eruit: de schattingsfout van Léger is 5,4 ml/kg/min, dus
@@ -6156,6 +6484,22 @@ function renderDoelen() {
      hem echt heeft gemeten. */
   const I = instelLees();
   const items = [];
+
+  /* Het 6-minutendoel is geen 1RM maar een veldtest: geen schatting uit een
+     formule, maar wat je die dag daadwerkelijk liep. Daarom staat er geen
+     marge bij -- de meting is de meting. */
+  if (I.doel6min) {
+    const m = zesminAlles();
+    const beste = m.reduce((b, x) => (!b || x.meter > b.meter) ? x : b, null);
+    items.push({naam: "6 minuten all out", doel: I.doel6min, kleur: "--s1", icoon: "sprong",
+      eenheid: "m", nu: beste ? beste.meter : null,
+      tekst: beste
+        ? `Je beste van ${m.length} ${m.length === 1 ? "meting" : "metingen"}, gelopen op ` +
+          `${kortDatum(beste.datum)}${beste.auto ? " (uit je sessies gehaald)" : ""}` +
+          `${m[0] !== beste ? ` — laatst ${m[0].meter} m op ${kortDatum(m[0].datum)}` : ""}.`
+        : "Nog niets gemeten. Neem je test op als losse hardloopactiviteit, dan pik ik hem " +
+          "vanzelf op — of vul je afstand hieronder in."});
+  }
 
   [["bench", "Bankdrukken", I.doelBench, "--s2", "bank"],
    ["squat", "Squat", I.doelSquat, "--s3", "been"],
@@ -6224,10 +6568,38 @@ function renderWorkout() {
   /* Zolang jij zelf niets gekozen hebt, staat de workout voor die vandaag past.
      Mogen de zware benen niet, dan is dat de bovenlichaamdag -- die is precies
      daarvoor zonder squat en deadlift opgezet. */
-  let gekozen = false;
+  /* Wat je voor vandaag plande, staat vandaag open. Je plan is een voornemen;
+     de ochtend mag het overrulen, maar dan moet je wél zien dat het overruled
+     is en waarom -- vandaar dat de reden in het contextblok belandt. */
+  let gekozen = false, uitPlanning = null;
   if (!WK_ACTIEF) {
-    WK_ACTIEF = ctx.zwaarBenenMag ? "push" : "boven";
-    gekozen = !ctx.zwaarBenenMag;
+    const {open} = vandaagOpDePlanning();
+    uitPlanning = open.map(d => d.workout).find(w => w && WORKOUTS[w]) || null;
+    if (uitPlanning) {
+      const W = WORKOUTS[uitPlanning];
+      const heeftBenen = W.soort !== "conditie" &&
+        wkOefeningen(uitPlanning).some(k => OEF[k] && OEF[k].onder && OEF[k].rol === "basis");
+      if (heeftBenen && !ctx.zwaarBenenMag) {
+        WK_ACTIEF = "boven"; gekozen = true;
+        ctx.redenen.unshift(`Je had ${W.naam} gepland, maar de zware benen kunnen vandaag niet. ` +
+          `Bovenlichaam staat ervoor in de plaats.`);
+      } else if (W.soort === "conditie" && W.zwaarte >= 1 &&
+                 ((ctx.gereedheid != null && ctx.gereedheid < 40) ||
+                  (ctx.tsb != null && ctx.tsb < -20))) {
+        WK_ACTIEF = "duur"; gekozen = true;
+        ctx.status = "warning";
+        ctx.redenen.unshift(`Je had ${W.naam} gepland, maar ${ctx.gereedheid != null &&
+          ctx.gereedheid < 40 ? `je gereedheid is ${ctx.gereedheid}` :
+          `je vorm staat op ${Math.round(ctx.tsb)}`}. Intervallen halen hun prikkel uit de ` +
+          `intensiteit en die haal je vandaag niet; een rustige duurloop levert meer op.`);
+      } else {
+        WK_ACTIEF = uitPlanning;
+        ctx.redenen.unshift(`${W.naam} staat vandaag op je planning.`);
+      }
+    } else {
+      WK_ACTIEF = ctx.zwaarBenenMag ? "push" : "boven";
+      gekozen = !ctx.zwaarBenenMag;
+    }
   }
   document.getElementById("wkContext").innerHTML = `
     <div class="duiding duiding--los ${ctx.status}">
@@ -6235,10 +6607,44 @@ function renderWorkout() {
       <div>${ctx.redenen.map(r => `<div>${r}</div>`).join("")}</div>
     </div>`;
 
-  document.querySelectorAll("#wkTabs button").forEach(b =>
-    b.setAttribute("aria-pressed", b.dataset.wk === WK_ACTIEF ? "true" : "false"));
+  /* De drie voorstellen, op volgorde van wat je week nog mist. */
+  const {lijst, ruimte} = workoutVoorstellen(ctx);
+  const keuze = document.getElementById("wkTabs");
+  keuze.innerHTML = lijst.map(v => `
+    <button class="act" data-wk="${v.sleutel}" data-ic3="halter"
+            aria-pressed="${v.sleutel === WK_ACTIEF}" ${v.blokkade ? 'data-blok="1"' : ""}>
+      <span class="ic"></span>
+      <span class="mid"><span class="nm">${v.W.naam}</span>
+        <span class="mt">${v.blokkade
+          ? `kan nu niet — ${v.blokkade}`
+          : v.redenen.join(" · ")}</span></span>
+    </button>`).join("") +
+    `<p class="cbij">Nog <b>${ruimte.dagen}</b> ${ruimte.dagen === 1 ? "dag" : "dagen"} deze week,
+       waarvan ${ruimte.gepland} met iets ingepland. De volgorde komt uit je setvolume per
+       spiergroep van de laatste zeven dagen — niet uit je vorm, want die komt uit je hartslag en
+       ziet krachtvermoeidheid niet.</p>`;
+  document.querySelectorAll("button[data-ic3]").forEach(b => {
+    const gat = b.querySelector(".ic");
+    if (gat && !gat.querySelector("svg")) gat.innerHTML = ic(b.dataset.ic3);
+  });
 
   const W = WORKOUTS[WK_ACTIEF];
+
+  /* Een conditietraining heeft geen sets en reps; die krijgt een voorschrift
+     en de reden waarom hij aan je doel bijdraagt. */
+  if (W.soort === "conditie") {
+    document.getElementById("wkBlad").innerHTML = `
+      <div class="wkkop"><h3>${W.naam}</h3><span class="wkmeta">${W.ondertitel}</span></div>
+      <div class="card card--accent" style="margin-top:var(--sp3)">
+        <div class="tgetal" style="font-size:26px">${W.voorschrift}</div>
+        <p class="cbij" style="margin-top:var(--sp3)">${W.waarom}</p>
+      </div>
+      <div class="duiding good"><i class="dot">${statusIcon("good")}</i>
+        <div><h4>Wat het je oplevert</h4><p>${W.bijdrage}</p></div></div>`;
+    document.getElementById("wkLogger").innerHTML = "";
+    return;
+  }
+
   const rijen = bouwWorkout(WK_ACTIEF, ctx);
   const laatste = logLees().filter(x => x.type === WK_ACTIEF)
                            .sort((a, b) => a.datum < b.datum ? 1 : -1)[0];
@@ -6259,21 +6665,39 @@ function renderWorkout() {
         hierboven altijd een andere kiezen.</span>` : ""}
     </div>
     <div class="oeflijst">
-      ${rijen.map(r => `
-        <div class="oef">
+      ${rijen.map((r, i) => `
+        <div class="oef" data-oefrij="${r.sleutel}">
           <div class="naam">${r.oef.naam}${r.vervangen
               ? ` <span style="color:var(--warning)">— vandaag licht</span>` : ""}
+            ${r.eigenSets || r.eigenReps || r.eigenKg
+              ? ` <span class="oefeigen">aangepast</span>` : ""}
             <small>${r.vervangen
               ? "zware benen staan te dicht op je wedstrijd of op je vorige beensessie. " +
                 (r.kg ? `Twee rustige sets op ongeveer 60% (${r.kg} kg) houdt het patroon warm ` +
                         `zonder je sprongkracht te kosten; overslaan mag ook.`
-                      : "Sla hem vandaag over.") +
-                (r.reden ? ` <span style="opacity:.75">Zonder die beperking zou hier staan: ` +
-                           `${r.reden}.</span>` : "")
+                      : "Sla hem vandaag over.")
               : r.reden}</small></div>
           <div class="voorschrift ${r.vorige && r.kg > r.vorige.kg && !r.vervangen ? "op" : ""}">
             ${r.kg ? `${r.kg}<small>kg</small>` : `<span style="color:var(--muted)">–</span>`}
             <small>${r.sets} × ${r.laag === r.hoog ? r.laag : `${r.laag}–${r.hoog}`} · ${r.rir}</small>
+          </div>
+          <div class="oefbewerk">
+            <select class="oefwissel" data-wissel="${r.sleutel}" aria-label="Andere oefening">
+              ${Object.entries(OEF).map(([k, o]) =>
+                `<option value="${k}"${k === r.sleutel ? " selected" : ""}>${o.naam}</option>`).join("")}
+            </select>
+            <div class="oefvelden">
+              <div><label>Sets</label><input type="number" min="1" max="10" step="1"
+                data-veld2="sets" data-oef2="${r.sleutel}" value="${r.sets}"
+                class="${r.eigenSets ? "eigen" : ""}" inputmode="numeric"></div>
+              <div><label>Reps</label><input type="number" min="1" max="30" step="1"
+                data-veld2="reps" data-oef2="${r.sleutel}" value="${r.eigenReps ? r.laag : ""}"
+                placeholder="${r.laag === r.hoog ? r.laag : r.laag + "-" + r.hoog}"
+                class="${r.eigenReps ? "eigen" : ""}" inputmode="numeric"></div>
+              <div><label>Kg</label><input type="number" min="0" max="400" step="0.5"
+                data-veld2="kg" data-oef2="${r.sleutel}" value="${r.kg ?? ""}"
+                placeholder="kg" class="${r.eigenKg ? "eigen" : ""}" inputmode="decimal"></div>
+            </div>
           </div>
         </div>`).join("")}
     </div>
@@ -6288,7 +6712,48 @@ function renderWorkout() {
       herhalingen verder van falen — niet volledig rusten.</div>` : ""}
     <div class="knoprij">
       <button class="knop knop--primair" id="wkGedaan" data-ic2="goed">Deze heb ik gedaan</button>
+      ${wkAanLees()[WK_ACTIEF] ? `<button class="knop knop--stil knop--klein" id="wkReset">
+        Terug naar het voorstel</button>` : ""}
     </div>`;
+
+  /* Wat je hier verandert wordt bewaard per workout en overleeft het opnieuw
+     tekenen. Een leeg veld betekent: terug naar het voorstel van het model. */
+  const blad = document.getElementById("wkBlad");
+  const reset = document.getElementById("wkReset");
+  if (reset) reset.onclick = () => {
+    const alles = wkAanLees(); delete alles[WK_ACTIEF]; wkAanZet(alles);
+    renderWorkout();
+  };
+  blad.querySelectorAll("select[data-wissel]").forEach(sel => {
+    sel.onchange = () => {
+      const oud = sel.dataset.wissel, nieuw = sel.value;
+      if (oud === nieuw) return;
+      wkAanpassen(WK_ACTIEF, w => {
+        const lijst = w.oefeningen || [...WORKOUTS[WK_ACTIEF].oefeningen];
+        const i = lijst.indexOf(oud);
+        if (i >= 0) lijst[i] = nieuw; else lijst.push(nieuw);
+        w.oefeningen = lijst;
+        /* De instellingen van de oude oefening horen niet mee te verhuizen:
+           15 kg lateral raise is geen 15 kg bankdrukken. */
+        if (w.per) delete w.per[oud];
+      });
+      renderWorkout();
+    };
+  });
+  blad.querySelectorAll("input[data-veld2]").forEach(inp => {
+    inp.onchange = () => {
+      const sleutel = inp.dataset.oef2, veld = inp.dataset.veld2;
+      const waarde = inp.value.trim() === "" ? null : parseFloat(inp.value);
+      wkAanpassen(WK_ACTIEF, w => {
+        w.per = w.per || {};
+        w.per[sleutel] = w.per[sleutel] || {};
+        if (waarde == null || !Number.isFinite(waarde)) delete w.per[sleutel][veld];
+        else w.per[sleutel][veld] = waarde;
+        if (!Object.keys(w.per[sleutel]).length) delete w.per[sleutel];
+      });
+      renderWorkout();
+    };
+  });
 
   const knop = document.getElementById("wkGedaan");
   if (knop) knop.addEventListener("click", () => tik(true));
@@ -6482,14 +6947,12 @@ function boot() {
   renderVandaagTegels();
   renderBelDials(); renderBelTegels(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
   renderPlanner(); renderPlan(); renderUitleg();
-  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout(); renderExplos();
+  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout();
   renderExplain(); renderInsights(); langeTekstInklappen();
-  const ea = document.getElementById("explosAdd");
-  if (ea && !ea.querySelector("svg")) {
-    ea.insertAdjacentHTML("afterbegin", ic("sprong"));
-    ea.onclick = explosOpen;
-  }
   planKnoppen();
+  const zm = document.getElementById("zesminAdd");
+  if (zm) { if (!zm.querySelector("svg")) zm.insertAdjacentHTML("afterbegin", ic("sprong"));
+            zm.onclick = zesminOpen; }
 
   /* De URL bepaalt waar je begint. Ververs je op Herstel, dan sta je daarna
      weer op Herstel; deel je een link naar een sessie, dan opent die sessie.
@@ -7079,7 +7542,7 @@ function coachContext() {
     komende_dagen: week,
     eigen_checks: checks,
     laatste_krachtwaarden: kracht,
-    doelen: {bankdrukken: I.doelBench ?? null,
+    doelen: {bankdrukken: I.doelBench ?? null, zes_minuten_meter: I.doel6min ?? null,
              squat: I.doelSquat ?? null, deadlift: I.doelDead ?? null,
              gewicht: I.gewicht ?? null, fase: I.fase === "off" ? "buiten het seizoen" : "in het seizoen"},
     dekking: DATA.coverage || {},
@@ -7271,7 +7734,7 @@ function coachOpmaak(tekst) {
    niet klopt gooien we weg in plaats van een kaart te tonen met "undefined"
    erin -- een knop waarvan je niet weet wat hij doet is erger dan geen knop. */
 const PLAN_SOORTEN = ["rust", "training", "wedstrijd", "extra", "sociaal"];
-const DOEL_VELDEN = ["doelBench", "doelSquat", "doelDead"];
+const DOEL_VELDEN = ["doelBench", "doelSquat", "doelDead", "doel6min"];
 const isDatum = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
   && !isNaN(new Date(d + "T12:00:00").getTime());
 
@@ -7306,8 +7769,8 @@ function voorstelTekst(v) {
     return `${langeDatum(v.datum)} als <strong>${wat}</strong> inplannen${v.note ? ` — ${veiligeTekst(v.note)}` : ""}`;
   }
   if (v.soort === "doel") {
-    const naam = {doelBench: "bankdrukken", doelSquat: "squat",
-                  doelDead: "deadlift"}[v.veld] || v.veld;
+    const naam = {doelBench: "bankdrukken", doelSquat: "squat", doelDead: "deadlift",
+                  doel6min: "6 minuten all out"}[v.veld] || v.veld;
     return `Je doel voor <strong>${naam}</strong> op <strong>${v.waarde}</strong> zetten`;
   }
   return "Onbekend voorstel";
