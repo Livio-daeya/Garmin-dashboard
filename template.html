@@ -181,7 +181,9 @@
 .dial { display: flex; flex-direction: column; align-items: center; gap: var(--sp2);
         cursor: pointer; background: none; border: 0; font: inherit; color: inherit; }
 .dial .rw { position: relative; }
-.dial svg { display: block; transform: rotate(-90deg); }
+/* Alleen de ring wordt gedraaid zodat hij bovenaan begint. Deze regel gold
+   voor élke svg in de wijzer en zette daarmee ook de sparkline op zijn kant. */
+.dial .rw svg { display: block; transform: rotate(-90deg); }
 .dial .val { position: absolute; inset: 0; display: flex; flex-direction: column;
              align-items: center; justify-content: center; }
 /* Het getal moet in de ring passen, en hoe lang het getal is weten we pas
@@ -205,6 +207,12 @@
 .dial.b .dlt { font-size: var(--t-klein); margin-top: var(--sp1); }
 .dial .dlt.op { color: var(--good); } .dial .dlt.neer { color: var(--critical); }
 .dial .dlt.vlak { color: var(--muted); }
+/* Een lijntje van zeven dagen onder de ring. Eén cijfer plus een verschil met
+   gisteren zegt niets over of dit normaal is vóór jou; zeven punten wel. Geen
+   assen, geen labels -- de vorm is de hele boodschap. */
+.dial .vonk { display: block; width: 100%; max-width: 92px; height: 18px;
+  margin-top: var(--sp1); opacity: .8; }
+.dial.b .vonk { max-width: 112px; height: 22px; }
 .dial .cap { font-size: var(--t-micro); letter-spacing: .12em; color: var(--muted);
              font-weight: var(--w-nadruk); text-transform: uppercase; }
 .dial .subt { font-size: var(--t-klein); color: var(--ink-2); font-weight: var(--w-nadruk);
@@ -591,6 +599,21 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
   background: none; color: var(--ink-2); border-radius: var(--r-md); }
 .knop--toevoegen:hover { background: var(--bg2); color: var(--ink); }
 
+
+/* ---- opbouw van een samengesteld cijfer ------------------------------
+   Gereedheid is het enige getal in de app dat uit onderdelen bestaat. Zonder
+   die onderdelen is het een orakel: een cijfer dat je moet geloven. Ze zitten
+   al in de data; ze horen onder de ring te staan, niet op een ander scherm. */
+.opbouw { display: none; margin: var(--sp1) 0 var(--sp2); }
+.opbouw.open { display: block; animation: opkomen var(--traag) var(--ease); }
+.opbouwrij { display: grid; grid-template-columns: 88px 1fr 42px; align-items: center;
+  gap: var(--sp3); padding: var(--sp2) 0; }
+.opbouwrij + .opbouwrij { border-top: 1px solid var(--hair); }
+.opbouwrij .n { font-size: var(--t-klein); font-weight: var(--w-nadruk); color: var(--ink); }
+.opbouwrij .n small { display: block; font-weight: var(--w-normaal); color: var(--muted);
+  font-size: var(--t-micro); }
+.opbouwrij .v { font-size: var(--t-klein); font-weight: var(--w-nadruk); text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--ink); }
 
 /* ---- uitklapkaart ----------------------------------------------------
    Een kaart waarvan de kop altijd staat en het lichaam op verzoek opengaat.
@@ -1316,6 +1339,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
        gemeten dagcijfer is dat op- en ontlaadt: 's ochtends zegt het iets
        over je nacht, 's avonds over wat er nog in zit. -->
   <div class="dials" id="dials"></div>
+  <div class="opbouw" id="opbouw"></div>
 
   <div id="slotKaart"></div>
   <div class="melding" id="verversMelding" style="display:none"></div>
@@ -1645,6 +1669,12 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     </div>
     <div id="planAdvies"></div>
     <div class="how" id="howPlan"></div>
+    <!-- Eén beeld in plaats van een tabel met 87 getallen: staven zijn de
+         belasting die je van plan bent, de lijn is waar je vorm dan uitkomt,
+         en de wedstrijddag is gemarkeerd. Dat is de vraag waarvoor je dit
+         scherm opent. -->
+    <div class="chartbox" id="planBeeldBox" style="display:none"><canvas id="chPlanBeeld"></canvas></div>
+    <div class="legend" id="planBeeldLegenda"></div>
     <div class="scen" id="planScenarios"></div>
   </div>
 
@@ -1672,11 +1702,20 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
   <div class="card">
     <h2>Komende dagen</h2>
-    <p class="hint">Geschatte belasting per dag en waar je vorm dan op uitkomt. De wedstrijddag is gemarkeerd.</p>
-    <div class="planhead">
-      <span>Dag</span><span>Wat</span><span class="num">Belasting</span><span class="num">Vorm</span>
+    <p class="hint">Dezelfde dagen als in de grafiek hierboven, maar dan met de getallen en waar de
+      schatting vandaan komt.</p>
+    <!-- Deze lijst toont wat de grafiek erboven al laat zien. Hij blijft staan
+         voor wie het exacte getal wil of wil weten waar de schatting op stoelt,
+         maar dicht -- anders lees je hetzelfde twee keer en wordt het scherm
+         een meter langer. -->
+    <button class="uitklap" id="planLijstKlap" aria-expanded="false" aria-controls="planLijst">
+      <span id="planLijstTekst">Toon de dagen met getallen</span></button>
+    <div class="inklap" id="planLijst">
+      <div class="planhead">
+        <span>Dag</span><span>Wat</span><span class="num">Belasting</span><span class="num">Vorm</span>
+      </div>
+      <div class="plan" id="planDagen"></div>
     </div>
-    <div class="plan" id="planDagen"></div>
   </div>
 </section>
 
@@ -2333,6 +2372,50 @@ function planDagen(horizon) {
   const rij = [];
   for (let i = 1; i <= n; i++) rij.push(dagPlan(isoPlus(vandaag, i)));
   return projecteerJS(rij);
+}
+
+/* Belasting als staven, vorm als lijn, wedstrijd gemarkeerd. Dit is het beeld
+   dat het hele model draagt: wat ga ik doen, en hoe fris sta ik er dan voor.
+   Het stond alleen als kolom in een tabel. */
+function planBeeldTekenen(rij, doel) {
+  const box = document.getElementById("planBeeldBox");
+  const canvas = document.getElementById("chPlanBeeld");
+  if (!box || !canvas || !rij || rij.length < 3) { if (box) box.style.display = "none"; return; }
+  box.style.display = "";
+  /* renderPlan draait opnieuw zodra je je planning verzet, en Chart.js weigert
+     een canvas dat al in gebruik is. Eerst opruimen dus. */
+  if (CHARTS.chPlanBeeld) { CHARTS.chPlanBeeld.destroy(); delete CHARTS.chPlanBeeld; }
+
+  const labels = rij.map(d => `${d.weekday} ${+d.date.split("-")[2]}`);
+  const isDoel = rij.map(d => !!d.doel);
+  /* De staaf krijgt de kleur van de zwaarste sport van die dag; een wedstrijd
+     is altijd de wedstrijdkleur, want dan gaat het daarover. */
+  const kleur = rij.map(d => {
+    if (d.doel) return css("--warning");
+    const sport = (d.delen || []).map(x => x.sport).filter(Boolean)[0];
+    return d.load ? css(SPORT_VAR[sport] || "--s5") : css("--bg3");
+  });
+
+  mk("chPlanBeeld", {data: {labels, datasets: [
+    {type: "bar", label: "Belasting", data: rij.map(d => d.load || 0), yAxisID: "y",
+     backgroundColor: kleur, borderRadius: 3, borderSkipped: false, order: 2},
+    {type: "line", label: "Vorm", data: rij.map(d => d.tsb), yAxisID: "y2",
+     borderColor: css("--ink"), borderWidth: 2.5, tension: .3, order: 1,
+     pointRadius: isDoel.map(x => x ? 6 : 0),
+     pointBackgroundColor: css("--warning"), pointBorderColor: css("--warning")},
+  ]}, options: {scales: {
+      x: xAxisCat(),
+      y: axis({beginAtZero: true, title: {display: false}}),
+      /* De vorm-as staat rechts en heeft een eigen schaal; hem op dezelfde as
+         zetten als de belasting zou de lijn platdrukken tot een streep. */
+      y2: {position: "right", grid: {display: false}, border: {display: false},
+           ticks: {color: css("--ink-2")}},
+    }}});
+
+  document.getElementById("planBeeldLegenda").innerHTML =
+    `<span><i class="swatch" style="background:var(--s2)"></i>belasting per dag</span>` +
+    `<span><i class="swatch" style="background:var(--ink)"></i>verwachte vorm</span>` +
+    (doel ? `<span><i class="swatch" style="background:var(--warning)"></i>wedstrijddag</span>` : "");
 }
 
 function scenariosJS(rij, doeldatum) {
@@ -3128,6 +3211,8 @@ function renderPlan() {
       <div class="v">${o.tsb>0?"+":""}${o.tsb.toFixed(0)}</div>
       <div class="bij">${o.uitleg}</div>
     </div>`).join("");
+
+  planBeeldTekenen(rij.slice(0, TOON), doel);
 
   const verder = doel && rij.indexOf(doel) >= TOON ? doel : null;
   document.getElementById("planDagen").innerHTML = rij.slice(0, TOON).map(d => {
@@ -4511,6 +4596,31 @@ const uurMin = h => {
   return m >= 60 ? `${Math.floor(m / 60)}u${String(m % 60).padStart(2, "0")}` : `${m} min`;
 };
 
+/* Een sparkline als los SVG-pad. Chart.js zou hier een compleet grafiekobject
+   optuigen voor zeven punten, met assen die we toch uitzetten -- dat is meer
+   werk voor de browser dan het hele scherm. */
+function vonk(reeks, kleur) {
+  const w = (reeks || []).filter(v => v != null);
+  if (w.length < 4) return "";
+  const min = Math.min(...w), max = Math.max(...w), bereik = (max - min) || 1;
+  const bx = 100, by = 30;
+  const punten = w.map((v, i) => [
+    (i / (w.length - 1)) * bx,
+    by - ((v - min) / bereik) * (by - 6) - 3,
+  ]);
+  const pad = punten.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const [lx, ly] = punten[punten.length - 1];
+  return `<svg class="vonk" viewBox="0 0 ${bx} ${by}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${pad}" fill="none" stroke="${kleur}" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="${kleur}"/></svg>`;
+}
+
+/* De laatste n dagen van een veld uit de dagreeks. */
+function laatsteReeks(veld, n) {
+  return (DATA.daily || []).map(d => d[veld]).filter(v => v != null).slice(-(n || 7));
+}
+
 function dialHtml(d) {
   const kleur = d.kleur || BANDVAR[d.band];
   /* Vier tekens passen niet op dezelfde maat als twee. De trap is met opzet
@@ -4537,6 +4647,7 @@ function dialHtml(d) {
       <div class="rw">${teken}<div class="val">${binnen}${dlt}</div></div>
       <div class="cap">${d.cap}</div>
       <div class="subt ${d.band}">${d.subt}</div>
+      ${d.vonk ? vonk(d.vonk, BANDVAR[d.band] || "var(--muted)") : ""}
     </button>`;
 }
 
@@ -4587,7 +4698,7 @@ function renderDials() {
   const slaapVorig = slaapDag ? vorigeMet("sleep_score", slaapDag.date) : null;
   const slaap = {
     cap: "Slaap", num: sl.sleep_score ?? null, deel: (sl.sleep_score || 0) / 100,
-    band: slaapBand, ga: "herstel",
+    band: slaapBand, ga: "herstel", vonk: laatsteReeks("sleep_score", 7),
     delta: deltaVan(sl.sleep_score ?? null, slaapVorig ? slaapVorig.sleep_score : null, true, 1),
     subt: sl.sleep_h ? `${uurMin(sl.sleep_h)} · ${({EXCELLENT:"uitstekend", GOOD:"goed",
             FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten"}`
@@ -4602,7 +4713,7 @@ function renderDials() {
      nergens op stoelt. Liever niets. */
   const ready = {
     cap: "Gereedheid", num: g.score ?? null, deel: (g.score || 0) / 100,
-    band: BAND(g.score), groot: true, ga: "belasting",
+    band: BAND(g.score), groot: true, ga: "gereedheid-open",
     subt: g.score == null ? "nog niet compleet"
         : g.score >= 67 ? "goed hersteld" : g.score >= 34 ? "matig hersteld" : "rust nodig",
   };
@@ -4615,7 +4726,7 @@ function renderDials() {
   const bbVorig = laatste.date ? vorigeMet("bb_now", laatste.date) : null;
   const batterij = {
     cap: "Body Battery", num: bb, deel: (bb || 0) / 100, ga: "herstel",
-    delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
+    vonk: laatsteReeks("bb_now", 7), delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
     band: bb == null ? "n" : bb >= 50 ? "g" : bb >= 25 ? "a" : "r",
     subt: bb == null ? "niet gemeten"
         : (laatste.date !== ((DATA.planbasis || {}).vandaag)
@@ -4624,8 +4735,40 @@ function renderDials() {
 
   host.innerHTML = [slaap, ready, batterij].map(dialHtml).join("");
   host.querySelectorAll("button[data-ga]").forEach(b => {
-    if (b.dataset.ga) b.onclick = () => naarTab(b.dataset.ga);
+    if (!b.dataset.ga) return;
+    /* De gereedheidsring sprong naar Belasting -- en beantwoordde daarmee niet
+       de vraag die je stelt als je erop tikt: waaróm is dit 89? De opbouw zit
+       al in de data; hij hoort onder de ring open te vouwen, niet op een ander
+       scherm te staan. */
+    b.onclick = b.dataset.ga === "gereedheid-open"
+      ? () => opbouwWisselen(b) : () => naarTab(b.dataset.ga);
   });
+  opbouwTekenen(g);
+}
+
+/* De onderdelen van gereedheid, met hun gewicht. Elke balk toont hoe goed dat
+   onderdeel scoort; het percentage ervoor is hoeveel het meeweegt. */
+function opbouwTekenen(g) {
+  const host = document.getElementById("opbouw");
+  if (!host) return;
+  const delen = (g && g.gebruikt) || [];
+  if (!delen.length) { host.innerHTML = ""; return; }
+  host.innerHTML = `<div class="card">` + delen.map(d => `
+    <div class="opbouwrij">
+      <div class="n">${d.naam}<small>weegt ${d.gewicht}% mee</small></div>
+      <div class="spoor"><i style="width:${Math.max(0, Math.min(100, d.deel))}%;
+        background:${d.deel >= 67 ? "var(--good)" : d.deel >= 34 ? "var(--warning)" : "var(--critical)"}"></i></div>
+      <div class="v">${d.deel}</div>
+    </div>`).join("")
+    + (g.gevoelIn ? "" : `<p class="cbij">Je eigen gevoel telt nog niet mee — vul de check-in
+        bovenaan in, dan weegt dat voor 40%.</p>`) + `</div>`;
+}
+
+function opbouwWisselen(knop) {
+  const host = document.getElementById("opbouw");
+  if (!host) return;
+  const open = host.classList.toggle("open");
+  knop.setAttribute("aria-expanded", String(open));
 }
 
 /* Naar een tabblad springen vanaf een tegel of wijzer. */
@@ -4987,6 +5130,7 @@ function renderBelDials() {
     gaugeDeel: tsb == null ? 0 : Math.max(-1, Math.min(1, tsb / 30)),
     kleur: vormKleur, band: tsb == null ? "n" : tsb >= 0 ? "g" : (tsb > -25 ? "" : "r"),
     delta: deltaVan(tsb, eerder.tsb, true, 0.5),
+    vonk: reeks.slice(-7).map(x => x.tsb).filter(v => v != null),
     subt: tsb == null ? "geen model"
         : tsb >= 0 ? "uitgerust"
         : tsb > -25 ? "normale trainingsdruk" : "vermoeidheid loopt voor",
@@ -5163,11 +5307,12 @@ function renderHerstelKop() {
   const kolommen = [
     {v: rhrW, l: "Rusthartslag", st: statusTegenBand(rhrW, rhrB),
      deel: bandVulling(rhrW, rhrB, -1), band: bandKleur(rhrW, rhrB, -1),
-     delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
+     vonk: laatsteReeks("rhr", 7), delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
     {v: hrvW, l: "HRV", groot: true, st: statusTegenBand(hrvW, hrvB),
      deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
-     delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
+     vonk: laatsteReeks("hrv", 7), delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
     {v: sl.sleep_score ?? null, l: "Slaapscore", deel: (sl.sleep_score || 0) / 100,
+     vonk: laatsteReeks("sleep_score", 7),
      delta: deltaVan(sl.sleep_score ?? null, slVorig ? slVorig.sleep_score : null, true, 1),
      band: sl.sleep_score == null ? "n" : BAND(sl.sleep_score),
      st: {tekst: ({EXCELLENT:"uitstekend", GOOD:"goed", FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten",
@@ -5175,6 +5320,7 @@ function renderHerstelKop() {
   ];
   host.innerHTML = kolommen.map(k => dialHtml({
       cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot,
+      vonk: k.vonk,
       subt: k.v == null ? "geen meting" : k.st.tekst,
     })).join("");
 
@@ -5340,6 +5486,21 @@ function renderGedaan() {
   const gec = gecorrigeerdeBelasting();
   const loads = (gec && gec.loads) || (DATA.belastingbasis || {}).daily_load || {};
   const rust = (loads[vandaag] || 0) === 0;
+
+  /* Op een trainingsdag open je deze app om precies één reden: wat deed die
+     sessie met me. Dan hoort dit blok open te staan. Op een rustdag is het
+     naslag en mag het dicht. Dezelfde persoon, ander moment -- en de app weet
+     welk moment het is. Alleen bij het eerste tekenen: heb je hem daarna zelf
+     dichtgeklapt, dan blijft dat zo. */
+  const body = document.getElementById("gedaanBody");
+  const knop = document.getElementById("gedaanKlap");
+  if (body && knop && !body.dataset.gezet) {
+    body.dataset.gezet = "1";
+    body.classList.toggle("open", !rust);
+    knop.setAttribute("aria-expanded", String(!rust));
+    const tekst = document.getElementById("gedaanKlapTekst");
+    if (tekst) tekst.textContent = rust ? "Toon de uitwerking" : "Verberg de uitwerking";
+  }
   const reeks = rust ? rustReeks(vandaag, loads) : {dagen: 0, gepland: 0};
   const nu = FITHEID && FITHEID.length ? FITHEID[FITHEID.length - 1] : null;
   const gisteren = FITHEID && FITHEID.length > 1 ? FITHEID[FITHEID.length - 2] : null;
@@ -6072,8 +6233,10 @@ function iconenPlaatsen() {
   document.querySelectorAll(".schermkop .pijl").forEach(el => {
     if (!el.querySelector("svg")) el.innerHTML = ic("vorige");
   });
-  const kl = document.getElementById("gedaanKlap");
-  if (kl && !kl.querySelector("svg")) kl.insertAdjacentHTML("beforeend", ic("omlaag"));
+  ["gedaanKlap", "planLijstKlap"].forEach(id => {
+    const k = document.getElementById(id);
+    if (k && !k.querySelector("svg")) k.insertAdjacentHTML("beforeend", ic("omlaag"));
+  });
   const vv = document.getElementById("btnVervers");
   if (vv && !vv.querySelector("svg")) vv.innerHTML = ic("ververs");
   themaIcoon();
@@ -7108,6 +7271,14 @@ function langeTekstInklappen() {
     h.insertAdjacentElement("afterend", knop);
   });
 }
+
+document.getElementById("planLijstKlap").addEventListener("click", e => {
+  const knop = e.currentTarget;
+  const open = document.getElementById("planLijst").classList.toggle("open");
+  knop.setAttribute("aria-expanded", String(open));
+  document.getElementById("planLijstTekst").textContent =
+    open ? "Verberg de dagen met getallen" : "Toon de dagen met getallen";
+});
 
 document.getElementById("gedaanKlap").addEventListener("click", e => {
   const knop = e.currentTarget;
