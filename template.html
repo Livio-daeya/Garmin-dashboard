@@ -46,16 +46,22 @@
 :root {
   color-scheme: dark;
 
+  /* Elke laag moet je kunnen ZIEN. De kaart lag op 1,095 contrast van de
+     pagina en de haarlijn op 1,23 -- daaronder zie je op een telefoon in
+     daglicht geen vlak meer, en las een scherm als een zwarte lap met tekst.
+     Nu staat elke stap op minstens 1,19 en de haarlijn op 1,45, terwijl alle
+     tekstkleuren op alle drie de vlakken nog boven 4,5:1 blijven. Verder
+     omhoog kan niet: dan zakt de tekst. */
   --bg0:  #000000;
-  --bg1:  #0E0F11;
-  --bg2:  #16181B;
-  --bg3:  #262A30;
-  --hair: #212429;
+  --bg1:  #17191E;
+  --bg2:  #27292E;
+  --bg3:  #35373C;
+  --hair: #34363B;
   --hair-strong: rgba(255,255,255,0.14);
 
   --ink:   #FFFFFF;
   --ink-2: #9BA1A9;
-  --muted: #7C818A;        /* was #6C727A: haalde 3,7:1 en zakte daarmee voor WCAG AA */
+  --muted: #8E939B;        /* meegegroeid met de lichtere vlakken; haalt 4,7:1 op bg2 */
 
   --good:     #16D9A3;
   --warning:  #F5C14E;
@@ -125,11 +131,15 @@
 /* ---- laag 2: licht (alleen op verzoek) --------------------------- */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg0:  #F4F5F7;
+  /* Zelfde probleem als in het donker: de witte kaart lag 1,09 van de pagina.
+     De pagina is nu donkerder zodat de kaart eruit springt -- maar niet
+     donkerder dan dit, want daaronder zakt de tekst die rechtstreeks op de
+     pagina staat onder 4,5:1. */
+  --bg0:  #ECEEF2;
   --bg1:  #FFFFFF;
-  --bg2:  #ECEEF1;
-  --bg3:  #E2E5E9;
-  --hair: #E2E5E9;
+  --bg2:  #F0F2F6;
+  --bg3:  #E3E5E9;
+  --hair: #D1D3D7;
   --hair-strong: rgba(11,12,14,0.18);
   --ink:   #111417;
   --ink-2: #565C66;
@@ -204,10 +214,11 @@
 .dial .leeg { font-size: var(--t-titel); font-weight: var(--w-cijfer); color: var(--muted); }
 
 /* --- conclusiekaart ------------------------------------------------- */
-/* Op Vandaag is de middelste wijzer de hoofdzaak en dus groter. Op Herstel
-   staan drie gelijkwaardige metingen naast elkaar; daar is een grotere
-   middelste een leugen over de rangorde. */
-.dials.gelijk { grid-template-columns: 1fr 1fr 1fr; }
+/* Eén raster op elk tabblad. Herstel en Belasting hadden drie gelijke
+   kolommen en Vandaag een grotere middelste -- wie snel tussen de tabs
+   wisselde zag de wijzers verspringen en van maat veranderen. De regel is nu:
+   het middelste vak is de hoofdzaak van dát tabblad, en die staat overal op
+   dezelfde plek in hetzelfde formaat. */
 
 /* De twee effectcijfers zeggen pas iets in combinatie. Die leesregel staat
    er daarom onder, in plaats van dat je hem zelf moet maken. */
@@ -497,6 +508,15 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: none; }
 }
+/* ---- kaart -----------------------------------------------------------
+   Het dragende vlak van het hele product. Deze regel was gesneuveld bij het
+   opruimen van .impact, waardoor kaarten helemaal geen achtergrond meer
+   hadden en elk scherm als een zwarte lap met tekst las. */
+.card {
+  background: var(--bg1); border: 1px solid var(--hair);
+  border-radius: var(--r-lg); padding: var(--sp5);
+  margin-bottom: var(--sp3);
+}
 .card + .card { margin-top: 0; }
 /* Een kaart die een gevolg toont krijgt een accentrand -- verder is het
    gewoon de kaart, geen apart component. */
@@ -572,17 +592,34 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 .knop--toevoegen:hover { background: var(--bg2); color: var(--ink); }
 
 
-/* ---- inklapbaar kaartlichaam -----------------------------------------
-   "Wat je vandaag deed" is de langste kaart op Vandaag en beantwoordt een
-   vraag die je niet elke keer stelt. De kop met de samenvattingsregel blijft
-   staan; de onderbouwing komt pas als je erom vraagt. */
-.klap { background: none; border: none; padding: var(--sp1); margin: 0;
-        width: 40px; height: 40px; justify-content: center;
-        color: var(--muted); cursor: pointer; display: flex; align-items: center;
-        border-radius: var(--r-sm); flex: 0 0 auto; }
-.klap:hover { color: var(--ink-2); }
-.klap svg { width: 20px; height: 20px; transition: transform var(--traag) var(--ease); }
-.klap[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* ---- uitklapkaart ----------------------------------------------------
+   Een kaart waarvan de kop altijd staat en het lichaam op verzoek opengaat.
+   Hier hing eerst een kaal chevron-icoontje naast de i-knop; dat viel weg
+   tussen de rest en zei niet wat het deed. Nu is de hele kop de knop, met een
+   woord erbij -- je hoeft niet te raden dat er iets onder zit. */
+/* Een lange hint wordt op twee regels afgekapt met een knop eronder. Twee
+   regels is genoeg om te zien waar het over gaat; wie de rest wil leest hem,
+   wie doorscrollt wordt er niet mee opgehouden. */
+.hint--kort { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; }
+.uitklap { display: flex; align-items: center; gap: var(--sp2);
+  width: 100%; margin-top: var(--sp3); padding: var(--sp2) var(--sp3);
+  background: var(--bg2); border: 1px solid var(--hair); border-radius: var(--r-pill);
+  color: var(--ink-2); font: inherit; font-size: var(--t-klein);
+  font-weight: var(--w-nadruk); cursor: pointer; justify-content: center;
+  transition: background var(--snel) var(--ease), color var(--snel) var(--ease); }
+.uitklap:hover { background: var(--bg3); color: var(--ink); }
+.uitklap svg { width: 16px; height: 16px; transition: transform var(--traag) var(--ease); }
+.uitklap[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* Bij een lange tekst is de knop een terzijde, geen actie: links uitgelijnd,
+   zonder vlak, en niet over de volle breedte. Deze modifier moet ná de
+   basisregel staan -- anders wint de basis en staat hij alsnog vol. */
+.uitklap--tekst { width: auto; margin-top: var(--sp2);
+  padding: var(--sp1) var(--sp3) var(--sp1) 0;
+  background: none; border-color: transparent; color: var(--muted);
+  justify-content: flex-start; }
+.uitklap--tekst:hover { background: none; color: var(--ink); }
 .inklap { display: none; }
 .inklap.open { display: block; animation: opkomen var(--traag) var(--ease); }
 
@@ -1294,9 +1331,9 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
       <span class="spacer"></span>
       <button class="knop knop--secundair knop--icoon" data-how="howGedaan" aria-expanded="false"
               title="Hoe zijn deze getallen berekend?">i</button>
-      <button class="klap" id="gedaanKlap" aria-expanded="false" aria-controls="gedaanBody"
-              title="Uitklappen"></button>
     </div>
+    <button class="uitklap" id="gedaanKlap" aria-expanded="false" aria-controls="gedaanBody">
+      <span id="gedaanKlapTekst">Toon de uitwerking</span></button>
     <div id="gedaanBody" class="inklap">
       <div id="gedaanChips" class="gedaanchips"></div>
       <div id="gedaanRijen" class="gedaanrijen"></div>
@@ -1365,7 +1402,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     <!-- Aeroob en anaeroob zijn gemeten, vorm is model. Ze staan naast elkaar
          omdat ze samen twee verschillende vragen beantwoorden: wat voor werk
          deed ik, en ben ik er fris van. -->
-    <div class="dials gelijk" id="belDials"></div>
+    <div class="dials" id="belDials"></div>
     <div class="duiding duiding--kaart" id="belLees"></div>
     <div class="chips" id="belHerkomst"></div>
     <div class="card"><div id="loadrijen"></div></div>
@@ -1462,7 +1499,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
        Vandaag: hetzelfde soort cijfer hoort er overal hetzelfde uit te zien,
        anders moet je twee keer leren kijken. Hier alle drie even groot --
        geen van de drie is de hoofdzaak. -->
-  <div class="dials gelijk" id="herstelTriple"></div>
+  <div class="dials" id="herstelTriple"></div>
   <div class="card" id="herstelConc" style="display:none"></div>
   <div id="herstelBasis"></div>
 
@@ -5120,13 +5157,16 @@ function renderHerstelKop() {
   const rhrVorig = rhr ? vorigeMet("rhr", rhr.date) : null;
   const slDag = laatsteMet("sleep_score");
   const slVorig = slDag ? vorigeMet("sleep_score", slDag.date) : null;
+  /* Volgorde: rusthartslag, HRV, slaapscore. HRV staat in het midden omdat het
+     middelste vak op elk tabblad de hoofdzaak is -- en van deze drie is HRV
+     het cijfer waar je herstel het scherpst aan afleest. */
   const kolommen = [
-    {v: hrvW, l: "HRV", st: statusTegenBand(hrvW, hrvB),
-     deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
-     delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
     {v: rhrW, l: "Rusthartslag", st: statusTegenBand(rhrW, rhrB),
      deel: bandVulling(rhrW, rhrB, -1), band: bandKleur(rhrW, rhrB, -1),
      delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
+    {v: hrvW, l: "HRV", groot: true, st: statusTegenBand(hrvW, hrvB),
+     deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
+     delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
     {v: sl.sleep_score ?? null, l: "Slaapscore", deel: (sl.sleep_score || 0) / 100,
      delta: deltaVan(sl.sleep_score ?? null, slVorig ? slVorig.sleep_score : null, true, 1),
      band: sl.sleep_score == null ? "n" : BAND(sl.sleep_score),
@@ -5134,7 +5174,7 @@ function renderHerstelKop() {
           klasse: sl.sleep_score == null ? "norm" : sl.sleep_score >= 67 ? "high" : sl.sleep_score >= 34 ? "norm" : "low"}},
   ];
   host.innerHTML = kolommen.map(k => dialHtml({
-      cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta,
+      cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot,
       subt: k.v == null ? "geen meting" : k.st.tekst,
     })).join("");
 
@@ -6033,7 +6073,7 @@ function iconenPlaatsen() {
     if (!el.querySelector("svg")) el.innerHTML = ic("vorige");
   });
   const kl = document.getElementById("gedaanKlap");
-  if (kl && !kl.querySelector("svg")) kl.innerHTML = ic("omlaag");
+  if (kl && !kl.querySelector("svg")) kl.insertAdjacentHTML("beforeend", ic("omlaag"));
   const vv = document.getElementById("btnVervers");
   if (vv && !vv.querySelector("svg")) vv.innerHTML = ic("ververs");
   themaIcoon();
@@ -6063,7 +6103,7 @@ function boot() {
   renderBelDials(); renderLoadrijen(); renderBelasting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
   renderPlanner(); renderPlan(); renderUitleg();
   renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout(); renderExplos();
-  renderExplain(); renderInsights();
+  renderExplain(); renderInsights(); langeTekstInklappen();
   const ea = document.getElementById("explosAdd");
   if (ea && !ea.querySelector("svg")) {
     ea.insertAdjacentHTML("afterbegin", ic("sprong"));
@@ -7048,12 +7088,34 @@ document.getElementById("sesTerug").addEventListener("click", () => routeTerug(S
 /* De kop van "Wat je vandaag deed" blijft altijd staan -- daar staat al
    hoeveel sessies het waren en wat ze kostten. De uitwerking eronder is
    naslag en staat daarom dicht. */
+/* Elke hint die langer is dan een paar regels wordt afgekapt en krijgt een
+   eigen knopje. Dat gebeurt hier en niet in de opmaak van elk scherm, zodat
+   een nieuwe kaart het vanzelf meekrijgt. */
+function langeTekstInklappen() {
+  document.querySelectorAll(".card .hint").forEach(h => {
+    if (h.dataset.klap || (h.textContent || "").trim().length < 150) return;
+    h.dataset.klap = "1";
+    h.classList.add("hint--kort");
+    const knop = document.createElement("button");
+    knop.className = "uitklap uitklap--tekst";
+    knop.setAttribute("aria-expanded", "false");
+    knop.innerHTML = `<span>Meer uitleg</span>${ic("omlaag")}`;
+    knop.addEventListener("click", () => {
+      const open = h.classList.toggle("hint--kort") === false;
+      knop.setAttribute("aria-expanded", String(open));
+      knop.querySelector("span").textContent = open ? "Minder uitleg" : "Meer uitleg";
+    });
+    h.insertAdjacentElement("afterend", knop);
+  });
+}
+
 document.getElementById("gedaanKlap").addEventListener("click", e => {
   const knop = e.currentTarget;
   const body = document.getElementById("gedaanBody");
   const open = body.classList.toggle("open");
   knop.setAttribute("aria-expanded", String(open));
-  knop.title = open ? "Inklappen" : "Uitklappen";
+  document.getElementById("gedaanKlapTekst").textContent =
+    open ? "Verberg de uitwerking" : "Toon de uitwerking";
 });
 
 /* De schermkop van een overlay sluit hem weer, via dezelfde functie als de
