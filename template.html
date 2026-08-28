@@ -177,7 +177,7 @@
 
 /* --- drie wijzers: slaap, gereedheid (groter), body battery --------- */
 .dials { display: grid; grid-template-columns: 1fr 1.3fr 1fr; align-items: center;
-         gap: var(--sp1); padding: var(--sp4) 0 var(--sp2); }
+         gap: var(--sp1); padding: var(--sp4) 0 var(--sp2); margin-bottom: var(--sp3); }
 .dial { display: flex; flex-direction: column; align-items: center; gap: var(--sp2);
         cursor: pointer; background: none; border: 0; font: inherit; color: inherit; }
 .dial .rw { position: relative; }
@@ -239,7 +239,11 @@
 .slot .why b { color: var(--ink-2); font-weight: var(--w-nadruk); }
 
 /* --- herkomstlabels -------------------------------------------------- */
-.chips { display: flex; gap: var(--sp2); margin: var(--sp4) var(--sp1) var(--sp1); flex-wrap: wrap; }
+/* De chips stonden 16 px van wat erboven staat en 4 px van wat eronder komt.
+   Daardoor plakten ze aan de kaart eronder en leken ze daarbij te horen,
+   terwijl ze bij het blok erboven horen. Zelfde afstand aan beide kanten. */
+.chips { display: flex; gap: var(--sp2); flex-wrap: wrap;
+  margin: var(--sp4) var(--sp1) var(--sp4); }
 .chip { display: inline-flex; align-items: center; gap: var(--sp1); font-size: var(--t-micro);
         font-weight: var(--w-nadruk); padding: var(--sp1) var(--sp2); border-radius: var(--r-lg);
         max-width: 100%; min-width: 0; }
@@ -542,6 +546,9 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
   gap: var(--sp4); }
 .grid2 > .card { margin-bottom: 0; }
+/* De kaarten binnen het raster hebben hun eigen marge afgestaan aan de gap;
+   het raster zelf moet die afstand dan wel teruggeven aan wat erna komt. */
+.grid2 { margin-bottom: var(--sp3); }
 
 /* ---- knop ------------------------------------------------------------
    Drie soorten en niet meer: primair is de bevestigende actie, secundair is
@@ -714,7 +721,7 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 .duiding--los { background: var(--bg2); border-radius: var(--r-md);
   padding: var(--sp3) var(--sp4); margin: var(--sp2) 0; }
 .duiding--kaart { background: var(--bg1); border-radius: var(--r-md);
-  padding: var(--sp4); margin: var(--sp1) 0 var(--sp1); }
+  padding: var(--sp4); margin: var(--sp3) 0; }
 
 .duiding.good { --stkleur: var(--good); }
 .duiding.warning { --stkleur: var(--warning); }
@@ -741,6 +748,14 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 .swatch { width: 9px; height: 9px; border-radius: var(--r-sm); display: inline-block; }
 .seg { display: inline-flex; background: var(--bg2); border-radius: var(--r-pill);
   padding: var(--sp1); gap: var(--sp1); }
+
+/* De wisselaar bovenaan Belasting verandert het hele tabblad -- niet een
+   detail binnen een kaart. Als klein pilletje onder de appbalk las hij als een
+   filterchip: je zag niet dat er een tweede scherm achter zat. Over de volle
+   breedte met twee gelijke helften zegt hij wat hij doet. */
+.seg--paginabreed { display: grid; grid-template-columns: 1fr 1fr; width: 100%;
+  max-width: 420px; margin: var(--sp3) 0 var(--sp6); }
+.seg--paginabreed button { justify-content: center; min-height: 44px; }
 .seg button { font: inherit; font-size: var(--t-label); font-weight: var(--w-nadruk); cursor: pointer;
   border: 0; background: none; color: var(--muted); min-height: 40px;
   padding: var(--sp2) var(--sp4); border-radius: var(--r-pill);
@@ -1411,7 +1426,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 </section>
 
 <section class="panel" id="tab-belasting">
-  <div class="seg" id="belSeg" style="margin:0 0 var(--sp4)">
+  <div class="seg seg--paginabreed" id="belSeg">
     <button data-bel="belasting" aria-pressed="true">Belasting</button>
     <button data-bel="sessies" aria-pressed="false">Sessies</button>
   </div>
