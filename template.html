@@ -1529,6 +1529,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
          omdat ze samen twee verschillende vragen beantwoorden: wat voor werk
          deed ik, en ben ik er fris van. -->
     <div class="dials" id="belDials"></div>
+    <div class="opbouw" id="belOpbouw"></div>
     <div class="duiding duiding--kaart" id="belLees"></div>
     <div class="chips" id="belHerkomst"></div>
     <!-- Fitheid en vermoeidheid stonden hier als tekstrijen met een pijl: een
@@ -1601,6 +1602,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
        anders moet je twee keer leren kijken. Hier alle drie even groot --
        geen van de drie is de hoofdzaak. -->
   <div class="dials" id="herstelTriple"></div>
+  <div class="opbouw" id="herstelOpbouw"></div>
   <!-- Zes losse grafiekkaarten zijn zes tegels geworden. De volle grafiek zit
        nog steeds achter elke tegel, maar pas als je erom vraagt. -->
   <div class="sectiontitle">Je metingen over 28 dagen</div>
@@ -5002,7 +5004,7 @@ function renderDials() {
      nergens op stoelt. Liever niets. */
   const ready = {
     cap: "Gereedheid", num: g.score ?? null, deel: (g.score || 0) / 100,
-    band: BAND(g.score), groot: true, ga: "gereedheid-open",
+    band: BAND(g.score), groot: true, ga: "gereedheid",
     subt: g.score == null ? "nog niet compleet"
         : g.score >= 67 ? "goed hersteld" : g.score >= 34 ? "matig hersteld" : "rust nodig",
   };
@@ -5015,7 +5017,7 @@ function renderDials() {
   const bbVorig = laatste.date ? vorigeMet("bb_now", laatste.date) : null;
   const batterij = {
     cap: "Body Battery", num: bb, deel: (bb || 0) / 100,
-    ga: bb == null ? "herstel" : "battery-open",
+    ga: bb == null ? "herstel" : "battery",
     delta: deltaVan(bb, bbVorig ? bbVorig.bb_now : null, true, 1),
     band: bb == null ? "n" : bb >= 50 ? "g" : bb >= 25 ? "a" : "r",
     subt: bb == null ? "niet gemeten"
@@ -5024,77 +5026,181 @@ function renderDials() {
   };
 
   host.innerHTML = [slaap, ready, batterij].map(dialHtml).join("");
-  const opb = document.getElementById("opbouw");
-  if (opb) { opb.classList.remove("open"); OPBOUW_WAT = null; }
-  host.querySelectorAll("button[data-ga]").forEach(b => {
-    if (!b.dataset.ga) return;
-    /* De gereedheidsring sprong naar Belasting -- en beantwoordde daarmee niet
-       de vraag die je stelt als je erop tikt: waaróm is dit 89? De opbouw zit
-       al in de data; hij hoort onder de ring open te vouwen, niet op een ander
-       scherm te staan. */
-    if (b.dataset.ga === "gereedheid-open") b.onclick = () => opbouwWisselen(b, "gereedheid");
-    else if (b.dataset.ga === "battery-open") b.onclick = () => opbouwWisselen(b, "battery");
-    else b.onclick = () => naarTab(b.dataset.ga);
-  });
+  wijzersBedraden("#dials", "opbouw");
 }
 
 /* De onderdelen van gereedheid, met hun gewicht. Elke balk toont hoe goed dat
    onderdeel scoort; het percentage ervoor is hoeveel het meeweegt. */
-function opbouwTekenen(g) {
-  const host = document.getElementById("opbouw");
-  if (!host) return;
-  const delen = (g && g.gebruikt) || [];
-  if (!delen.length) { host.innerHTML = ""; return; }
-  host.innerHTML = `<div class="card">` + delen.map(d => `
-    <div class="opbouwrij">
-      <div class="n">${d.naam}<small>weegt ${d.gewicht}% mee</small></div>
-      <div class="spoor"><i style="width:${Math.max(0, Math.min(100, d.deel))}%;
-        background:${d.deel >= 67 ? "var(--good)" : d.deel >= 34 ? "var(--warning)" : "var(--critical)"}"></i></div>
-      <div class="v">${d.deel}</div>
-    </div>`).join("")
-    + (g.gevoelIn ? "" : `<p class="cbij">Je eigen gevoel telt nog niet mee — vul de check-in
-        bovenaan in, dan weegt dat voor 20%.</p>`) + `</div>`;
-}
+/* =======================================================================
+   Wat zit er achter een wijzer?
+   -----------------------------------------------------------------------
+   Elk van de drie kerncijfers op elk tabblad kan opengevouwen worden tot zijn
+   onderdelen. Eén mechanisme voor alle drie de schermen: een wijzer krijgt een
+   sleutel mee, en die sleutel wijst naar een functie die de rijen levert.
 
-let OPBOUW_WAT = null;
+   Waarom dit ertoe doet: een samengesteld of afgeleid cijfer dat je niet kunt
+   uitklappen is een orakel. Je moet het geloven zonder te kunnen nakijken waar
+   het vandaan komt -- en dat is precies wat dit dashboard elders juist weigert.
+   ======================================================================= */
 
-function opbouwWisselen(knop, wat) {
-  const host = document.getElementById("opbouw");
-  if (!host) return;
-  const zelfde = OPBOUW_WAT === wat && host.classList.contains("open");
-  document.querySelectorAll("#dials button[data-ga]").forEach(b =>
-    b.setAttribute("aria-expanded", String(!zelfde && b === knop)));
-  if (zelfde) { host.classList.remove("open"); OPBOUW_WAT = null; return; }
-  OPBOUW_WAT = wat;
-  if (wat === "battery") batterijTekenen(); else opbouwTekenen(gereedheidNu());
-  host.classList.add("open");
-}
-
-/* Wat Garmin over je body battery weet, in dezelfde volgorde als hun eigen
-   scherm: hoeveel erbij kwam, hoeveel eraf ging, en waar je nu staat. Alle
-   vier de getallen komen rechtstreeks uit de dagsamenvatting -- wij rekenen
-   er niets aan. */
-function batterijTekenen() {
-  const host = document.getElementById("opbouw");
-  const dag = laatsteMet("bb_now") || {};
-  const op = dag.bb_charged, af = dag.bb_drained;
-  const rij = (label, waarde, kleur, uitleg) => `
-    <div class="opbouwrij">
-      <div class="n">${label}<small>${uitleg}</small></div>
-      <div class="spoor"><i style="width:${Math.min(100, Math.abs(waarde || 0))}%;
-        background:${kleur}"></i></div>
-      <div class="v" style="color:${kleur}">${waarde == null ? "–" : (waarde > 0 && label === "Opgeladen" ? "+" : "") + waarde}</div>
-    </div>`;
-
-  host.innerHTML = `<div class="card">
-    ${op != null ? rij("Opgeladen", op, "var(--good)", "wat je nacht en rust opleverden") : ""}
-    ${af != null ? rij("Verbruikt", af == null ? null : -af, "var(--warning)", "training, stress en activiteit") : ""}
-    ${dag.bb_wake != null ? rij("Bij het ontwaken", dag.bb_wake, "var(--ink-2)", "waar je de dag mee begon") : ""}
-    ${dag.bb_now != null ? rij("Nu", dag.bb_now, BANDVAR[dag.bb_now >= 50 ? "g" : dag.bb_now >= 25 ? "a" : "r"], "wat er op dit moment nog in zit") : ""}
-    <p class="cbij">Dit zijn Garmins eigen cijfers, ongewijzigd overgenomen. Hij leidt ze de
-      hele dag door af uit je hartslagvariabiliteit; slaap laadt op, inspanning en stress
-      ontladen.</p>
+/* Eén rij in zo'n paneel: naam, balk, waarde. */
+function opbouwRij(naam, onder, deel, waarde, kleur) {
+  return `<div class="opbouwrij">
+    <div class="n">${naam}${onder ? `<small>${onder}</small>` : ""}</div>
+    <div class="spoor"><i style="width:${Math.max(0, Math.min(100, deel))}%;
+      background:${kleur || "var(--ink-2)"}"></i></div>
+    <div class="v"${kleur ? ` style="color:${kleur}"` : ""}>${waarde}</div>
   </div>`;
+}
+
+/* Waar ligt een waarde binnen je eigen band? Nul procent is de onderkant,
+   honderd de bovenkant; daarbuiten klemmen we, want een balk die uit beeld
+   loopt zegt niets meer. */
+function bandRijen(waarde, b, eenheid, omhoogGoed) {
+  if (!b || !b.genoeg)
+    return `<p class="cbij">Je band is nog in opbouw. Zolang die er niet is kan
+      dit cijfer alleen met zichzelf vergeleken worden, niet met je normaal.</p>`;
+  const breedte = Math.max(b.boven - b.onder, 1e-6);
+  const deel = ((waarde - b.onder) / breedte) * 100;
+  const kleur = BANDVAR[bandKleur(waarde, b, omhoogGoed ? +1 : -1)];
+  return opbouwRij("Vandaag", `waar je nu staat`, deel, `${waarde}${eenheid}`, kleur) +
+    opbouwRij("Je mediaan", `het midden van je band`, 50,
+      `${Math.round(b.mediaan)}${eenheid}`, "var(--ink-2)") +
+    `<p class="cbij">Je band loopt van <b>${Math.round(b.onder)}</b> tot
+      <b>${Math.round(b.boven)}${eenheid}</b>, berekend over je eigen nachten. Binnen die
+      band is variatie normaal en zegt een verschil van een paar punten niets.</p>`;
+}
+
+/* De inhoud per wijzer. Levert HTML of null als er niets te tonen valt. */
+const OPBOUW = {
+  gereedheid() {
+    const g = gereedheidNu();
+    const delen = (g && g.gebruikt) || [];
+    if (!delen.length) return null;
+    return delen.map(d => opbouwRij(d.naam, `weegt ${d.gewicht}% mee`, d.deel, d.deel,
+        d.deel >= 67 ? "var(--good)" : d.deel >= 34 ? "var(--warning)" : "var(--critical)")).join("")
+      + (g.gevoelIn ? "" : `<p class="cbij">Je eigen gevoel telt nog niet mee — vul de check-in
+          bovenaan in, dan weegt dat voor 20%.</p>`);
+  },
+
+  battery() {
+    const dag = laatsteMet("bb_now") || {};
+    if (dag.bb_now == null) return null;
+    return (dag.bb_charged != null
+        ? opbouwRij("Opgeladen", "wat je nacht en rust opleverden", dag.bb_charged,
+                    `+${dag.bb_charged}`, "var(--good)") : "")
+      + (dag.bb_drained != null
+        ? opbouwRij("Verbruikt", "training, stress en activiteit", dag.bb_drained,
+                    `−${dag.bb_drained}`, "var(--warning)") : "")
+      + (dag.bb_wake != null
+        ? opbouwRij("Bij het ontwaken", "waar je de dag mee begon", dag.bb_wake,
+                    dag.bb_wake, "var(--ink-2)") : "")
+      + opbouwRij("Nu", "wat er op dit moment nog in zit", dag.bb_now, dag.bb_now,
+          BANDVAR[dag.bb_now >= 50 ? "g" : dag.bb_now >= 25 ? "a" : "r"])
+      + `<p class="cbij">Garmins eigen cijfers, ongewijzigd overgenomen. Hij leidt ze de hele dag
+          door af uit je hartslagvariabiliteit; slaap laadt op, inspanning en stress ontladen.</p>`;
+  },
+
+  hrv() {
+    const r = laatsteMet("hrv");
+    if (!r) return null;
+    return bandRijen(r.hrv, bandVan("hrv"), " ms", true) +
+      `<p class="cbij">Gemeten tijdens je slaap. Eén nacht is nog geen trend: kijk of een
+        afwijking morgen terugveert voordat je je training aanpast.</p>`;
+  },
+
+  rhr() {
+    const r = laatsteMet("rhr");
+    if (!r) return null;
+    return bandRijen(Math.round(r.rhr), bandVan("rust"), " bpm", false) +
+      `<p class="cbij">Hier is lager beter. Een rusthartslag die een paar dagen boven je band
+        blijft hangen gaat vaker over ziekte of slaaptekort dan over training.</p>`;
+  },
+
+  slaapscore() {
+    const sl = DATA.sleep_last || {};
+    if (sl.sleep_score == null) return null;
+    const u = h => h ? uurMin(h) : "–";
+    const totaal = sl.sleep_h || 0;
+    const deel = h => totaal ? (h || 0) / totaal * 100 : 0;
+    return opbouwRij("Diep", "herstel van je lichaam", deel(sl.sleep_deep_h),
+        u(sl.sleep_deep_h), "var(--sl-diep)")
+      + opbouwRij("REM", "herstel van je hoofd", deel(sl.sleep_rem_h),
+        u(sl.sleep_rem_h), "var(--sl-rem)")
+      + opbouwRij("Licht", "de rest van je nacht", deel(sl.sleep_light_h),
+        u(sl.sleep_light_h), "var(--sl-licht)")
+      + opbouwRij("Wakker", sl.sleep_awakenings != null
+          ? `${sl.sleep_awakenings}× wakker geworden` : "onderbrekingen",
+        deel(sl.sleep_awake_h), u(sl.sleep_awake_h), "var(--sl-wakker)")
+      + `<p class="cbij"><b>Met voorbehoud.</b> De score en de duur zijn betrouwbaar; de verdeling
+        over de fases veel minder — in onafhankelijk onderzoek haalde de best presterende band 40%
+        specificiteit. Lees dit als grove verhouding.</p>`;
+  },
+
+  vorm() {
+    const f = (typeof FITHEID !== "undefined" && FITHEID && FITHEID.length)
+              ? FITHEID : (DATA.fitness || []);
+    const l = f[f.length - 1] || {};
+    if (l.tsb == null) return null;
+    const schaal = Math.max(l.ctl || 0, l.atl || 0, 1);
+    return opbouwRij("Fitheid", "traag gemiddelde over 42 dagen",
+        (l.ctl / schaal) * 100, Math.round(l.ctl), "var(--s1)")
+      + opbouwRij("Vermoeidheid", "snel gemiddelde over 7 dagen",
+        (l.atl / schaal) * 100, Math.round(l.atl), "var(--s2)")
+      + `<p class="cbij">Je vorm ís het verschil: <b>${Math.round(l.ctl)} − ${Math.round(l.atl)}
+        = ${komma(Math.round(l.tsb)).replace("-", "−")}</b>. Onder nul loopt je vermoeidheid voor
+        op je fitheid; dat hoort bij een opbouwblok en is geen probleem zolang het afwisselt met
+        lichtere weken. Alles hier komt uit je hartslag tijdens trainingen — het ziet de
+        vermoeidheid in je spieren van een krachtsessie dus niet.</p>`;
+  },
+
+  zones() {
+    const eind = ((typeof FITHEID !== "undefined" && FITHEID && FITHEID.length)
+                  ? FITHEID[FITHEID.length - 1].date : null)
+                 || (DATA.planbasis || {}).vandaag;
+    if (!eind) return null;
+    const week = sessiesVenster(eind, 7);
+    const sec = z => week.reduce((t, a) => t + (a["z" + z + "_s"] || 0), 0);
+    const totaal = [1, 2, 3, 4, 5].reduce((t, z) => t + sec(z), 0);
+    if (!totaal) return `<p class="cbij">Geen zonetijd in de laatste zeven dagen.</p>`;
+    return [5, 4, 3, 2, 1].map(z => opbouwRij(`Zone ${z}`,
+        z >= 4 ? "telt als anaeroob" : "telt als aeroob",
+        sec(z) / totaal * 100, `${Math.round(sec(z) / 60)} min`, `var(--z${z})`)).join("")
+      + `<p class="cbij">De verdeling van je laatste zeven dagen, samen
+        <b>${Math.round(totaal / 60)} minuten</b>. Aeroob is het aandeel zone 1 tot 3, anaeroob
+        zone 4 en 5 — beide afgezet tegen je eigen band, want een vast percentage zegt niets
+        over wat voor jou normaal is.</p>`;
+  },
+};
+
+/* Eén wisselaar voor alle schermen. De wijzers van dat scherm zitten in `host`,
+   het paneel eronder in `paneel`. */
+function opbouwWisselen(knop, wat, hostSel, paneelId) {
+  const paneel = document.getElementById(paneelId);
+  if (!paneel) return;
+  const open = paneel.dataset.wat === wat && paneel.classList.contains("open");
+  document.querySelectorAll(`${hostSel} button[data-ga]`).forEach(b =>
+    b.setAttribute("aria-expanded", String(!open && b === knop)));
+  if (open) { paneel.classList.remove("open"); paneel.dataset.wat = ""; return; }
+  const maak = OPBOUW[wat];
+  const inhoud = maak ? maak() : null;
+  if (!inhoud) { paneel.classList.remove("open"); paneel.dataset.wat = ""; return; }
+  paneel.innerHTML = `<div class="card">${inhoud}</div>`;
+  paneel.dataset.wat = wat;
+  paneel.classList.add("open");
+}
+
+/* Wijzers klikbaar maken: `ga` is ofwel een tabblad om heen te springen,
+   ofwel een sleutel uit OPBOUW om open te vouwen. */
+function wijzersBedraden(hostSel, paneelId) {
+  const paneel = document.getElementById(paneelId);
+  if (paneel) { paneel.classList.remove("open"); paneel.dataset.wat = ""; }
+  document.querySelectorAll(`${hostSel} button[data-ga]`).forEach(b => {
+    const ga = b.dataset.ga;
+    if (!ga) return;
+    if (OPBOUW[ga]) b.onclick = () => opbouwWisselen(b, ga, hostSel, paneelId);
+    else b.onclick = () => naarTab(ga);
+  });
 }
 
 /* Naar een tabblad springen vanaf een tegel of wijzer. */
@@ -5451,7 +5557,8 @@ function renderBelDials() {
   const vormKleur = tsb == null ? "var(--muted)"
     : tsb >= 0 ? "var(--good)" : (tsb > -25 ? "var(--ord2)" : "var(--critical)");
   const vorm = {
-    cap: "Vorm", num: tsb == null ? null : komma(Math.round(tsb)).replace("-", "\u2212"),
+    cap: "Vorm", ga: "vorm",
+    num: tsb == null ? null : komma(Math.round(tsb)).replace("-", "\u2212"),
     groot: true, gauge: true,
     gaugeDeel: tsb == null ? 0 : Math.max(-1, Math.min(1, tsb / 30)),
     kleur: vormKleur, band: tsb == null ? "n" : tsb >= 0 ? "g" : (tsb > -25 ? "" : "r"),
@@ -5465,13 +5572,13 @@ function renderBelDials() {
   function effect(cap, veld, zones, uitleg) {
     if (bron === "te") {
       const v = teTop(nu, veld), was = teTop(gisteren, veld);
-      return {cap, num: v == null ? null : komma(v.toFixed(1)), waarde: v,
+      return {cap, ga: "zones", num: v == null ? null : komma(v.toFixed(1)), waarde: v,
               deel: (v || 0) / 5, band: v == null ? "n" : v >= 3 ? "g" : v >= 2 ? "" : "a",
               delta: deltaVan(v, was, true, 0.15, 1), subt: teWoord(v), bron};
     }
     const v = zoneAandeel(nu, zones), was = zoneAandeel(gisteren, zones);
     const b = zoneBand(zones);
-    return {cap, num: v == null ? null : Math.round(v), eenheid: "%", waarde: v,
+    return {cap, ga: "zones", num: v == null ? null : Math.round(v), eenheid: "%", waarde: v,
             deel: b ? bandVulling(v, b, +1) : (v == null ? 0 : v / 100),
             band: v == null ? "n" : (b ? bandKleur(v, b, +1) : ""),
             delta: deltaVan(v, was, true, 1),
@@ -5483,6 +5590,7 @@ function renderBelDials() {
   const anaeroob = effect("Anaeroob", "anaerobic_te", [4, 5], "aandeel zone 4-5");
 
   host.innerHTML = [aeroob, vorm, anaeroob].map(dialHtml).join("");
+  wijzersBedraden("#belDials", "belOpbouw");
 
   /* De leesregel: het interessante zit in de verhouding tussen de twee. */
   const uitZone = bron === "zone";
@@ -5818,22 +5926,24 @@ function renderHerstelKop() {
      middelste vak op elk tabblad de hoofdzaak is -- en van deze drie is HRV
      het cijfer waar je herstel het scherpst aan afleest. */
   const kolommen = [
-    {v: rhrW, l: "Rusthartslag", st: statusTegenBand(rhrW, rhrB),
+    {v: rhrW, l: "Rusthartslag", ga: "rhr", st: statusTegenBand(rhrW, rhrB),
      deel: bandVulling(rhrW, rhrB, -1), band: bandKleur(rhrW, rhrB, -1),
      delta: deltaVan(rhrW, rhrVorig ? Math.round(rhrVorig.rhr) : null, false, 1)},
-    {v: hrvW, l: "HRV", groot: true, st: statusTegenBand(hrvW, hrvB),
+    {v: hrvW, l: "HRV", groot: true, ga: "hrv", st: statusTegenBand(hrvW, hrvB),
      deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
      delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
-    {v: sl.sleep_score ?? null, l: "Slaapscore", deel: (sl.sleep_score || 0) / 100,
+    {v: sl.sleep_score ?? null, l: "Slaapscore", ga: "slaapscore",
+     deel: (sl.sleep_score || 0) / 100,
      delta: deltaVan(sl.sleep_score ?? null, slVorig ? slVorig.sleep_score : null, true, 1),
      band: sl.sleep_score == null ? "n" : BAND(sl.sleep_score),
      st: {tekst: ({EXCELLENT:"uitstekend", GOOD:"goed", FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten",
           klasse: sl.sleep_score == null ? "norm" : sl.sleep_score >= 67 ? "high" : sl.sleep_score >= 34 ? "norm" : "low"}},
   ];
   host.innerHTML = kolommen.map(k => dialHtml({
-      cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot,
+      cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot, ga: k.ga,
       subt: k.v == null ? "geen meting" : k.st.tekst,
     })).join("");
+  wijzersBedraden("#herstelTriple", "herstelOpbouw");
 
   /* Eén conclusiezin in plaats van drie losse oordelen. */
   const conc = document.getElementById("herstelConc");
