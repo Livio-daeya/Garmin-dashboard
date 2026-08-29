@@ -2407,6 +2407,59 @@ function planZetItems(iso, lijst) {
 }
 
 /* Eén item omzetten naar wat het dashboard ervan moet weten. */
+/* Welk soort sessie was dit, afgelezen aan de zoneverdeling?
+
+   Hier is geen label voor nodig dat jij invult: een intervalblok en een
+   rustige duurloop zien er in de zonetijd fundamenteel anders uit. Vier keer
+   drie minuten hard levert per definitie ruim tien minuten in zone 4-5 op; een
+   duurloop van een uur in zone 2 komt daar nauwelijks boven de nul.
+
+   Dat is beter dan afgaan op wat je had gepland, om twee redenen: het werkt
+   met terugwerkende kracht op alles wat er al staat, en het meet wat je
+   werkelijk deed in plaats van wat je van plan was.
+
+   De grenzen: vanaf 8 minuten in zone 4-5 en meer dan een achtste van de
+   sessie noemen we het intervalwerk; onder de 4 minuten en onder een twintigste
+   rustig duurwerk. Wat ertussen valt krijgt geen etiket -- een tempoloop is
+   geen van beide en zou allebei de medianen vervuilen. */
+function sessieSoort(a) {
+  if (a.sport !== "Hardlopen") return null;
+  const tot = [1, 2, 3, 4, 5].reduce((t, z) => t + (a["z" + z + "_s"] || 0), 0);
+  if (!tot) return null;
+  const hardSec = (a.z4_s || 0) + (a.z5_s || 0);
+  const hardMin = hardSec / 60, deel = hardSec / tot;
+  if (hardMin >= 8 && deel >= 0.125) return "vo2";
+  if (hardMin < 4 && deel < 0.05) return "duur";
+  return null;
+}
+
+/* Bij kracht verraadt de hartslag het type niet -- push en pull zien er
+   hetzelfde uit. Maar je logboek weet het wel: daar staat per sessie welk type
+   je afvinkte. Die koppelen we op datum aan de gemeten sessie. */
+function krachtSoortOpDatum() {
+  const uit = {};
+  logLees().forEach(x => { if (x.type && x.datum) uit[x.datum] = x.type; });
+  return uit;
+}
+
+/* De gemeten sessies van één workouttype, met hun belasting en duur. */
+function sessiesVanType(type) {
+  const W = WORKOUTS[type];
+  if (!W) return [];
+  const acts = DATA.activities || [];
+  if (W.soort === "conditie")
+    return acts.filter(a => a.load > 0 && sessieSoort(a) === type);
+  const perDatum = krachtSoortOpDatum();
+  return acts.filter(a => a.sport === "Kracht" && a.load > 0 && perDatum[a.date] === type);
+}
+
+function mediaan(getallen) {
+  const g = getallen.slice().sort((a, b) => a - b);
+  if (!g.length) return null;
+  const m = Math.floor(g.length / 2);
+  return g.length % 2 ? g[m] : (g[m - 1] + g[m]) / 2;
+}
+
 /* Wat kost een geplande workout aan belastingpunten?
 
    Uit je eigen sessies, niet uit een tabel: we pakken de mediaan van je
@@ -2423,12 +2476,27 @@ const WORKOUT_ZWAARTE = {push: 0.45, pull: 0.45, boven: 0.35, duur: 0.8, vo2: 1.
 function schatWorkout(type, min) {
   const W = WORKOUTS[type];
   if (!W) return {load: 0, bron: "onbekende workout"};
+
+  /* Eerst je eigen sessies van dít type. Zijn het er drie of meer, dan is de
+     factor hieronder niet meer nodig -- dan staat er een gemeten mediaan. */
+  const eigen = sessiesVanType(type);
+  if (eigen.length >= 3) {
+    const mLoad = mediaan(eigen.map(a => a.load));
+    const mMin = mediaan(eigen.map(a => (a.duration_s || 0) / 60)) || null;
+    const load = (min && mMin) ? Math.round(mLoad * (min / mMin) * 10) / 10 : Math.round(mLoad);
+    return {load, bron: `mediaan van ${eigen.length} eigen ${W.naam}-sessies` +
+      (mMin ? ` van ${Math.round(mMin)} min` : "") + (min && mMin ? `, naar rato van ${min} min` : "")};
+  }
+
   const sport = W.soort === "conditie" ? "Hardlopen" : "Kracht";
   const basis = schatBelasting(sport, min);
   const factor = WORKOUT_ZWAARTE[type] ?? 1;
+  const nog = 3 - eigen.length;
   return {load: Math.round(basis.load * factor),
-          bron: `${W.naam} — mediaan van je ${sport.toLowerCase()}sessies, ` +
-                `maal ${komma(factor.toFixed(2))} voor dit type`};
+          bron: `${W.naam} — mediaan van je ${sport.toLowerCase()}sessies maal ` +
+                `${komma(factor.toFixed(2))}. Die factor is een schatting; na nog ` +
+                `${nog} ${nog === 1 ? "sessie" : "sessies"} van dit type rekent hij met je ` +
+                `eigen cijfers.`};
 }
 
 function itemUit(item, iso, std) {

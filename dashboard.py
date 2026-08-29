@@ -866,6 +866,12 @@ def demo_cache(weeks: int) -> dict[str, Any]:
                 "averageHR": avg_hr,
                 "maxHR": avg_hr + random.randint(12, 28),
                 "calories": int(dur_min * 11),
+                # Ook de rustige zones vullen. Stonden ze op nul, dan leek elke
+                # sessie voor 100% uit hard werk te bestaan en viel er geen
+                # onderscheid te maken tussen een duurloop en een intervalblok.
+                "hrTimeInZone_1": dur * (1 - hard_frac) * 0.25,
+                "hrTimeInZone_2": dur * (1 - hard_frac) * 0.45,
+                "hrTimeInZone_3": dur * (1 - hard_frac) * 0.30,
                 "hrTimeInZone_4": dur * hard_frac * 0.7,
                 "hrTimeInZone_5": dur * hard_frac * 0.3,
                 "aerobicTrainingEffect": round(random.uniform(2.0, 4.4), 1),
