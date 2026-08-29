@@ -772,7 +772,7 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         "sleep_last": next(
             ({"date": d, **{k: daily[d].get(k) for k in
                             ("sleep_h", "sleep_deep_h", "sleep_light_h", "sleep_rem_h",
-                             "sleep_awake_h", "sleep_score", "sleep_quality",
+                             "sleep_awake_h", "sleep_score", "sleep_quality", "sleep_delen",
                              "sleep_awakenings", "sleep_stress", "hrv",
                              "sleep_start", "sleep_end", "rhr",
                              "bb_wake", "bb_now", "bb_charged", "bb_drained",
@@ -785,6 +785,9 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         "hrv_nacht": next(
             (r for r in (A.nacht_hrv_reeks(cache.get("daily", {}).get(d) or {})
                          for d in reversed(days)) if r), None),
+        # Hartslag per vijf minuten over de jongste gemeten dag, met de
+        # rusthartslag erbij als referentielijn.
+        "hr_dag": A.dag_hr_reeks(cache.get("extras") or {}),
         "sleep_nights": fill("sleep_h"),
         "explain": EXPLAIN,
         "sport_order": A.SPORT_ORDER,
@@ -818,7 +821,27 @@ def demo_cache(weeks: int) -> dict[str, Any]:
                 "lightSleepSeconds": int((3.5 + random.random()) * 3600),
                 "remSleepSeconds": int((1.1 + random.random() * 0.6) * 3600),
                 "awakeSleepSeconds": int(random.random() * 0.5 * 3600),
-                "sleepScores": {"overall": {"value": random.randint(62, 91)}}},
+                # Ontbraken in de demo, waardoor twee rijen in de opbouw van de
+                # slaapscore leeg bleven en er niets te testen viel.
+                "awakeCount": random.randint(0, 4),
+                "avgSleepStress": round(14 + random.random() * 16, 1),
+                # Garmin geeft naast het eindcijfer per onderdeel een oordeel.
+                # De demo moet die meesturen, anders test je het paneel dat ze
+                # toont met een lege lijst en lijkt het te werken.
+                "sleepScores": {
+                    "overall": {"value": random.randint(62, 91)},
+                    "totalDuration": {"qualifierKey": random.choice(["EXCELLENT", "GOOD", "FAIR"]),
+                                      "optimalStart": 25200.0, "optimalEnd": 32400.0},
+                    "stress": {"qualifierKey": random.choice(["GOOD", "FAIR", "POOR"])},
+                    "awakeCount": {"qualifierKey": random.choice(["EXCELLENT", "GOOD"])},
+                    "remPercentage": {"qualifierKey": random.choice(["GOOD", "FAIR"]),
+                                      "value": random.randint(14, 24),
+                                      "optimalStart": 21.0, "optimalEnd": 31.0},
+                    "lightPercentage": {"qualifierKey": "GOOD", "value": random.randint(44, 58),
+                                        "optimalStart": 30.0, "optimalEnd": 64.0},
+                    "deepPercentage": {"qualifierKey": random.choice(["FAIR", "POOR", "GOOD"]),
+                                       "value": random.randint(9, 21),
+                                       "optimalStart": 16.0, "optimalEnd": 33.0}}},
                 # Losse HRV-metingen door de nacht, zoals get_sleep_data ze
                 # levert als het apparaat ze meestuurt. Eens in de zoveel nacht
                 # een uitschieter, want die zitten er in het echt ook in -- en
@@ -896,8 +919,37 @@ def demo_cache(weeks: int) -> dict[str, Any]:
                 random.randint(128, 141) if easy else random.randint(155, 172),
                 random.uniform(0.0, 0.05) if easy else random.uniform(0.3, 0.55))
 
+    # Hartslag per twee minuten door de dag: laag 's nachts, een plateau rond
+    # de trainingstijd, en daarna langzaam terugzakkend. Zonder deze reeks
+    # bouwt de demo geen daggrafiek en lijkt het blok te ontbreken.
+    def _hr_dag(dag: date) -> dict[str, Any]:
+        basis = datetime(dag.year, dag.month, dag.day)
+        punten = []
+        for m in range(0, 24 * 60, 2):
+            uur = m / 60
+            if uur < 7:
+                slag = 48 + 4 * math.sin(uur) + random.uniform(-2, 2)
+            elif 18 <= uur < 19.5:
+                slag = 148 + 22 * math.sin((uur - 18) * 4) + random.uniform(-6, 6)
+            elif 19.5 <= uur < 21:
+                slag = 95 - (uur - 19.5) * 16 + random.uniform(-4, 4)
+            else:
+                slag = 68 + 8 * math.sin(uur / 2) + random.uniform(-4, 4)
+            punten.append([int(basis.timestamp() * 1000) + m * 60000, round(slag)])
+        slagen = [p[1] for p in punten]
+        # Garmin stempelt de metingen in GMT en stuurt beide starttijden mee,
+        # zodat het dashboard de offset kan terugrekenen. De demo doet dat na,
+        # anders test je de tijdzonecorrectie niet.
+        gmt0 = int(basis.timestamp() * 1000)
+        offset = int((basis.astimezone().utcoffset() or timedelta()).total_seconds() * 1000)
+        return {"heartRateValues": punten, "restingHeartRate": 48,
+                "startTimestampGMT": gmt0, "startTimestampLocal": gmt0 + offset,
+                "minHeartRate": min(slagen), "maxHeartRate": max(slagen)}
+
     cache["extras"] = {"race_predictions": {"time5K": 1180, "time10K": 2480,
-                                            "timeHalfMarathon": 5520, "timeMarathon": 11700}}
+                                            "timeHalfMarathon": 5520, "timeMarathon": 11700},
+                       "hr_dag": {d.isoformat(): _hr_dag(d)
+                                  for d in (today, today - timedelta(days=1))}}
     cache["meta"]["support"] = {"demo": "ok"}
     return cache
 

@@ -371,6 +371,14 @@
    verplaatst naar direct onder de rij waarin je hebt getikt. In de tegel zelf
    zou hij 160 px breed zijn en dus onleesbaar; onderaan het hele raster zou je
    het verband met je tik kwijtraken. */
+/* Een tussenkopje binnen een uitgeklapt paneel. De panelen tonen soms twee
+   dingen die niet hetzelfde zijn -- de opbouw van een cijfer en de grafiek
+   eronder -- en zonder kopje lezen die als één lijst. */
+.opbouwkop { font-size: var(--t-klein); font-weight: var(--w-nadruk); color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em;
+  margin: var(--sp5) 0 var(--sp3); }
+.opbouwkop:first-child { margin-top: 0; }
+
 .tegeluit { display: none; }
 .tegeluit.open { display: block; grid-column: 1 / -1;
   animation: opkomen var(--traag) var(--ease); }
@@ -674,7 +682,13 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
 .opbouwrij { display: grid; grid-template-columns: 88px 1fr 42px; align-items: center;
   gap: var(--sp3); padding: var(--sp2) 0; }
 .opbouwrij + .opbouwrij { border-top: 1px solid var(--hair); }
-.opbouwrij .n { font-size: var(--t-klein); font-weight: var(--w-nadruk); color: var(--ink); }
+.opbouwrij .n { font-size: var(--t-klein); font-weight: var(--w-nadruk); color: var(--ink);
+  overflow-wrap: anywhere; }
+/* De meeste rijen eindigen op een getal en dat past in 42 px. De opbouw van de
+   slaapscore eindigt op een woord -- "Uitstekend" is twee keer zo breed en liep
+   het scherm uit. Daar krijgt de laatste kolom de ruimte die het woord nodig
+   heeft, ten koste van de balk; de balk is daar toch de trap en geen meting. */
+.opbouwrij--woord { grid-template-columns: 92px minmax(40px, 1fr) auto; }
 .opbouwrij .n small { display: block; font-weight: var(--w-normaal); color: var(--muted);
   font-size: var(--t-micro); }
 .opbouwrij .v { font-size: var(--t-klein); font-weight: var(--w-nadruk); text-align: right;
@@ -5044,8 +5058,8 @@ function renderDials() {
    ======================================================================= */
 
 /* Eén rij in zo'n paneel: naam, balk, waarde. */
-function opbouwRij(naam, onder, deel, waarde, kleur) {
-  return `<div class="opbouwrij">
+function opbouwRij(naam, onder, deel, waarde, kleur, klasse) {
+  return `<div class="opbouwrij${klasse ? " " + klasse : ""}">
     <div class="n">${naam}${onder ? `<small>${onder}</small>` : ""}</div>
     <div class="spoor"><i style="width:${Math.max(0, Math.min(100, deel))}%;
       background:${kleur || "var(--ink-2)"}"></i></div>
@@ -5101,20 +5115,83 @@ const OPBOUW = {
           door af uit je hartslagvariabiliteit; slaap laadt op, inspanning en stress ontladen.</p>`;
   },
 
-  hrv() {
+  hrv(paneelId) {
     const r = laatsteMet("hrv");
     if (!r) return null;
-    return bandRijen(r.hrv, bandVan("hrv"), " ms", true) +
-      `<p class="cbij">Gemeten tijdens je slaap. Eén nacht is nog geen trend: kijk of een
+    const rijen = bandRijen(r.hrv, bandVan("hrv"), " ms", true);
+    const reeks = DATA.hrv_nacht;
+    const staart = `<p class="cbij">Gemeten tijdens je slaap. Eén nacht is nog geen trend: kijk of een
         afwijking morgen terugveert voordat je je training aanpast.</p>`;
+    /* Zonder losse metingen geen curve. Dat is geen fout maar een eigenschap
+       van de opstelling; het paneel toont dan alleen de band. */
+    if (!reeks || reeks.length < 8) return rijen + staart;
+
+    const waarden = reeks.map(p => p[1]);
+    const gem = waarden.reduce((a, b) => a + b, 0) / waarden.length;
+    const grens = gem * 1.5;
+    const pieken = waarden.filter(v => v > grens).length;
+    const cid = "chOpbouwHrv_" + paneelId;
+    return {
+      html: rijen +
+        `<h3 class="opbouwkop">Vannacht, meting voor meting</h3>
+         <div class="chartbox short"><canvas id="${cid}"></canvas></div>
+         <p class="cbij">${reeks.length} metingen tussen ${reeks[0][0]} en
+           ${reeks[reeks.length - 1][0]}, gemiddeld <b>${Math.round(gem)} ms</b>.` +
+        (pieken ? ` ${pieken === 1 ? "Eén meting springt" : pieken + " metingen springen"}
+           er ver bovenuit — vrijwel zeker meetruis, geen echte uitslag.` : "") +
+        ` Het nachtcijfer hierboven komt uit Garmins eigen avgOvernightHrv en hoeft dus niet
+          exact dit gemiddelde te zijn — hoe hij dat berekent maakt hij niet bekend. Wat deze
+          curve toevoegt is de vorm: of dat ene cijfer een rustige nacht samenvat of een
+          onrustige.</p>` + staart,
+      teken: () => mk(cid, {type: "line", data: {labels: reeks.map(p => p[0]), datasets: [{
+          label: "HRV", data: waarden,
+          borderColor: css("--s1"), borderWidth: 2, tension: .3, fill: true,
+          backgroundColor: doorzichtig(css("--s1"), .12),
+          pointRadius: waarden.map(v => v > grens ? 4 : 0),
+          pointBackgroundColor: css("--critical"), pointBorderColor: css("--critical")}]},
+        options: {scales: {
+          x: {...xAxisCat(), ticks: {...xAxisCat().ticks, maxTicksLimit: 6}},
+          y: axis()}}}),
+    };
   },
 
-  rhr() {
+  rhr(paneelId) {
     const r = laatsteMet("rhr");
     if (!r) return null;
-    return bandRijen(Math.round(r.rhr), bandVan("rust"), " bpm", false) +
-      `<p class="cbij">Hier is lager beter. Een rusthartslag die een paar dagen boven je band
+    const rijen = bandRijen(Math.round(r.rhr), bandVan("rust"), " bpm", false);
+    const staart = `<p class="cbij">Hier is lager beter. Een rusthartslag die een paar dagen boven je band
         blijft hangen gaat vaker over ziekte of slaaptekort dan over training.</p>`;
+    const dag = DATA.hr_dag;
+    if (!dag || !dag.reeks || dag.reeks.length < 12) return rijen + staart;
+
+    const waarden = dag.reeks.map(p => p[1]);
+    const rust = dag.rust != null ? dag.rust : Math.round(r.rhr);
+    const cid = "chOpbouwRhr_" + paneelId;
+    /* Hoe lang zat je vandaag dicht bij je rustwaarde? Dat is iets anders dan
+       het dagminimum: het zegt of je lichaam tussendoor echt is teruggezakt.
+       Vijf slagen speling, want de meting zelf is niet nauwkeuriger. */
+    const rustig = waarden.filter(v => v <= rust + 5).length * 5;
+    return {
+      html: rijen +
+        `<h3 class="opbouwkop">Je hartslag vandaag</h3>
+         <div class="chartbox short"><canvas id="${cid}"></canvas></div>
+         <p class="cbij">Gemiddelde per vijf minuten over ${short(dag.datum)}, met je
+           rusthartslag als stippellijn.` +
+        (dag.hoogst != null ? ` Hoogst gemeten <b>${dag.hoogst}</b>,` : "") +
+        (dag.laagst != null ? ` laagst <b>${dag.laagst}</b>.` : "") +
+        ` Ongeveer <b>${uurMin(rustig / 60)}</b> zat je binnen vijf slagen van je rustwaarde —
+          dat is de tijd waarin je lichaam werkelijk terugzakte, niet alleen het dieptepunt
+          van de dag.</p>` + staart,
+      teken: () => mk(cid, {type: "line", data: {labels: dag.reeks.map(p => p[0]), datasets: [
+          {label: "Hartslag", data: waarden, borderColor: css("--s1"), borderWidth: 1.5,
+           tension: .3, fill: true, pointRadius: 0,
+           backgroundColor: doorzichtig(css("--s1"), .12)},
+          {label: "Rusthartslag", data: waarden.map(() => rust), borderColor: css("--muted"),
+           borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, fill: false}]},
+        options: {scales: {
+          x: {...xAxisCat(), ticks: {...xAxisCat().ticks, maxTicksLimit: 7}},
+          y: axis()}}}),
+    };
   },
 
   slaapscore() {
@@ -5123,7 +5200,55 @@ const OPBOUW = {
     const u = h => h ? uurMin(h) : "–";
     const totaal = sl.sleep_h || 0;
     const deel = h => totaal ? (h || 0) / totaal * 100 : 0;
-    return opbouwRij("Diep", "herstel van je lichaam", deel(sl.sleep_deep_h),
+
+    /* Garmin geeft per onderdeel geen cijfer maar een oordeel in vier
+       stappen. Die stappen zijn de score-opbouw; de fases eronder zijn iets
+       anders -- hoe je nacht verdeeld was. Ze staan hier onder elkaar omdat
+       ze verschillende vragen beantwoorden: waar komt het cijfer vandaan, en
+       waar bestond de nacht uit.
+
+       De balklengte is de trap zelf, niet een gemeten percentage. Dat mag,
+       zolang de waarde ernaast het woord is dat Garmin stuurt en niet een
+       getal dat wij verzinnen. */
+    const TRAP = {EXCELLENT: [100, "Uitstekend", "var(--good)"],
+                  GOOD:      [75,  "Goed",       "var(--good)"],
+                  FAIR:      [50,  "Redelijk",   "var(--warning)"],
+                  POOR:      [25,  "Slecht",     "var(--critical)"]};
+    /* Percentages en secondes staan door elkaar in dezelfde velden. Boven de
+       duizend kan het geen percentage meer zijn, dus dan is het tijd. */
+    const eenheid = v => v == null ? null : (v > 1000 ? uurMin(v / 3600) : `${Math.round(v)}%`);
+    const bereik = d => {
+      const van = eenheid(d.optimaal_van), tot = eenheid(d.optimaal_tot);
+      return (van && tot) ? `${van}–${tot} is optimaal` : "";
+    };
+
+    /* Bij een paar onderdelen laat Garmin het eigen cijfer weg en stuurt hij
+       alleen het oordeel en het optimale bereik. Die getallen staan wél elders
+       in dezelfde nacht, dus we vullen ze daaruit aan -- gemeten waarden, niet
+       geschat. Zonder dit staat er "7u00–9u00 is optimaal" zonder dat je ziet
+       hoe lang jij dan sliep. */
+    const EIGEN = {
+      "Duur": sl.sleep_h != null ? uurMin(sl.sleep_h) : null,
+      "Keer wakker": sl.sleep_awakenings != null ? `${sl.sleep_awakenings}×` : null,
+      "Rust": sl.sleep_stress != null ? `stress ${Math.round(sl.sleep_stress)}` : null,
+    };
+    const delen = sl.sleep_delen || {};
+    const namen = Object.keys(delen);
+    const opbouw = !namen.length ? "" :
+      `<h3 class="opbouwkop">Waar het cijfer vandaan komt</h3>` +
+      namen.map(naam => {
+        const d = delen[naam];
+        const t = TRAP[d.oordeel] || [50, d.oordeel.toLowerCase(), "var(--ink-2)"];
+        const eigen = eenheid(d.waarde) || EIGEN[naam];
+        const onder = [eigen ? `bij jou ${eigen}` : "", bereik(d)].filter(Boolean).join(" · ");
+        return opbouwRij(naam, onder, t[0], t[1], t[2], "opbouwrij--woord");
+      }).join("") +
+      `<p class="cbij">Garmins eigen oordeel per onderdeel, ongewijzigd overgenomen. Hoeveel
+        elk onderdeel meeweegt maakt Garmin niet bekend, dus de balken tonen het oordeel — niet
+        het gewicht. Wat hier rood staat is waar je <b>${sl.sleep_score}</b> aan blijft hangen.</p>
+      <h3 class="opbouwkop">Waar de nacht uit bestond</h3>`;
+
+    return opbouw + opbouwRij("Diep", "herstel van je lichaam", deel(sl.sleep_deep_h),
         u(sl.sleep_deep_h), "var(--sl-diep)")
       + opbouwRij("REM", "herstel van je hoofd", deel(sl.sleep_rem_h),
         u(sl.sleep_rem_h), "var(--sl-rem)")
@@ -5183,11 +5308,20 @@ function opbouwWisselen(knop, wat, hostSel, paneelId) {
     b.setAttribute("aria-expanded", String(!open && b === knop)));
   if (open) { paneel.classList.remove("open"); paneel.dataset.wat = ""; return; }
   const maak = OPBOUW[wat];
-  const inhoud = maak ? maak() : null;
+  /* Een paneel levert ofwel kant-en-klare HTML, ofwel {html, teken} als er een
+     grafiek in zit. Chart.js meet zijn ouder bij het aanmaken, dus tekenen kan
+     pas nadat het paneel zichtbaar is -- vandaar dezelfde timeout als bij de
+     uitklapbare tegels. */
+  const uit = maak ? maak(paneelId) : null;
+  const inhoud = typeof uit === "string" ? uit : (uit && uit.html);
   if (!inhoud) { paneel.classList.remove("open"); paneel.dataset.wat = ""; return; }
   paneel.innerHTML = `<div class="card">${inhoud}</div>`;
   paneel.dataset.wat = wat;
   paneel.classList.add("open");
+  if (uit && uit.teken) setTimeout(() => {
+    try { uit.teken(); }
+    catch (e) { console.error("opbouwgrafiek " + wat + " faalde:", e); }
+  }, 0);
 }
 
 /* Wijzers klikbaar maken: `ga` is ofwel een tabblad om heen te springen,

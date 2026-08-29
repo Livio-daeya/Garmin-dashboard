@@ -147,6 +147,7 @@ PROBE_METHODS = [
     ("get_sleep_data", "slaap incl. fases"),
     ("get_hrv_data", "HRV (nachtelijk, alleen nieuwere toestellen)"),
     ("get_rhr_day", "rusthartslag"),
+    ("get_heart_rates", "hartslag per meting door de dag"),
     ("get_max_metrics", "VO2max"),
     ("get_training_status", "trainingsstatus + acute/chronische belasting"),
     ("get_training_readiness", "training readiness score"),
@@ -295,6 +296,14 @@ def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
     extras["body_battery"] = fetcher.call(
         "get_body_battery", (today - timedelta(days=28)).isoformat(), today.isoformat()
     )
+    # Hartslag per meting door de dag. Alleen voor de laatste twee dagen: het
+    # zijn honderden punten per dag, en het dashboard laat er maar één zien.
+    # Gisteren zit erbij omdat vroeg in de ochtend nog nauwelijks metingen van
+    # vandaag binnen zijn.
+    extras["hr_dag"] = {
+        d.isoformat(): fetcher.call("get_heart_rates", d.isoformat())
+        for d in (today, today - timedelta(days=1))
+    }
     cache["extras"] = extras
     cache["meta"]["support"] = fetcher.support
     save_cache(cache)

@@ -229,6 +229,68 @@ def nacht_hrv_reeks(raw: dict[str, Any]) -> list[list] | None:
     return None
 
 
+def dag_hr_reeks(extras: dict[str, Any]) -> dict[str, Any] | None:
+    """De hartslag van vandaag door de dag heen, als reeks punten.
+
+    De rusthartslag in het dashboard is één getal per dag. Dat getal is een
+    dagminimum in rust en zegt niets over hoe de dag verliep. De reeks eronder
+    wel: je ziet waar de training zat, hoe lang je erna verhoogd bleef, en hoe
+    dicht de rustige uren bij je rusthartslag kwamen.
+
+    Garmin levert metingen ongeveer elke twee minuten. Dat zijn er zevenhonderd
+    per dag; te veel om mee te sturen en te fijn om iets aan af te lezen.
+    Daarom middelen we per vijf minuten. Dat is geen versimpeling van de
+    waarheid maar van de ruis -- pieken van één meting zijn bij hartslag
+    meestal beweging, geen inspanning.
+
+    Valt vandaag nog leeg (vroeg in de ochtend, horloge nog niet
+    gesynchroniseerd), dan pakken we gisteren. Is er van beide dagen niets,
+    dan None: dan laat het dashboard de grafiek weg in plaats van een lege
+    as te tonen.
+    """
+    dagen = (extras or {}).get("hr_dag") or {}
+    for datum in sorted(dagen.keys(), reverse=True):
+        raw = dagen.get(datum)
+        if not isinstance(raw, dict):
+            continue
+        punten = raw.get("heartRateValues")
+        if not isinstance(punten, list):
+            continue
+
+        # De tijdstempels in heartRateValues staan in GMT. Zonder correctie
+        # schuift de hele dag op met de tijdzone -- een training om zes uur
+        # 's avonds komt dan om vier uur te staan. Garmin stuurt in dezelfde
+        # respons zowel de GMT- als de lokale start mee; het verschil is de
+        # offset, inclusief zomertijd, zonder dat we die zelf hoeven weten.
+        verschuif = 0
+        gmt, lokaal = _num(raw.get("startTimestampGMT")), _num(raw.get("startTimestampLocal"))
+        if gmt is not None and lokaal is not None:
+            verschuif = lokaal - gmt
+
+        emmers: dict[int, list[float]] = {}
+        for punt in punten:
+            if not isinstance(punt, (list, tuple)) or len(punt) < 2:
+                continue
+            stempel, slag = punt[0], _num(punt[1])
+            if slag is None or not isinstance(stempel, (int, float)):
+                continue
+            minuut = int((stempel + verschuif) / 1000 / 60)
+            emmers.setdefault(minuut // 5, []).append(slag)
+        if len(emmers) < 12:            # minder dan een uur aan metingen
+            continue
+
+        reeks = []
+        for blok in sorted(emmers):
+            minuut_van_dag = (blok * 5) % (24 * 60)
+            reeks.append([f"{minuut_van_dag // 60:02d}:{minuut_van_dag % 60:02d}",
+                          round(sum(emmers[blok]) / len(emmers[blok]))])
+        return {"datum": datum, "reeks": reeks,
+                "rust": _num(raw.get("restingHeartRate")),
+                "laagst": _num(raw.get("minHeartRate")),
+                "hoogst": _num(raw.get("maxHeartRate"))}
+    return None
+
+
 def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str, Any]]:
     """Trek uit de ruwe dagresponses de velden die het dashboard gebruikt."""
     out: dict[str, dict[str, Any]] = {}
@@ -249,6 +311,32 @@ def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str,
         overall = scores.get("overall") or {}
         row["sleep_score"] = _num(overall.get("value"))
         row["sleep_quality"] = overall.get("qualifierKey")
+
+        # Garmin bouwt de slaapscore op uit deelscores en zegt er per onderdeel
+        # bij of het goed, redelijk of slecht was. Alleen het eindcijfer tonen
+        # maakt er een orakel van; met de onderdelen erbij zie je waar een lage
+        # score vandaan komt -- te kort, te onrustig, of te weinig diepe slaap.
+        #
+        # Welke sleutels Garmin meestuurt verschilt per toestel, dus we nemen
+        # over wat er is in plaats van een vaste lijst te eisen.
+        deel = {}
+        for sleutel, naam in (("totalDuration", "Duur"),
+                              ("stress", "Rust"),
+                              ("awakeCount", "Keer wakker"),
+                              ("remPercentage", "REM"),
+                              ("lightPercentage", "Lichte slaap"),
+                              ("deepPercentage", "Diepe slaap"),
+                              ("restlessness", "Onrust")):
+            blok = scores.get(sleutel)
+            if not isinstance(blok, dict):
+                continue
+            oordeel = blok.get("qualifierKey")
+            if not oordeel:
+                continue
+            deel[naam] = {"oordeel": oordeel, "waarde": _num(blok.get("value")),
+                          "optimaal_van": _num(blok.get("optimalStart")),
+                          "optimaal_tot": _num(blok.get("optimalEnd"))}
+        row["sleep_delen"] = deel or None
         row["sleep_start"] = dto.get("sleepStartTimestampLocal")
         row["sleep_end"] = dto.get("sleepEndTimestampLocal")
         row["sleep_awakenings"] = _num(dto.get("awakeCount"))
