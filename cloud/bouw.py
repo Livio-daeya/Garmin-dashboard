@@ -140,7 +140,9 @@ def main() -> None:
     try:
         json.loads(rauwe_tokens)
     except json.JSONDecodeError:
-        sys.exit("GARMIN_TOKENS is geen geldige JSON. Draai cloud_instellen.py opnieuw.")
+        sys.exit("GARMIN_TOKENS is geen geldige JSON.\n"
+                 "Zet de INHOUD van ~/.garminconnect/garmin_tokens.json in het secret,\n"
+                 "niet het pad naar dat bestand. Zie DELEN.md, stap 2.")
     (TOKENMAP / "garmin_tokens.json").write_text(rauwe_tokens, encoding="utf-8")
 
     # De synchronisatie-instellingen moeten mee de pagina in, anders raakt je
@@ -170,7 +172,8 @@ def main() -> None:
         # connect() stopt met een nette tekst; die willen we zien, maar met
         # een duidelijker vervolg erbij.
         sys.exit(f"{stop}\n\nDe tokens in het secret GARMIN_TOKENS werken niet meer.\n"
-                 f"Draai op je Mac 'python3 cloud_instellen.py --tokens' om ze te vernieuwen.")
+                 f"Vernieuw ze op je eigen machine en zet de nieuwe inhoud van\n"
+                 f"~/.garminconnect/garmin_tokens.json in het secret. Zie DELEN.md, stap 2.")
 
     fetcher = F.Fetcher(client)
     F.probe(fetcher)
