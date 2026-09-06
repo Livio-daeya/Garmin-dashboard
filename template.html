@@ -1378,6 +1378,12 @@ tbody tr:last-child td { border-bottom: 0; }
   font-size: var(--t-micro); color: var(--muted); margin-top: 2px; }
 .setkop, .setrij { display: grid; grid-template-columns: 26px 1fr 1fr 44px;
   gap: var(--sp2); align-items: center; }
+/* Op een telefoon mogen de velden de breedte pakken; op een laptop wordt een
+   invoervak van vierhonderd pixels voor twee cijfers lachwekkend. Dan vaste
+   kolommen, links uitgelijnd, en de rest blijft leeg. */
+@media (min-width: 560px) {
+  .setkop, .setrij { grid-template-columns: 26px 132px 132px 44px; justify-content: start; }
+}
 .setkop { font-size: var(--t-micro); font-weight: var(--w-nadruk); letter-spacing: .085em;
   text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp2); }
 .setkop span:nth-child(2), .setkop span:nth-child(3) { text-align: right; }
@@ -1402,6 +1408,9 @@ tbody tr:last-child td { border-bottom: 0; }
    ondergrens uit 2.5.8. */
 .editor .knop { min-height: 44px; }
 .editor .knop--icoon { min-width: 44px; width: 44px; height: 44px; }
+
+.wkwegwijs { flex-basis: 100%; margin: var(--sp3) 0 0; font-size: var(--t-klein);
+  color: var(--muted); display: flex; align-items: center; gap: var(--sp2); flex-wrap: wrap; }
 
 .gesch { display: grid; gap: var(--sp1); margin-top: var(--sp3); }
 .geschrij { display: grid; grid-template-columns: 78px 1fr auto; gap: var(--sp3);
@@ -7196,6 +7205,11 @@ function renderWorkout() {
       <span class="wkmeta">${laatste
         ? `laatst gedaan ${kortDatum(laatste.datum)}`
         : "nog niet gelogd"}</span>
+      <!-- De velden hieronder zijn het voorschrift: wat je van plan bent. Wat
+           je werkelijk deed vul je per set in, en die knop staat pas na zes
+           oefeningen. Zonder deze regel scrol je daar niet vanzelf heen. -->
+      <p class="wkwegwijs">Hieronder stel je het voorschrift bij. Klaar met trainen?
+        <button class="knop knop--stil knop--klein" id="wkNaarLog">Vul per set in wat je deed</button></p>
       ${gekozen ? `<span class="wkmeta" style="flex-basis:100%;color:var(--warning)">
         Deze staat voor je klaar omdat de zware benen vandaag niet uitkomen — je kunt
         hierboven altijd een andere kiezen.</span>` : ""}
@@ -7247,7 +7261,7 @@ function renderWorkout() {
       vooruitgang. Overweeg één week met de helft van de sets, hetzelfde gewicht en twee
       herhalingen verder van falen — niet volledig rusten.</div>` : ""}
     <div class="knoprij">
-      <button class="knop knop--primair" id="wkGedaan" data-ic2="goed">Deze heb ik gedaan</button>
+      <button class="knop knop--primair" id="wkGedaan" data-ic2="goed">Deze heb ik gedaan — per set invullen</button>
       ${wkAanLees()[WK_ACTIEF] ? `<button class="knop knop--stil knop--klein" id="wkReset">
         Terug naar het voorstel</button>` : ""}
     </div>`;
@@ -7295,6 +7309,8 @@ function renderWorkout() {
   if (knop) knop.addEventListener("click", () => tik(true));
   knop.insertAdjacentHTML("afterbegin", ic("goed"));
   knop.onclick = () => openLogger(WK_ACTIEF, rijen);
+  const naarLog = document.getElementById("wkNaarLog");
+  if (naarLog) naarLog.onclick = () => { tik(true); openLogger(WK_ACTIEF, rijen); };
 
   geschiedenisTonen();
 
