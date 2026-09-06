@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 # --------------------------------------------------------------------------
@@ -227,6 +227,88 @@ def nacht_hrv_reeks(raw: dict[str, Any]) -> list[list] | None:
         if len(punten) >= 8:
             return punten
     return None
+
+
+# Garmin nummert de slaapfases; de namen staan nergens in de respons.
+SLAAPNIVEAUS = {0: "diep", 1: "licht", 2: "rem", 3: "wakker"}
+
+
+def nacht_fases(raw: dict[str, Any]) -> dict[str, Any] | None:
+    """De fases van een nacht op een tijdlijn: van hoe laat tot hoe laat, en wat.
+
+    Het dashboard toonde per fase het aantal minuten. Dat zegt hoevéél, niet
+    wannéér -- terwijl juist de volgorde iets vertelt: diepe slaap hoort in het
+    eerste deel van de nacht te zitten, en drie keer wakker vlak voor het
+    opstaan is iets anders dan drie keer verspreid.
+
+    Garmin levert dit als sleepLevels, met tijden in GMT. De start- en
+    eindstempel van de nacht staan er in beide vormen bij, dus het verschil
+    daartussen is de offset -- inclusief zomertijd, zonder dat we een tijdzone
+    hoeven kennen.
+
+    Niet elke nacht heeft dit. Bij een borstband komt de fasetijdlijn met
+    tussenpozen binnen; in de cache had 19 van de 20 gemeten nachten hem wel.
+    Ontbreekt hij, dan levert deze functie None en laat het dashboard het
+    hypnogram weg in plaats van een lege tijdas te tonen.
+    """
+    sleep = raw.get("sleep") or {}
+    lagen = sleep.get("sleepLevels")
+    dto = sleep.get("dailySleepDTO") or {}
+    if not isinstance(lagen, list) or not lagen:
+        return None
+
+    gmt = _num(dto.get("sleepStartTimestampGMT"))
+    lokaal = _num(dto.get("sleepStartTimestampLocal"))
+    verschuif = (lokaal - gmt) / 1000 if (gmt is not None and lokaal is not None) else 0
+
+    def stip(tekst: str) -> float | None:
+        """"2026-09-05T23:43:41.0" -> seconden sinds epoch, in lokale tijd."""
+        t = str(tekst or "").strip().replace("Z", "").replace(" ", "T")
+        if not t:
+            return None
+        # Garmin schrijft "23:43:41.0" -- één decimaal achter de seconden.
+        # fromisoformat accepteert op Python 3.9 alleen drie of zes cijfers,
+        # dus we gooien de fractie weg; secondes zijn hier ruim genoeg.
+        t = t.split(".")[0]
+        try:
+            return datetime.fromisoformat(t).replace(
+                tzinfo=timezone.utc).timestamp() + verschuif
+        except ValueError:
+            return None
+
+    blokken = []
+    for laag in lagen:
+        if not isinstance(laag, dict):
+            continue
+        van, tot = stip(laag.get("startGMT")), stip(laag.get("endGMT"))
+        niveau = _num(laag.get("activityLevel"))
+        # activityLevel -1 komt voor: een gat waarin niets is gemeten. Dat is
+        # geen fase en tekenen we dus niet -- als blok zou het suggereren dat
+        # je toen iets deed.
+        if van is None or tot is None or tot <= van or niveau not in (0, 1, 2, 3):
+            continue
+        blokken.append([van, tot, int(niveau)])
+    if len(blokken) < 3:
+        return None
+
+    blokken.sort(key=lambda b: b[0])
+    begin, eind = blokken[0][0], blokken[-1][1]
+
+    minuten: dict[str, float] = {}
+    uit = []
+    for van, tot, niveau in blokken:
+        naam = SLAAPNIVEAUS[niveau]
+        minuten[naam] = minuten.get(naam, 0) + (tot - van) / 60
+        uit.append([round((van - begin) / 60, 1), round((tot - van) / 60, 1), niveau])
+
+    def klok(sec: float) -> str:
+        t = datetime.fromtimestamp(sec, tz=timezone.utc)
+        return t.strftime("%H:%M")
+
+    return {"start": klok(begin), "eind": klok(eind),
+            "duur_min": round((eind - begin) / 60),
+            "blokken": uit,
+            "minuten": {k: round(v) for k, v in minuten.items()}}
 
 
 def dag_hr_reeks(extras: dict[str, Any]) -> dict[str, Any] | None:

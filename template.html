@@ -295,6 +295,37 @@
 .basisbalk .n { font-size: var(--t-titel); font-weight: var(--w-cijfer); color: var(--ink-2); white-space: nowrap; }
 
 /* --- slaapfases ------------------------------------------------------- */
+/* ---- hypnogram -------------------------------------------------------
+   Vier sporen onder elkaar, van wakker bovenaan tot diep onderin, met de
+   blokken op hun eigen tijd. De minuten per fase stonden er al; die zeggen
+   hoevéél, niet wannéér. Diepe slaap hoort in de eerste uren te zitten en
+   drie keer wakker vlak voor het opstaan is iets anders dan drie keer
+   verspreid over de nacht -- dat zie je alleen op een tijdas.
+
+   Waarom geen Chart.js: dit zijn rechthoeken op een lijn. Een grafiekbibliotheek
+   zou hier een balkdiagram van maken met assen die niets toevoegen, en de
+   blokken van één minuut zouden onder de afronding verdwijnen. */
+.hypno { margin: var(--sp4) 0 var(--sp2); }
+.hypno-tijd { display: flex; align-items: baseline; gap: var(--sp2);
+  font-size: var(--t-klein); color: var(--muted); margin-bottom: var(--sp3); }
+.hypno-tijd b { font-size: var(--t-body); font-weight: var(--w-cijfer); color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+.hypno-rij { display: grid; grid-template-columns: 46px 1fr; align-items: center;
+  gap: var(--sp3); margin-bottom: 3px; }
+.hypno-rij .hl { font-size: var(--t-micro); color: var(--muted); font-weight: var(--w-nadruk);
+  text-transform: uppercase; letter-spacing: .03em; }
+.hypno-spoor { position: relative; height: 17px; background: var(--bg2);
+  border-radius: var(--r-sm); overflow: hidden; }
+/* Een blok van één minuut is op een telefoon een halve pixel breed. Zonder
+   ondergrens zou het verdwijnen, en juist de korte keren wakker wil je zien. */
+.hypno-spoor i { position: absolute; top: 0; bottom: 0; min-width: 2px; border-radius: 2px; }
+.hypno-as { display: grid; grid-template-columns: 46px 1fr; gap: var(--sp3); margin-top: var(--sp2); }
+.hypno-as .ht { position: relative; height: 15px; }
+.hypno-as .ht span { position: absolute; font-size: var(--t-micro); color: var(--muted);
+  font-variant-numeric: tabular-nums; transform: translateX(-50%); white-space: nowrap; }
+.hypno-as .ht span.rand-l { transform: none; }
+.hypno-as .ht span.rand-r { transform: translateX(-100%); }
+
 .phasegrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp2); margin: var(--sp3) 0 var(--sp1); }
 .phase { background: var(--bg2); border-radius: var(--r-md); padding: var(--sp3) var(--sp3);
          display: flex; align-items: center; gap: var(--sp3); }
@@ -1295,6 +1326,47 @@ tbody tr:last-child td { border-bottom: 0; }
   color: var(--muted); }
 .logkop span:not(:first-child) { text-align: right; }
 
+/* ---- setregels -------------------------------------------------------
+   Eén blok per oefening, met daarin een regel per set. Vier kolommen:
+   setnummer, reps, kg, weg. De invoervelden zijn 44 px hoog omdat je ze met
+   een duim raakt terwijl je nog buiten adem bent. */
+.oefblok { background: var(--bg2); border-radius: var(--r-md);
+  padding: var(--sp3); margin-top: var(--sp3); }
+.oefblok--bij { display: grid; gap: var(--sp2); }
+.oefblok--bij label { font-size: var(--t-micro); font-weight: var(--w-nadruk);
+  letter-spacing: .085em; text-transform: uppercase; color: var(--muted); }
+.oefblok-kop { display: flex; align-items: flex-start; gap: var(--sp3);
+  margin-bottom: var(--sp3); }
+.oefblok-kop .n { flex: 1; font-size: var(--t-body); font-weight: var(--w-nadruk); color: var(--ink); }
+.oefblok-kop .n small { display: block; font-weight: var(--w-normaal);
+  font-size: var(--t-micro); color: var(--muted); margin-top: 2px; }
+.setkop, .setrij { display: grid; grid-template-columns: 26px 1fr 1fr 44px;
+  gap: var(--sp2); align-items: center; }
+.setkop { font-size: var(--t-micro); font-weight: var(--w-nadruk); letter-spacing: .085em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp2); }
+.setkop span:nth-child(2), .setkop span:nth-child(3) { text-align: right; }
+.setrij { margin-bottom: var(--sp2); }
+.setrij .sn { font-size: var(--t-klein); color: var(--muted);
+  font-variant-numeric: tabular-nums; text-align: center; }
+.setrij input { padding: var(--sp2) var(--sp3); border: 1px solid var(--hair);
+  border-radius: var(--r-sm); min-height: 44px; background: var(--bg0); color: var(--ink);
+  text-align: right; font: inherit; font-variant-numeric: tabular-nums; width: 100%; }
+.setrij input:focus { outline: none; border-color: var(--accent); }
+.vrijnaam { width: 100%; padding: var(--sp2) var(--sp3); min-height: 44px;
+  border: 1px solid var(--hair); border-radius: var(--r-sm);
+  background: var(--bg0); color: var(--ink); font: inherit; }
+.oefkeuze { width: 100%; min-height: 44px; padding: var(--sp2) var(--sp3);
+  border: 1px solid var(--hair); border-radius: var(--r-sm);
+  background: var(--bg0); color: var(--ink); font: inherit; }
+
+/* De knoppen in de rest van de app zijn 40 px; dat is bewust, want daar
+   staan ze los. Hier staan ze met z'n vieren op een regel, de ✕ verwijdert
+   iets, en je tikt erop met een duim terwijl je nog buiten adem bent. In dit
+   formulier dus 44 px, de bovengrens uit WCAG 2.5.5 in plaats van de
+   ondergrens uit 2.5.8. */
+.editor .knop { min-height: 44px; }
+.editor .knop--icoon { min-width: 44px; width: 44px; height: 44px; }
+
 .gesch { display: grid; gap: var(--sp1); margin-top: var(--sp3); }
 .geschrij { display: grid; grid-template-columns: 78px 1fr auto; gap: var(--sp3);
   align-items: center; padding: var(--sp2) var(--sp3); border-radius: var(--r-sm);
@@ -1633,6 +1705,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
       <span class="spacer"></span>
       <span class="chip m"><span class="cd"></span>Gemeten</span>
     </div>
+    <div id="hypno"></div>
     <div class="phasegrid" id="fasesGrid"></div>
   </div>
 
@@ -3617,6 +3690,15 @@ const OEF = {
                spieren: {triceps: 1, borst: 0.5, schouder: 0.5}},
   ohp:        {naam: "Overhead press", rol: "tweede", staaf: true,
                spieren: {schouder: 1, triceps: 0.5}},
+  /* Twee schouderdrukvarianten met losse gewichten. Ze staan apart van de
+     staafvariant omdat je er andere kilo's bij haalt: twee losse gewichten
+     vragen meer stabilisatie, en een kettlebell hangt bovendien achter je
+     onderarm in plaats van erboven. Je progressie op de een zegt dus weinig
+     over de ander, en dan horen ze niet op één hoop. */
+  ohpdb:      {naam: "Dumbbell shoulder press", rol: "tweede",
+               spieren: {schouder: 1, triceps: 0.5}},
+  ohpkb:      {naam: "Kettlebell shoulder press", rol: "tweede",
+               spieren: {schouder: 1, triceps: 0.5, rug: 0.5}},
   inclinedb:  {naam: "Incline dumbbellpress", rol: "tweede",
                spieren: {borst: 1, schouder: 0.5, triceps: 0.5}},
   dip:        {naam: "Dips of machine chest press", rol: "tweede",
@@ -6154,12 +6236,77 @@ function renderNachtcurve() {
       y: axis()}}});
 }
 
+/* Van hoe laat tot hoe laat, en wat er wanneer gebeurde.
+
+   Ontbreekt de tijdlijn, dan blijft dit blok weg en houd je de minuten per
+   fase eronder. Bij een borstband komt sleepLevels met tussenpozen binnen --
+   in de cache had negentien van de twintig gemeten nachten hem wel, maar dat
+   is geen garantie. */
+function renderHypnogram() {
+  const host = document.getElementById("hypno");
+  if (!host) return;
+  const f = DATA.slaap_fases;
+  if (!f || !f.blokken || !f.blokken.length || !f.duur_min) { host.innerHTML = ""; return; }
+
+  /* Wakker bovenaan, diep onderin: zo wordt een hypnogram gelezen, en zo
+     loopt de nacht ook visueel naar beneden weg. */
+  const SPOREN = [["Wakker", 3, "--sl-wakker"], ["REM", 2, "--sl-rem"],
+                  ["Licht", 1, "--sl-licht"], ["Diep", 0, "--sl-diep"]];
+  const totaal = f.duur_min;
+  const pct = m => (m / totaal) * 100;
+
+  const sporen = SPOREN.map(([naam, niveau, kleur]) => {
+    const blokken = f.blokken.filter(b => b[2] === niveau).map(b =>
+      `<i style="left:${pct(b[0]).toFixed(3)}%;width:${pct(b[1]).toFixed(3)}%;
+         background:var(${kleur})" title="${veiligeTekst(naam)}, ${Math.round(b[1])} min"></i>`).join("");
+    return `<div class="hypno-rij"><div class="hl">${naam}</div>
+      <div class="hypno-spoor">${blokken}</div></div>`;
+  }).join("");
+
+  /* Streepjes op het hele uur. Niet om de zoveel procent: een label op 14:37
+     leest niemand, en de nacht loopt over middernacht heen. */
+  const startMin = klokNaarMin(f.start);
+  const ticks = [];
+  /* Op 390 px is het spoor zo'n 275 px breed. Een label van vijf tekens
+     kost er dertig, dus meer dan een stuk of zes labels gaan tegen elkaar
+     aan staan. Bij een nacht langer dan vier uur dus om de twee uur. */
+  const stap = totaal > 240 ? 120 : 60;
+  for (let m = (stap - (startMin % stap)) % stap; m < totaal; m += stap) {
+    const p = pct(m);
+    /* De begin- en eindtijd staan al op de randen. Een uurstreepje daar
+       vlakbij schrijft er dwars overheen -- die slaan we over. */
+    if (p < 11 || p > 89) continue;
+    ticks.push(`<span style="left:${p.toFixed(2)}%">${minNaarKlok(startMin + m)}</span>`);
+  }
+
+  host.innerHTML =
+    `<div class="hypno">
+       <div class="hypno-tijd"><b>${f.start}</b> tot <b>${f.eind}</b>
+         <span>· ${uurMin(totaal / 60)} van inslapen tot ontwaken</span></div>
+       ${sporen}
+       <div class="hypno-as"><div></div><div class="ht">
+         <span class="rand-l" style="left:0">${f.start}</span>
+         ${ticks.join("")}
+         <span class="rand-r" style="left:100%">${f.eind}</span></div></div>
+     </div>`;
+}
+
+const klokNaarMin = t => {
+  const [u, m] = String(t || "0:0").split(":").map(Number);
+  return (u || 0) * 60 + (m || 0);
+};
+const minNaarKlok = m => {
+  const t = ((m % 1440) + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
+
 function renderFases() {
   const kaart = document.getElementById("fasesCard");
   const grid = document.getElementById("fasesGrid");
   const s = DATA.sleep_last || {};
   if (!kaart || !s.sleep_h) { if (kaart) kaart.style.display = "none"; return; }
   kaart.style.display = "";
+  renderHypnogram();
   const fases = [["Diep", s.sleep_deep_h, "var(--sl-diep)"],
                  ["Licht", s.sleep_light_h, "var(--sl-licht)"],
                  ["REM", s.sleep_rem_h, "var(--sl-rem)"],
@@ -7121,80 +7268,220 @@ function geschiedenisTonen() {
       <div class="geschrij">
         <span class="d">${kortDatum(s.datum)}</span>
         <span>${Object.entries(s.oefeningen || {}).filter(([, v]) => v.kg)
-          .map(([k, v]) => `${OEF[k] ? OEF[k].naam.split(" ")[0] : k} ${v.kg}×${v.reps}`)
+          .map(([k, v]) => `${OEF[k] ? OEF[k].naam.split(" ")[0]
+            : (v.naam || k.replace(/^vrij:/, ""))} ${v.kg}×${v.reps}`)
           .join(" · ") || "geen gewichten ingevuld"}</span>
         <span class="v">${(s.oefeningen && Object.values(s.oefeningen)
           .reduce((a, v) => a + (v.sets || 0), 0)) || 0} sets</span>
       </div>`).join("")}</div>`);
 }
 
-/* ---- afvinken ---- */
+/* ---- afvinken -------------------------------------------------------
+   Het formulier logde per oefening één regel: kg, reps, en het aantal sets
+   uit het schema. Dat klopt zolang je alle sets hetzelfde doet, en dat doe
+   je meestal niet -- twee sets van acht met tien kilo en daarna twee van
+   tien met vijftien is een normale sessie en paste er niet in.
+
+   Nu is elke set een eigen regel. Wat er wordt weggeschreven blijft
+   uitwisselbaar met wat er al in je logboek staat: `kg`, `reps` en `sets`
+   houden dezelfde betekenis (de zwaarste set en het totale aantal), en
+   `reeksen` komt erbij met de losse regels. Zo blijven je oude sessies
+   leesbaar en gaat er niets verloren bij het overzetten. */
+
+const VRIJ = "__vrij__";
+
+/* Wat je eerder deed bij deze oefening, als startpunt voor de setregels.
+   Leeg beginnen betekent alles opnieuw intikken; vorige week overnemen is
+   bijna altijd dichter bij de waarheid dan een leeg veld. */
+function setregelsVoor(type, sleutel, r) {
+  const eerder = logLees()
+    .filter(x => x.oefeningen && x.oefeningen[sleutel])
+    .sort((a, b) => (a.datum < b.datum ? 1 : -1))[0];
+  const v = eerder && eerder.oefeningen[sleutel];
+  if (v && Array.isArray(v.reeksen) && v.reeksen.length)
+    return v.reeksen.map(x => ({reps: x.reps, kg: x.kg}));
+  if (v && v.kg)
+    return Array.from({length: v.sets || 1}, () => ({reps: v.reps, kg: v.kg}));
+  const sets = (r && r.sets) || 3;
+  return Array.from({length: sets}, () => ({reps: "", kg: ""}));
+}
+
 function openLogger(type, rijen) {
   const vandaag = (DATA.planbasis || {}).vandaag || "";
   const host = document.getElementById("wkLogger");
-  host.innerHTML = `
-    <div class="editor">
-      <h4>${WORKOUTS[type].naam} afvinken</h4>
-      <div class="velden" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-        <div class="veld"><label for="lgDatum">Wanneer gedaan</label>
-          <input id="lgDatum" type="date" value="${vandaag}" max="${vandaag}"></div>
-        <div class="veld"><label for="lgRir">RIR laatste set</label>
-          <select id="lgRir">
-            <option value="0">0 — tot falen</option>
-            <option value="1">1</option>
-            <option value="2" selected>2</option>
-            <option value="3">3</option>
-            <option value="4">4 of meer</option>
-          </select>
-          <div class="bij">Alleen van de láátste set. Schattingen zijn daar het meest
-            betrouwbaar; per set vragen levert slechtere cijfers op.</div></div>
-      </div>
-      <div class="logkop" style="margin-top:var(--sp3)"><span>Oefening</span><span>kg</span><span>Reps</span></div>
-      <div class="logtabel">
-        ${rijen.map(r => `
-          <div class="logrij" data-oef="${r.sleutel}">
-            <div class="n">${r.oef.naam}<small>${r.sets} × ${
-              r.laag === r.hoog ? r.laag : `${r.laag}–${r.hoog}`}</small></div>
-            <input type="number" step="0.5" min="0" max="500" data-veld="kg"
-                   value="${r.kg ?? ""}" placeholder="kg" inputmode="decimal">
-            <input type="number" step="1" min="0" max="50" data-veld="reps"
-                   value="${r.vorige && !r.nieuw ? "" : ""}" placeholder="${r.hoog}" inputmode="numeric">
-          </div>`).join("")}
-      </div>
-      <p class="schatting">Vul in wat je daadwerkelijk deed op je laatste set. Leeg laten mag —
-        die oefening wordt dan niet gelogd en telt niet mee voor je volume.</p>
-      <div class="knoppen">
-        <button class="knop knop--primair" id="lgOk">Opslaan</button>
-        <button class="knop knop--secundair" id="lgAnn">Annuleren</button>
-      </div>
-    </div>`;
-  host.scrollIntoView({behavior: "smooth", block: "nearest"});
 
-  document.getElementById("lgAnn").onclick = () => { host.innerHTML = ""; };
-  document.getElementById("lgOk").onclick = () => {
+  /* De hele toestand van het formulier zit hier, niet in de DOM. Anders zou
+     elke keer dat je een set toevoegt de rest opnieuw uitgelezen en
+     teruggeschreven moeten worden, en raakt er iets zoek zodra je halverwege
+     een oefening verwijdert. */
+  const staat = rijen.map(r => ({
+    sleutel: r.sleutel, naam: r.oef.naam, doel: r.sets + " × " +
+      (r.laag === r.hoog ? r.laag : `${r.laag}–${r.hoog}`),
+    reeksen: setregelsVoor(type, r.sleutel, r),
+  }));
+
+  const keuzelijst = sel => `
+    <select class="oefkeuze">
+      <option value="">— kies een oefening —</option>
+      ${Object.entries(OEF).map(([k, o]) =>
+        `<option value="${k}"${k === sel ? " selected" : ""}>${veiligeTekst(o.naam)}</option>`).join("")}
+      <option value="${VRIJ}">— vrij invullen —</option>
+    </select>`;
+
+  function tekenen() {
+    host.innerHTML = `
+      <div class="editor">
+        <h4>${WORKOUTS[type].naam} afvinken</h4>
+        <div class="velden" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+          <div class="veld"><label for="lgDatum">Wanneer gedaan</label>
+            <input id="lgDatum" type="date" value="${LG_DATUM || vandaag}" max="${vandaag}"></div>
+          <div class="veld"><label for="lgRir">RIR laatste set</label>
+            <select id="lgRir">
+              ${[0, 1, 2, 3, 4].map(n => `<option value="${n}"${n === LG_RIR ? " selected" : ""}>${
+                n === 0 ? "0 — tot falen" : n === 4 ? "4 of meer" : n}</option>`).join("")}
+            </select>
+            <div class="bij">Alleen van de láátste set. Schattingen zijn daar het meest
+              betrouwbaar; per set vragen levert slechtere cijfers op.</div></div>
+        </div>
+
+        ${staat.map((o, i) => `
+          <div class="oefblok" data-oefblok="${i}">
+            <div class="oefblok-kop">
+              <div class="n">${o.vrij
+                ? `<input class="vrijnaam" type="text" maxlength="60" placeholder="Naam van de oefening"
+                          value="${veiligeTekst(o.naam || "")}">`
+                : veiligeTekst(o.naam)}${o.doel ? `<small>schema ${o.doel}</small>` : ""}</div>
+              <button class="knop knop--secundair knop--icoon knop--klein" data-oefweg="${i}"
+                      aria-label="Oefening verwijderen">✕</button>
+            </div>
+            ${o.vrij ? `<p class="bij" style="margin:0 0 var(--sp2)">Een eigen oefening wordt wel
+              gelogd, maar telt niet mee voor je setvolume per spiergroep — het dashboard weet
+              niet welke spieren hij aanspreekt.</p>` : ""}
+            <div class="setkop"><span>Set</span><span>Reps</span><span>kg</span><span></span></div>
+            ${o.reeksen.map((r, j) => `
+              <div class="setrij" data-set="${i}:${j}">
+                <span class="sn">${j + 1}</span>
+                <input type="number" step="1" min="0" max="100" inputmode="numeric"
+                       data-veld="reps" value="${r.reps ?? ""}" placeholder="reps">
+                <input type="number" step="0.5" min="0" max="500" inputmode="decimal"
+                       data-veld="kg" value="${r.kg ?? ""}" placeholder="kg">
+                <button class="knop knop--secundair knop--icoon knop--klein" data-setweg="${i}:${j}"
+                        aria-label="Set ${j + 1} verwijderen">✕</button>
+              </div>`).join("")}
+            <button class="knop knop--secundair knop--klein" data-setbij="${i}">+ Set toevoegen</button>
+          </div>`).join("")}
+
+        <div class="oefblok oefblok--bij">
+          <label for="lgNieuw">Oefening toevoegen</label>
+          ${keuzelijst("").replace("<select", '<select id="lgNieuw"')}
+        </div>
+
+        <p class="schatting">Vul in wat je daadwerkelijk deed. Een setregel zonder reps wordt
+          overgeslagen; een oefening zonder ingevulde set wordt niet gelogd en telt niet mee
+          voor je volume.</p>
+        <div class="knoppen">
+          <button class="knop knop--primair" id="lgOk">Opslaan</button>
+          <button class="knop knop--secundair" id="lgAnn">Annuleren</button>
+        </div>
+      </div>`;
+    bedraden();
+  }
+
+  /* Wat er in de velden staat terugzetten in `staat`, zodat opnieuw tekenen
+     niets weggooit wat je net hebt ingetikt. */
+  function lezen() {
+    LG_DATUM = (document.getElementById("lgDatum") || {}).value || LG_DATUM;
+    LG_RIR = parseInt((document.getElementById("lgRir") || {}).value, 10) || 0;
+    host.querySelectorAll(".setrij").forEach(rij => {
+      const [i, j] = rij.dataset.set.split(":").map(Number);
+      const g = v => rij.querySelector(`[data-veld="${v}"]`).value;
+      staat[i].reeksen[j] = {reps: g("reps"), kg: g("kg")};
+    });
+    host.querySelectorAll(".oefblok[data-oefblok]").forEach(blok => {
+      const veld = blok.querySelector(".vrijnaam");
+      if (veld) staat[Number(blok.dataset.oefblok)].naam = veld.value;
+    });
+  }
+
+  function bedraden() {
+    host.querySelectorAll("[data-setbij]").forEach(b => b.onclick = () => {
+      lezen();
+      const i = Number(b.dataset.setbij);
+      const laatste = staat[i].reeksen[staat[i].reeksen.length - 1] || {reps: "", kg: ""};
+      /* De nieuwe set begint op de vorige. Je verandert meestal één ding. */
+      staat[i].reeksen.push({reps: laatste.reps, kg: laatste.kg});
+      tekenen();
+    });
+    host.querySelectorAll("[data-setweg]").forEach(b => b.onclick = () => {
+      lezen();
+      const [i, j] = b.dataset.setweg.split(":").map(Number);
+      staat[i].reeksen.splice(j, 1);
+      if (!staat[i].reeksen.length) staat[i].reeksen.push({reps: "", kg: ""});
+      tekenen();
+    });
+    host.querySelectorAll("[data-oefweg]").forEach(b => b.onclick = () => {
+      lezen();
+      staat.splice(Number(b.dataset.oefweg), 1);
+      tekenen();
+    });
+    const nieuw = document.getElementById("lgNieuw");
+    if (nieuw) nieuw.onchange = () => {
+      const k = nieuw.value;
+      if (!k) return;
+      lezen();
+      if (k === VRIJ) staat.push({sleutel: null, vrij: true, naam: "", doel: "",
+                                  reeksen: [{reps: "", kg: ""}]});
+      else if (!staat.some(o => o.sleutel === k))
+        staat.push({sleutel: k, naam: OEF[k].naam, doel: "",
+                    reeksen: setregelsVoor(type, k, null)});
+      tekenen();
+    };
+
+    document.getElementById("lgAnn").onclick = () => { host.innerHTML = ""; };
+    document.getElementById("lgOk").onclick = opslaan;
+  }
+
+  function opslaan() {
     tik(true);
-    const datum = document.getElementById("lgDatum").value;
-    const rir = parseInt(document.getElementById("lgRir").value, 10);
-    if (!datum) return;
+    lezen();
+    if (!LG_DATUM) return;
     const oefeningen = {};
-    host.querySelectorAll(".logrij").forEach(rij => {
-      const kg = parseFloat(rij.querySelector('[data-veld="kg"]').value);
-      const reps = parseInt(rij.querySelector('[data-veld="reps"]').value, 10);
-      if (!Number.isFinite(kg) || !Number.isFinite(reps) || !reps) return;
-      const r = rijen.find(x => x.sleutel === rij.dataset.oef);
-      oefeningen[rij.dataset.oef] = {kg, reps, sets: r ? r.sets : 3, rir};
+    staat.forEach((o, i) => {
+      const reeksen = o.reeksen
+        .map(r => ({reps: parseInt(r.reps, 10), kg: parseFloat(r.kg)}))
+        .filter(r => Number.isFinite(r.reps) && r.reps > 0);
+      if (!reeksen.length) return;
+      /* De zwaarste set is de maat voor je e1RM; die zetten we in kg/reps
+         zodat elke bestaande berekening hem meteen ziet. Bij gelijk gewicht
+         wint de set met de meeste herhalingen. */
+      const top = reeksen.slice().sort((a, b) =>
+        (b.kg || 0) - (a.kg || 0) || b.reps - a.reps)[0];
+      const sleutel = o.sleutel || ("vrij:" + (o.naam || "eigen oefening").trim().toLowerCase());
+      oefeningen[sleutel] = {
+        kg: Number.isFinite(top.kg) ? top.kg : null,
+        reps: top.reps, sets: reeksen.length, rir: LG_RIR,
+        reeksen: reeksen.map(r => ({reps: r.reps, kg: Number.isFinite(r.kg) ? r.kg : null})),
+        ...(o.sleutel ? {} : {naam: (o.naam || "Eigen oefening").trim()}),
+      };
     });
     const log = logLees();
     /* Zelfde soort workout op dezelfde dag overschrijft de vorige invoer in
        plaats van er een tweede naast te zetten. */
-    const idx = log.findIndex(x => x.type === type && x.datum === datum);
-    const item = {type, datum, oefeningen};
+    const idx = log.findIndex(x => x.type === type && x.datum === LG_DATUM);
+    const item = {type, datum: LG_DATUM, oefeningen};
     if (idx >= 0) log[idx] = item; else log.push(item);
     logZet(log);
     host.innerHTML = "";
     renderWorkout(); renderDoelen();
-  };
+  }
+
+  LG_DATUM = vandaag;
+  LG_RIR = 2;
+  tekenen();
+  host.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
+
+let LG_DATUM = "", LG_RIR = 2;
 
 
 /* De navigatie plakt onder de kop. Die hoogte hier meten en als variabele

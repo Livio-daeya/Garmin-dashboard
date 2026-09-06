@@ -25,7 +25,7 @@ import math
 import random
 import sys
 import webbrowser
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone as tz
 from pathlib import Path
 from typing import Any
 
@@ -788,6 +788,12 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         # Hartslag per vijf minuten over de jongste gemeten dag, met de
         # rusthartslag erbij als referentielijn.
         "hr_dag": A.dag_hr_reeks(cache.get("extras") or {}),
+        # De fases van de jongste gemeten nacht op een tijdlijn. Net als de
+        # HRV-curve maar die ene nacht: 85 nachten x 22 blokken is ballast
+        # voor een hypnogram dat je alleen over vannacht bekijkt.
+        "slaap_fases": next(
+            (r for r in (A.nacht_fases(cache.get("daily", {}).get(d) or {})
+                         for d in reversed(days)) if r), None),
         "sleep_nights": fill("sleep_h"),
         "explain": EXPLAIN,
         "sport_order": A.SPORT_ORDER,
@@ -808,22 +814,58 @@ def demo_cache(weeks: int) -> dict[str, Any]:
     start = today - timedelta(weeks=weeks)
     cache: dict[str, Any] = {"daily": {}, "activities": {}, "meta": {}, "extras": {}}
 
+    def _epoch(ds: str, uur: int, minuut: int) -> int:
+        t = datetime.fromisoformat(ds) + timedelta(hours=uur, minutes=minuut)
+        return int(t.replace(tzinfo=tz.utc).timestamp() * 1000)
+
+    def _fases(ds: str) -> list[dict[str, Any]]:
+        """Een nacht in blokken: inslapen licht, dan diep, later meer REM."""
+        blokken, klok = [], datetime.fromisoformat(ds + "T21:20:00")
+        eind = klok + timedelta(minutes=random.randint(400, 470))
+        while klok < eind:
+            deel = (klok - (eind - timedelta(minutes=440))).total_seconds() / 3600
+            niveau = random.choices([0, 1, 2, 3],
+                                    [max(0.05, 0.45 - deel * 0.07), 0.45,
+                                     min(0.35, 0.05 + deel * 0.05), 0.08])[0]
+            duur = random.randint(6, 34)
+            blokken.append({"startGMT": klok.isoformat() + ".0",
+                            "endGMT": (klok + timedelta(minutes=duur)).isoformat() + ".0",
+                            "activityLevel": float(niveau)})
+            klok += timedelta(minutes=duur)
+        return blokken
+
     aid = 1
     for i in range((today - start).days + 1):
         d = start + timedelta(days=i)
         ds = d.isoformat()
         wd = d.weekday()
 
+        # De fasetijdlijn en de fasetotalen moeten hetzelfde zeggen. In de
+        # echte data doen ze dat ook -- de blokken uit sleepLevels telden
+        # precies op tot de secondes in de dto. Genereerde de demo ze los van
+        # elkaar, dan zou het hypnogram iets anders tonen dan de cijfers
+        # eronder en zou ik dat verschil voor een fout aanzien.
+        fases = _fases(ds)
+        sec = {0: 0, 1: 0, 2: 0, 3: 0}
+        for blok in fases:
+            duur = (datetime.fromisoformat(blok["endGMT"][:19])
+                    - datetime.fromisoformat(blok["startGMT"][:19])).total_seconds()
+            sec[int(blok["activityLevel"])] += duur
         cache["daily"][ds] = {
             "sleep": {"dailySleepDTO": {
-                "sleepTimeSeconds": int((6.6 + random.random() * 1.8) * 3600),
-                "deepSleepSeconds": int((0.9 + random.random() * 0.7) * 3600),
-                "lightSleepSeconds": int((3.5 + random.random()) * 3600),
-                "remSleepSeconds": int((1.1 + random.random() * 0.6) * 3600),
-                "awakeSleepSeconds": int(random.random() * 0.5 * 3600),
+                "sleepTimeSeconds": int(sec[0] + sec[1] + sec[2]),
+                "deepSleepSeconds": int(sec[0]),
+                "lightSleepSeconds": int(sec[1]),
+                "remSleepSeconds": int(sec[2]),
+                "awakeSleepSeconds": int(sec[3]),
                 # Ontbraken in de demo, waardoor twee rijen in de opbouw van de
                 # slaapscore leeg bleven en er niets te testen viel.
                 "awakeCount": random.randint(0, 4),
+                # De start in beide vormen, want daaruit leidt de rekenkern de
+                # tijdzone af. Zonder deze twee blijft de offset nul en test je
+                # de omrekening niet.
+                "sleepStartTimestampGMT": _epoch(ds, 21, 20),
+                "sleepStartTimestampLocal": _epoch(ds, 21, 20) + 2 * 3600 * 1000,
                 "avgSleepStress": round(14 + random.random() * 16, 1),
                 # Garmin geeft naast het eindcijfer per onderdeel een oordeel.
                 # De demo moet die meesturen, anders test je het paneel dat ze
@@ -846,6 +888,11 @@ def demo_cache(weeks: int) -> dict[str, Any]:
                 # levert als het apparaat ze meestuurt. Eens in de zoveel nacht
                 # een uitschieter, want die zitten er in het echt ook in -- en
                 # de grafiek moet laten zien dat het er een is.
+                # De fasetijdlijn zoals get_sleep_data hem levert: blokken met
+                # een GMT-tijd en een niveau (0 diep, 1 licht, 2 REM, 3 wakker).
+                # Zonder deze lijst tekent de demo geen hypnogram en lijkt het
+                # blok te ontbreken.
+                "sleepLevels": fases,
                 "hrvData": [
                     {"startGMT": f"{ds}T{(23 + h // 12) % 24:02d}:{(h * 5) % 60:02d}:00",
                      "value": round(58 + 12 * math.sin(h / 7) + random.uniform(-9, 9)
