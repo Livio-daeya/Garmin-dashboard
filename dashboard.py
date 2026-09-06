@@ -745,7 +745,12 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
             "horizon": PLAN_HORIZON,
             "sporten": A.SPORT_ORDER,
         },
-        "generated": datetime.now().isoformat(timespec="minutes"),
+        # Met tijdzone erbij. Zonder was dit de kale klok van de machine die
+        # bouwde, en die staat bij GitHub op UTC -- waardoor een bouw van
+        # kwart over acht 's ochtends in de pagina als 06:15 verscheen en het
+        # leek alsof je oude data terugkreeg. Nu staat er een absoluut moment
+        # in en rekent de pagina het om naar de klok van wie kijkt.
+        "generated": datetime.now().astimezone().isoformat(timespec="minutes"),
         "sync": sync_config(),
         "weeks": weeks,
         "max_hr": MAX_HR,

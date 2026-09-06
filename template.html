@@ -535,6 +535,42 @@ svg.ic { width: 1em; height: 1em; display: block; flex: none;
   border-bottom: 1px solid var(--hair);
   padding-top: env(safe-area-inset-top);
 }
+/* ---- voortgangsbalk --------------------------------------------------
+   Plakt direct onder de kop, dus zichtbaar vanaf welk tabblad je ook op
+   verversen drukt. De ring toont echte voortgang: hij komt uit de stappen
+   die GitHub daadwerkelijk heeft afgerond, niet uit een timer die net doet
+   alsof. Honderd procent verschijnt pas als de nieuwe pagina online staat.
+   ------------------------------------------------------------------------ */
+.syncbar { position: sticky; top: var(--kophoogte, 56px); z-index: 39;
+  background: color-mix(in srgb, var(--bg1) 96%, transparent);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-bottom: 1px solid var(--hair);
+  animation: opkomen var(--snel) var(--ease); }
+.syncbar-in { max-width: 1180px; margin: 0 auto; padding: var(--sp3) var(--sp5);
+  display: flex; align-items: center; gap: var(--sp4); }
+.syncbar-tekst { flex: 1; min-width: 0; }
+.syncbar-tekst .t { font-size: var(--t-klein); font-weight: var(--w-nadruk); color: var(--ink); }
+.syncbar-tekst .s { font-size: var(--t-micro); color: var(--muted); margin-top: 2px; }
+.syncpct { font-size: var(--t-klein); font-weight: var(--w-cijfer); color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+
+.syncring { width: 34px; height: 34px; flex: none; transform: rotate(-90deg); }
+.syncring .baan { fill: none; stroke: var(--bg3); stroke-width: 5; }
+.syncring .vul  { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round;
+  stroke-dasharray: 113.1; stroke-dashoffset: 113.1;
+  transition: stroke-dashoffset var(--traag) var(--ease); }
+.syncbar.klaar .syncring .vul { stroke: var(--good); }
+.syncbar.fout  .syncring .vul { stroke: var(--critical); }
+
+/* Drie streepjes voor de drie fases: starten, ophalen, online zetten.
+   Amber zolang een fase loopt, groen als hij af is. */
+.syncfases { display: flex; gap: 4px; margin-top: var(--sp2); }
+.syncfases i { height: 3px; flex: 1; border-radius: 2px; background: var(--bg3); }
+.syncfases i.bezig { background: var(--warning); animation: pols 1.1s ease-in-out infinite; }
+.syncfases i.klaar { background: var(--good); }
+@media (prefers-reduced-motion: reduce) { .syncfases i.bezig { animation: none; } }
+
 .appbar-in { max-width: 1180px; margin: 0 auto; padding: var(--sp3) var(--sp5);
   display: flex; align-items: center; gap: var(--sp3); }
 .appbar h1 { font-size: var(--t-kop); letter-spacing: -0.01em; }
@@ -1488,6 +1524,26 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
     <button class="knop knop--secundair knop--icoon knop--kop" id="theme" title="Licht of donker" aria-label="Thema wisselen"></button>
   </div>
 </header>
+
+<!-- De voortgang van het ophalen. Stond eerst als tekstblok middenin het
+     tabblad Vandaag: je drukte op verversen, er gebeurde ogenschijnlijk
+     niets, en de melding stond honderden pixels lager. Nu plakt hij onder
+     de kop, zichtbaar op elk tabblad, en verdwijnt hij zodra de nieuwe
+     pagina er echt staat. -->
+<div class="syncbar" id="syncbar" hidden>
+  <div class="syncbar-in">
+    <svg class="syncring" viewBox="0 0 44 44" aria-hidden="true">
+      <circle class="baan" cx="22" cy="22" r="18"></circle>
+      <circle class="vul" cx="22" cy="22" r="18"></circle>
+    </svg>
+    <div class="syncbar-tekst">
+      <div class="t" id="syncbarTitel">Bezig met ophalen</div>
+      <div class="s" id="syncbarSub"></div>
+      <div class="syncfases" id="syncbarFases"></div>
+    </div>
+    <div class="syncpct" id="syncbarPct">0%</div>
+  </div>
+</div>
 
 <!-- De navigatie staat op een telefoon onderaan binnen duimbereik en op een
      groot scherm als pillenrij onder de kop. Zelfde knoppen, zelfde volgorde. -->
@@ -5420,6 +5476,27 @@ function wijzersBedraden(hostSel, paneelId) {
 }
 
 /* Naar een tabblad springen vanaf een tegel of wijzer. */
+/* Wanneer deze pagina is gebouwd, op de klok van wie ernaar kijkt.
+
+   Dit stond er als kale tekst uit de payload, en die tekst komt van de
+   machine die bouwt. Bij GitHub is dat UTC, dus een bouw van kwart over
+   acht 's ochtends verscheen hier als 06:15 -- twee uur in het verleden.
+   Wie dan opnieuw ververste zag achtereenvolgens 04:30, 06:00 en pas
+   daarna iets recents, en concludeerde begrijpelijk dat het ophalen in
+   stappen ging. Er staat nu een absoluut moment in de payload; Date doet
+   de omrekening.
+
+   Oude payloads hadden geen tijdzone. Die leest Date als lokale tijd, en
+   dat is precies wat de pagina er voorheen ook van maakte -- ze worden
+   dus niet ineens verkeerd. */
+function bouwtijd(lang) {
+  const t = new Date(DATA.generated || "");
+  if (isNaN(t)) return String(DATA.generated || "onbekend");
+  return t.toLocaleString("nl-NL", lang
+    ? {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"}
+    : {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
+}
+
 /* Een korte tik als je iets vastlegt -- opslaan, afvinken, loggen. Niet bij
    navigeren: dan zou het de hele dag trillen.
 
@@ -7536,8 +7613,8 @@ function boot() {
   kophoogteMeten();
   const smal = window.matchMedia("(max-width:720px)").matches;
   document.getElementById("meta").textContent = smal
-    ? `bijgewerkt ${DATA.generated.replace("T", " ").slice(5)}`
-    : `bijgewerkt ${DATA.generated.replace("T", " ")} · ${DATA.weeks} weken historie · ` +
+    ? `bijgewerkt ${bouwtijd()}`
+    : `bijgewerkt ${bouwtijd(true)} · ${DATA.weeks} weken historie · ` +
       `${DATA.activities.length} activiteiten`;
   if (DATA.demo) document.getElementById("demoBanner").style.display = "";
   belastingHerberekenen();
@@ -7880,15 +7957,6 @@ const kanLokaalVerversen = () =>
   location.protocol === "file:" ||
   ["localhost", "127.0.0.1"].includes(location.hostname);
 
-function verversMelding(tekst, soort) {
-  const el = document.getElementById("verversMelding");
-  if (!el) return;
-  if (!tekst) { el.style.display = "none"; el.innerHTML = ""; return; }
-  el.style.display = "";
-  el.className = "melding" + (soort === "fout" ? " melding--let" : "");
-  el.innerHTML = tekst;
-}
-
 let VERVERS_BEZIG = false;
 
 async function verversStart() {
@@ -7961,14 +8029,81 @@ async function ghApi(pad, opties = {}) {
   return r.status === 204 ? {} : r.json();
 }
 
+/* ---- de balk bovenaan ------------------------------------------------
+   De melding stond als tekstblok middenin het tabblad Vandaag. Je drukte op
+   verversen en zag niets gebeuren, want de tekst verscheen honderden pixels
+   lager -- en op elk ander tabblad helemaal niet.
+
+   De ring toont echte voortgang. Bij GitHub komt die uit de stappen die de
+   bouw daadwerkelijk heeft afgerond; lokaal uit de dagteller die het hulpje
+   meelogt. Wat er niet is, wordt niet verzonnen: honderd procent verschijnt
+   pas als de nieuwe pagina ook echt online staat.
+   ---------------------------------------------------------------------- */
+const SYNCFASES = ["Starten", "Ophalen bij Garmin", "Online zetten"];
+
+function syncbarToon({pct, titel, sub, fase, staat}) {
+  const bar = document.getElementById("syncbar");
+  if (!bar) return;
+  bar.hidden = false;
+  bar.className = "syncbar" + (staat ? " " + staat : "");
+  const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  document.getElementById("syncbarPct").textContent = p + "%";
+  /* 2*pi*r bij r=18 is 113,1. De ring loopt vol door de streepjeslijn op te
+     schuiven; dat animeert vloeiend en heeft geen JavaScript-lus nodig. */
+  bar.querySelector(".syncring .vul").style.strokeDashoffset = (113.1 * (1 - p / 100)).toFixed(1);
+  document.getElementById("syncbarTitel").textContent = titel || "Bezig";
+  document.getElementById("syncbarSub").textContent = sub || "";
+  document.getElementById("syncbarFases").innerHTML = SYNCFASES.map((naam, i) =>
+    `<i class="${i < (fase || 0) ? "klaar" : i === (fase || 0) ? "bezig" : ""}" title="${naam}"></i>`
+  ).join("");
+}
+
+function syncbarWeg() {
+  const bar = document.getElementById("syncbar");
+  if (bar) { bar.hidden = true; bar.className = "syncbar"; }
+}
+
+/* Fouten en uitleg blijven een tekstblok: daar wil je kunnen lezen en soms
+   een link aanklikken, en dat past niet in een balk van een regel. */
+function verversMelding(tekst, soort) {
+  const el = document.getElementById("verversMelding");
+  if (!el) return;
+  if (!tekst) { el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  el.className = "melding" + (soort === "fout" ? " melding--let" : "");
+  el.innerHTML = tekst;
+}
+
+/* Een vingerafdruk van de pagina zoals hij nu online staat.
+
+   Hiermee weten we of GitHub Pages de nieuwe bouw al uitserveert. Voorheen
+   wachtte de code blind zestig seconden en laadde dan opnieuw; stond de
+   nieuwe pagina er dan nog niet, dan kreeg je de vorige te zien. Wie daarna
+   weer op verversen drukte kreeg de daaropvolgende, en zo leek het alsof het
+   ophalen zich in stappen door de tijd terugwerkte. */
+async function paginaAfdruk() {
+  try {
+    const pad = location.pathname.replace(/[^/]*$/, "") + "index.html";
+    const r = await fetch(pad + "?t=" + Date.now(), {cache: "no-store"});
+    if (!r.ok) return null;
+    const t = await r.text();
+    let h = 5381;
+    for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return t.length + ":" + h;
+  } catch (e) { return null; }
+}
+
 async function wolkVerversen() {
   if (VERVERS_BEZIG) return;
   const repo = (DATA.sync || {}).repo;
   const knop = document.getElementById("btnVervers");
   VERVERS_BEZIG = true;
   knop.classList.add("draait");
-  verversMelding("<strong>Bezig.</strong> GitHub haalt je data op bij Garmin. " +
-                 "Dit duurt twee tot vier minuten.");
+  verversMelding("");
+  syncbarToon({pct: 2, fase: 0, titel: "De bouw starten", sub: "GitHub krijgt het verzoek."});
+  /* Voor het starten vastleggen wat er nu online staat, zodat we straks
+     kunnen zien dat het echt iets anders is geworden. */
+  const voorAfdruk = await paginaAfdruk();
   try {
     /* Onthoud welke run de nieuwste was, zodat we straks weten welke van ons is. */
     const voor = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=1`);
@@ -7979,27 +8114,79 @@ async function wolkVerversen() {
 
     const run = await wachtOpRun(repo, vorigeId);
     if (!run) {
+      syncbarToon({pct: 0, fase: 0, titel: "Bouw niet teruggevonden", staat: "fout",
+                   sub: "Kijk op GitHub wat er gebeurde."});
       verversMelding("<strong>De bouw is gestart, maar ik zie hem niet terug.</strong> " +
         `Kijk op <a href="https://github.com/${repo}/actions" target="_blank" rel="noopener">` +
         "GitHub</a> wat er gebeurde.", "fout");
       return;
     }
     if (run.conclusion !== "success") {
+      syncbarToon({pct: 0, fase: 1, titel: "De bouw is niet gelukt", staat: "fout",
+                   sub: String(run.conclusion || "")});
       verversMelding(`<strong>De bouw is niet gelukt</strong> (${veiligeTekst(run.conclusion)}).
         De reden staat in het logboek:
         <a href="${veiligeTekst(run.html_url)}" target="_blank" rel="noopener">bekijk de run</a>.`, "fout");
       return;
     }
-    verversMelding("<strong>Klaar.</strong> GitHub zet de nieuwe pagina nu online; " +
-                   "dat duurt nog ongeveer een minuut. Daarna laadt hij vanzelf opnieuw.");
-    setTimeout(() => location.reload(), 60000);
+
+    /* Derde fase: GitHub Pages moet de nieuwe pagina nog uitserveren. Dat
+       duurt meestal een halve tot anderhalve minuut. We wachten tot de pagina
+       echt verandert in plaats van een vast aantal seconden te gokken. */
+    const nieuw = await wachtOpNieuwePagina(voorAfdruk);
+    if (!nieuw) {
+      syncbarToon({pct: 99, fase: 2, titel: "Data is binnen, pagina nog niet",
+                   sub: "De bouw is gelukt; GitHub serveert hem zo. Herlaad over een minuut."});
+      return;
+    }
+    syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar",
+                 sub: "De nieuwe pagina staat online."});
+    setTimeout(() => location.reload(), 1200);
   } catch (e) {
+    syncbarToon({pct: 0, fase: 0, titel: "Verversen lukte niet", staat: "fout",
+                 sub: String(e.message || e).slice(0, 90)});
     verversMelding(`<strong>Verversen lukte niet.</strong>
       <div class="ververslog">${veiligeTekst(e.message || String(e))}</div>`, "fout");
   } finally {
     VERVERS_BEZIG = false;
     knop.classList.remove("draait");
   }
+}
+
+/* Wachten tot de pagina online daadwerkelijk een andere is dan die je nu
+   bekijkt. Konden we de afdruk vooraf niet ophalen -- offline, of een pagina
+   die vanaf de schijf draait -- dan valt er niets te vergelijken en wachten we
+   een vaste minuut. Dat is de oude situatie, maar nu alleen als er geen
+   betere te krijgen is. */
+async function wachtOpNieuwePagina(voorAfdruk) {
+  if (!voorAfdruk) {
+    await new Promise(r => setTimeout(r, 60000));
+    return true;
+  }
+  for (let i = 0; i < 40; i++) {                    // ruim drie minuten
+    await new Promise(r => setTimeout(r, 5000));
+    syncbarToon({pct: 80 + Math.min(18, i * 0.6), fase: 2,
+                 titel: "GitHub zet de pagina online",
+                 sub: `Al ${Math.round((i + 1) * 5)} seconden aan het wachten.`});
+    const nu = await paginaAfdruk();
+    if (nu && nu !== voorAfdruk) return true;
+  }
+  return false;
+}
+
+/* De voortgang komt uit de stappen die GitHub echt heeft afgerond. Dat is
+   geen schatting: de API zegt per stap of hij klaar is en welke er nu loopt,
+   dus de ring en de subregel vertellen allebei iets controleerbaars. */
+async function runVoortgang(repo, runId) {
+  try {
+    const j = await ghApi(`/repos/${repo}/actions/runs/${runId}/jobs`);
+    const stappen = (j.jobs || []).flatMap(x => x.steps || []);
+    if (!stappen.length) return null;
+    const af = stappen.filter(s => s.conclusion).length;
+    const bezig = stappen.find(s => s.status === "in_progress");
+    return {deel: af / stappen.length, af, totaal: stappen.length,
+            nu: bezig ? bezig.name : null};
+  } catch (e) { return null; }
 }
 
 async function wachtOpRun(repo, vorigeId) {
@@ -8011,12 +8198,29 @@ async function wachtOpRun(repo, vorigeId) {
       lijst = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=3`);
     } catch (e) { continue; }                       // even geen antwoord: doorgaan
     run = (lijst.workflow_runs || []).find(r => r.id > vorigeId);
-    if (!run) continue;
-    if (run.status === "completed") return run;
-    verversMelding(`<strong>Bezig.</strong> GitHub haalt je data op bij Garmin
-      (${veiligeTekst(run.status === "queued" ? "in de wachtrij" : "aan het werk")}).
-      <div class="ververslog">gestart om ${new Date(run.run_started_at ||
-        run.created_at).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"})}</div>`);
+    if (!run) {
+      syncbarToon({pct: 4, fase: 0, titel: "Wachten op GitHub",
+                   sub: "De bouw is aangevraagd en staat in de rij."});
+      continue;
+    }
+    if (run.status === "completed") {
+      syncbarToon({pct: 78, fase: 2, titel: "Data is binnen",
+                   sub: "GitHub zet de nieuwe pagina klaar."});
+      return run;
+    }
+    if (run.status === "queued") {
+      syncbarToon({pct: 6, fase: 0, titel: "In de wachtrij bij GitHub",
+                   sub: "Zodra er een machine vrij is begint het ophalen."});
+      continue;
+    }
+    const v = await runVoortgang(repo, run.id);
+    /* Tien procent voor het starten, zestig voor het werk, de rest is het
+       online zetten. Zonder stapinformatie blijven we op tien staan in plaats
+       van iets te tonen dat we niet weten. */
+    syncbarToon({pct: v ? 10 + 60 * v.deel : 10, fase: 1,
+                 titel: "Ophalen bij Garmin",
+                 sub: v ? `${v.nu || "bezig"} - stap ${Math.min(v.af + 1, v.totaal)} van ${v.totaal}`
+                        : "De bouw draait."});
   }
   return run;
 }
@@ -8033,25 +8237,44 @@ async function verversVolgen() {
       const r = await fetch(`http://127.0.0.1:${VERVERS_POORT}/stand`, {cache: "no-store"});
       s = await r.json();
     } catch (e) { continue; }                     // even geen antwoord: doorgaan
-    const log = (s.regels || []).slice(-14).join("\n");
+    const regels = s.regels || [];
+    const log = regels.slice(-14).join("\n");
     if (s.bezig) {
+      /* Het hulpje logt "12/85 dagen" terwijl het bezig is. Daar valt echte
+         voortgang uit te lezen; is die regel er nog niet, dan tonen we de
+         laatste logregel en blijft de ring op de startwaarde staan. */
+      const m = regels.join("\n").match(/(\d+)\s*\/\s*(\d+)\s+dagen/g);
+      let deel = null;
+      if (m && m.length) {
+        const laatste = m[m.length - 1].match(/(\d+)\s*\/\s*(\d+)/);
+        deel = Number(laatste[1]) / Math.max(Number(laatste[2]), 1);
+      }
+      syncbarToon({pct: deel == null ? 8 : 10 + 80 * deel, fase: 1,
+                   titel: "Ophalen bij Garmin",
+                   sub: (regels[regels.length - 1] || "bezig").trim().slice(0, 90)});
       verversMelding(`<strong>Bezig met ophalen bij Garmin.</strong>
         <div class="ververslog">${veiligeTekst(log)}</div>`);
       continue;
     }
     if (s.fout) {
+      syncbarToon({pct: 0, fase: 1, titel: "Ophalen mislukte", staat: "fout",
+                   sub: String(s.fout).slice(0, 90)});
       verversMelding(`<strong>Ophalen mislukte.</strong> ${veiligeTekst(s.fout)}
         <div class="ververslog">${veiligeTekst(log)}</div>`, "fout");
       return;
     }
-    verversMelding(`<strong>Klaar.</strong> De nieuwe data staat in het bestand. De pagina wordt
-      opnieuw geladen zodat je hem ziet.`);
+    syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar",
+                 sub: "De nieuwe data staat in het bestand."});
+    verversMelding("");
     setTimeout(() => location.reload(), 1400);
     return;
   }
+  syncbarToon({pct: 0, fase: 1, titel: "Het duurt langer dan verwacht", staat: "fout",
+               sub: "Kijk in het venster van het hulpje wat er gebeurt."});
   verversMelding("<strong>Het duurt langer dan verwacht.</strong> Kijk in het venster van het " +
                  "hulpje wat er gebeurt; de pagina wordt bijgewerkt zodra het klaar is.", "fout");
 }
+
 
 document.getElementById("btnVervers").addEventListener("click", verversStart);
 
@@ -8419,8 +8642,31 @@ function coachTeken() {
               <button class="knop knop--secundair knop--klein" data-weg="${i}-${j}">Laat maar</button>
             </div>
           </div>`).join("")}
+        ${b.workout ? workoutKaart(b.workout, i) : ""}
       </div></div>`;
   }).join("");
+
+  /* Pas na jouw bevestiging naar het logboek. Een verkeerd uitgelezen zin
+     die er stilzwijgend in verdwijnt vervuilt je gewichten en je volume; dat
+     merk je pas weken later. */
+  log.querySelectorAll("[data-wkja]").forEach(b => b.onclick = () => {
+    tik(true);
+    const blok = COACH_GESPREK[Number(b.dataset.wkja)];
+    const kaart = b.closest(".voorstel");
+    if (blok && blok.workout && workoutWegschrijven(blok.workout)) {
+      kaart.classList.add("gedaan");
+      kaart.querySelector(".k").textContent = "In je logboek gezet";
+      kaart.querySelector(".knoppen").remove();
+      blok.workout = null;
+      blok.tekst = "Genoteerd. Je vindt het terug bij Training onder _Eerder gedaan_, en het " +
+                   "telt vanaf nu mee in je setvolume per spiergroep.";
+    }
+  });
+  log.querySelectorAll("[data-wknee]").forEach(b => b.onclick = () => {
+    const blok = COACH_GESPREK[Number(b.dataset.wknee)];
+    if (blok) { blok.workout = null; blok.tekst = "Oké, niets opgeslagen."; }
+    coachTeken();
+  });
 
   log.querySelectorAll("[data-doe]").forEach(b => b.onclick = () => {
     const [i, j] = b.dataset.doe.split("-").map(Number);
@@ -8435,6 +8681,214 @@ function coachTeken() {
   log.querySelectorAll("[data-weg]").forEach(b => b.onclick = () =>
     b.closest(".voorstel").remove());
   log.scrollIntoView({block: "end", behavior: "smooth"});
+}
+
+/* =======================================================================
+   Een workout doorgeven in de chat
+   -----------------------------------------------------------------------
+   "workout gedaan: close grip bench 4x6 80kg, pull-ups 2x8" hoort in je
+   logboek te belanden, niet alleen in een gesprek dat je morgen kwijt bent.
+
+   Drie keuzes die het gedrag bepalen:
+
+   1. De herkenning gebeurt hier, niet bij het model. Een extra API-aanroep
+      bij elke vraag zou geld kosten voor niets; nu wordt er alleen uitgelezen
+      als je bericht er ook echt uitziet als een verslag.
+   2. Het uitlezen gebeurt wél bij het model, want "4x6 80kg" en "vier sets
+      van zes met tachtig" en "close grip bench" in twintig schrijfwijzen zijn
+      met een reguliere expressie niet te vangen.
+   3. Er wordt niets weggeschreven zonder dat je het hebt gezien. Een verkeerd
+      uitgelezen zin die stilzwijgend in je logboek verdwijnt is erger dan een
+      zin die niet werd herkend: het eerste vervuilt je gewichten en je
+      volumeberekening, het tweede merk je meteen.
+
+   Het schrijven gaat naar hetzelfde krachtlogboek als het invulscherm, dus
+   via de sync-gist. De gepubliceerde pagina kan niets naar de repo schrijven
+   en hoeft dat ook niet.
+   ======================================================================= */
+
+const WK_WOORD = /\b(gedaan|getraind|afgetraind|gelogd|afgevinkt|workout|sessie|training)\b/i;
+const WK_SETS  = /\b\d+\s*[x×]\s*\d+/;
+
+function lijktOpWorkout(tekst) {
+  return WK_WOORD.test(tekst) && (WK_SETS.test(tekst) || /\bkg\b/i.test(tekst));
+}
+
+const WK_UITLEES = `Je leest een trainingsverslag uit en geeft ALLEEN JSON terug, zonder
+uitleg en zonder code-fences. Schema:
+{"date":"YYYY-MM-DD","type":"kracht"|"conditie","workout":"push"|"pull"|"boven"|"duur"|"vo2"|null,
+ "exercises":[{"name":"...","sets":[{"reps":8,"weight_kg":10}]}]}
+Regels: reps is een geheel getal, weight_kg mag null zijn bij lichaamsgewicht.
+"4x6 80kg" betekent vier sets van zes met 80 kg, dus vier identieke items in sets.
+Staat er geen datum in de tekst, gebruik dan de meegegeven datum van vandaag.
+Is het een loop- of fietssessie zonder oefeningen, zet exercises dan op [].
+Weet je iets niet, laat het veld dan weg of op null -- verzin niets.`;
+
+/* De namen die iemand typt zijn niet de sleutels uit de catalogus. We zoeken
+   op losse woorden en niet op een exacte match, zodat "close grip bench" ook
+   "Close grip bankdrukken" vindt. Lukt het niet, dan wordt het een vrije
+   oefening -- die logt wel, maar telt niet mee voor je setvolume, want we
+   weten dan niet welke spieren hij aanspreekt. */
+function oefeningZoeken(naam) {
+  /* "1 1/4" is bij jou een aparte oefening, geen toevoeging. Die schrijfwijze
+     eerst gelijktrekken met de ¼ uit de catalogus, anders valt hij samen met
+     de gewone close grip. */
+  const schoon = t => String(t || "").toLowerCase()
+    .replace(/1\s*1\s*\/\s*4|1\s*¼|\b1\.25\b/g, " 1¼ ")
+    .replace(/[^a-z0-9¼]+/g, " ").replace(/\s+/g, " ").trim();
+  /* Een simpele stam: het meervoud eraf. "pull-ups" moet "pull up" vinden. */
+  const stam = w => (w.length > 2 && w.endsWith("s")) ? w.slice(0, -1) : w;
+  const SYNONIEM = {bench: "bankdrukken", db: "dumbbell", kb: "kettlebell",
+                    ohp: "overhead", chinup: "pull", chin: "pull"};
+  const splits = t => schoon(t).split(" ").filter(Boolean)
+    .map(w => SYNONIEM[w] || w).map(stam);
+
+  const woorden = splits(naam);
+  if (!woorden.length) return null;
+
+  let beste = null, besteScore = 0;
+  Object.entries(OEF).forEach(([k, o]) => {
+    const kandidaat = new Set(splits(o.naam + " " + k));
+    const raak = woorden.filter(w => kandidaat.has(w));
+    if (!raak.length) return;
+    /* Woorden in de catalogusnaam die jij niet noemde tellen licht tegen.
+       Zonder die correctie wint "Close grip bankdrukken" van "Bankdrukken"
+       zodra je alleen dat laatste typt -- beide bevatten het woord. */
+    /* Begrensd, want sommige catalogusnamen zijn lang ("Pull-up of lat
+       pulldown"). Zonder plafond drukt zo'n naam een terechte treffer onder
+       nul en valt de oefening alsnog buiten de boot. */
+    const extra = Math.min([...kandidaat].filter(w => !woorden.includes(w)).length, 3);
+    const score = raak.length - 0.3 * extra;
+    /* Eén gedeeld woord is meestal toeval ("press" zit in van alles). Alleen
+       als dat woord lang genoeg is om onderscheidend te zijn telt het mee. */
+    const genoeg = raak.length >= 2 || (raak.length === 1 && raak[0].length >= 6);
+    if (genoeg && score > besteScore) { besteScore = score; beste = k; }
+  });
+  return beste;
+}
+
+/* De Garmin-sessie van diezelfde dag erbij zoeken. Kracht koppelt aan een
+   krachtsessie, conditie aan een loop of rit. Zijn het er meerdere, dan pakken
+   we de langste -- dat is vrijwel altijd de sessie die je bedoelt. */
+function sessieZoeken(datum, soort) {
+  const wil = soort === "conditie" ? ["Hardlopen", "Fietsen"] : ["Kracht"];
+  const kandidaten = (DATA.activities || [])
+    .filter(a => a.date === datum && wil.includes(a.sport))
+    .sort((a, b) => (b.duration_s || 0) - (a.duration_s || 0));
+  return kandidaten[0] || null;
+}
+
+/* Van de uitgelezen JSON naar iets dat je kunt nakijken en dat past in het
+   logboek dat het invulscherm ook vult. */
+function workoutVoorstelBouwen(ruw) {
+  const vandaag = (DATA.planbasis || {}).vandaag || "";
+  const datum = /^\d{4}-\d{2}-\d{2}$/.test(ruw.date || "") ? ruw.date : vandaag;
+  const soort = ruw.type === "conditie" ? "conditie" : "kracht";
+  const oefeningen = {};
+  const regels = [];
+
+  (Array.isArray(ruw.exercises) ? ruw.exercises : []).forEach(o => {
+    const sets = (Array.isArray(o.sets) ? o.sets : [])
+      .map(x => ({reps: parseInt(x.reps, 10),
+                  kg: x.weight_kg == null ? null : parseFloat(x.weight_kg)}))
+      .filter(x => Number.isFinite(x.reps) && x.reps > 0);
+    if (!sets.length) return;
+    const sleutel = oefeningZoeken(o.name);
+    const top = sets.slice().sort((a, b) => (b.kg || 0) - (a.kg || 0) || b.reps - a.reps)[0];
+    const id = sleutel || ("vrij:" + String(o.name || "eigen oefening").trim().toLowerCase());
+    oefeningen[id] = {kg: top.kg, reps: top.reps, sets: sets.length, rir: 2, reeksen: sets,
+                      ...(sleutel ? {} : {naam: String(o.name || "Eigen oefening").trim()})};
+    regels.push({naam: sleutel ? OEF[sleutel].naam : String(o.name || "").trim(),
+                 herkend: !!sleutel, sets});
+  });
+
+  /* Welk type workout het was. Staat het er niet bij, dan raden we het niet:
+     "los" is een geldige waarde en houdt je logboek eerlijk. */
+  const type = WORKOUTS[ruw.workout] ? ruw.workout : (soort === "conditie" ? "duur" : "los");
+  return {datum, soort, type, oefeningen, regels,
+          sessie: sessieZoeken(datum, soort),
+          typeGeraden: !WORKOUTS[ruw.workout]};
+}
+
+async function workoutUitlezen(tekst) {
+  const c = coachLees();
+  const vandaag = (DATA.planbasis || {}).vandaag || "";
+  const r = await fetch(`${COACH_API}/messages`, {
+    method: "POST", headers: coachKop(c.sleutel),
+    body: JSON.stringify({
+      model: c.model, max_tokens: 900,
+      system: WK_UITLEES + `\nVandaag is ${vandaag}.`,
+      messages: [{role: "user", content: tekst}],
+    }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  let uit = (j.content || []).map(b => b.text || "").join("").trim();
+  /* Modellen zetten er soms toch een fence omheen, ondanks de instructie. */
+  uit = uit.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const van = uit.indexOf("{"), tot = uit.lastIndexOf("}");
+  if (van < 0 || tot < van) throw new Error("geen JSON in het antwoord");
+  return JSON.parse(uit.slice(van, tot + 1));
+}
+
+function workoutKaart(v, i) {
+  const rij = r => `${veiligeTekst(r.naam)}${r.herkend ? "" : " <em>(eigen oefening)</em>"}: ` +
+    r.sets.map(s => `${s.reps}${s.kg != null ? `×${s.kg} kg` : ""}`).join(", ");
+  const koppeling = v.sessie
+    ? `gekoppeld aan je ${veiligeTekst(v.sessie.sport.toLowerCase())}sessie van ` +
+      `${new Date(v.sessie.datetime).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"})}`
+    : `<b>niet gekoppeld</b> — geen ${v.soort === "conditie" ? "loop- of fietssessie" : "krachtsessie"}
+       van Garmin op ${veiligeTekst(v.datum)}`;
+  return `<div class="voorstel" data-wk="${i}">
+    <div class="k">Zo heb ik het begrepen</div>
+    <div class="w">
+      <b>${veiligeTekst(kortDatum(v.datum))}</b> ·
+      ${WORKOUTS[v.type] ? veiligeTekst(WORKOUTS[v.type].naam) : "losse sessie"}
+      ${v.typeGeraden ? " <em>(type niet genoemd)</em>" : ""}<br>
+      ${v.regels.length ? v.regels.map(rij).join("<br>") : "geen oefeningen, alleen de sessie"}
+      <br><small>${koppeling}</small>
+    </div>
+    <div class="knoppen">
+      <button class="knop knop--primair knop--klein" data-wkja="${i}">Klopt, zet in mijn logboek</button>
+      <button class="knop knop--secundair knop--klein" data-wknee="${i}">Nee, laat maar</button>
+    </div>
+  </div>`;
+}
+
+function workoutWegschrijven(v) {
+  const log = logLees();
+  /* Zelfde soort workout op dezelfde dag overschrijft, net als in het
+     invulscherm -- anders staat hij er twee keer als je hem corrigeert. */
+  const idx = log.findIndex(x => x.type === v.type && x.datum === v.datum);
+  const item = {type: v.type, datum: v.datum, oefeningen: v.oefeningen,
+                bron: "coach", ...(v.sessie ? {sessie: v.sessie.id} : {})};
+  if (idx >= 0) log[idx] = item; else log.push(item);
+  logZet(log);
+  try { renderWorkout(); renderDoelen(); } catch (e) { /* ander tabblad, niet erg */ }
+  return true;
+}
+
+async function workoutHerkennen(vraag) {
+  if (!lijktOpWorkout(vraag)) return;
+  const blok = {rol: "coach", tekst: "_Ik lees je workout uit…_", bezig: true};
+  COACH_GESPREK.push(blok);
+  coachTeken();
+  try {
+    const v = workoutVoorstelBouwen(await workoutUitlezen(vraag));
+    blok.bezig = false;
+    if (!v.regels.length && v.soort !== "conditie") {
+      blok.tekst = "Ik kreeg er geen oefeningen met herhalingen uit. Schrijf het bijvoorbeeld " +
+                   "als _close grip bench 4x6 80kg, pull-ups 2x8_.";
+    } else {
+      blok.tekst = "";
+      blok.workout = v;
+    }
+  } catch (e) {
+    blok.bezig = false;
+    blok.tekst = `**Uitlezen lukte niet.** ${veiligeTekst(e.message || e)} ` +
+                 "Je kunt het ook met de hand invullen op het tabblad Training.";
+  }
+  coachTeken();
 }
 
 async function coachStuur() {
@@ -8499,6 +8953,9 @@ async function coachStuur() {
     }
     antwoord.bezig = false;
     coachTeken();
+    /* Ziet je bericht eruit als een verslag van een training, dan lezen we
+       het daarna uit en leggen we voor wat we ervan begrepen. */
+    workoutHerkennen(vraag);
     if (gebruik) {
       document.getElementById("coachVoet").textContent =
         `${gebruik.input_tokens ?? "?"} tokens erheen, ${gebruik.output_tokens ?? "?"} terug. ` +
