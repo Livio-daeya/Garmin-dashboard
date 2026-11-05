@@ -1735,8 +1735,6 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
   <div class="checkregel" id="checkRegel"></div>
   <div id="checkVel"></div>
-  <!-- Wat staat er vandaag, wat is het advies, waarom, wat is gewijzigd. -->
-  <div id="vandaagRoute"></div>
 
 
   <!-- Drie wijzers. Links en rechts wat Garmin mat, in het midden wat dit
@@ -1751,7 +1749,8 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
        waar dit component voor is. -->
   <div class="sectiontitle">Vandaag gemeten</div>
   <div class="tegels" id="vandaagTegels"><div class="tegeluit" id="vandaagTegelUit"></div></div>
-  <div id="slotKaart"></div>
+  <!-- Wat staat er vandaag, wat is het advies, waarom, wat is gewijzigd. -->
+  <div id="vandaagRoute"></div>
   <div class="melding" id="verversMelding" style="display:none"></div>
   <div class="chips" id="herkomst"></div>
 
@@ -6107,32 +6106,6 @@ function naarTab(naam) {
   if (TABS.includes(naam)) routeGa({soort: "tab", naam});
 }
 
-/* De conclusie. Hij gebruikt dezelfde bron als het oude adviesblok, maar
-   toont hem als antwoord met een waarom-regel eronder in plaats van als
-   een van zes even grote blokjes. */
-function renderSlot() {
-  const host = document.getElementById("slotKaart");
-  if (!host) return;
-  const d = eenDing();
-  const g = gereedheidNu() || {};
-  const laatste = laatsteMet("bb_now") || {};
-  const klas = {good: "", warning: "a", serious: "a", critical: "r", neutral: ""}[d.status] || "";
-
-  const waarom = [];
-  if (laatste.bb_now != null) waarom.push(`body battery ${laatste.bb_now}`);
-  if (g.score != null) waarom.push(`gereedheid ${g.score}`);
-  const v = DATA.vandaag || {};
-  if (v.dagen_tot_doel != null) waarom.push(
-    v.dagen_tot_doel === 0 ? "wedstrijddag" : `wedstrijd over ${v.dagen_tot_doel} dagen`);
-
-  host.innerHTML = `<div class="slot ${klas}">
-      <div class="eb">Vandaag</div>
-      <h3>${d.titel}</h3>
-      <p>${d.body || ""}</p>
-      ${waarom.length ? `<div class="why"><b>Waarom:</b> ${waarom.join(" · ")}</div>` : ""}
-    </div>`;
-}
-
 /* Herkomstlabels: wat is gemeten en wat is gerekend. Dat onderscheid is de
    kern van dit product -- CTL, ATL en gereedheid zijn modellen, slaap en
    HRV zijn metingen. */
@@ -6236,7 +6209,7 @@ function renderVooruit() {
 }
 
 function renderVandaag() {
-  renderDials(); renderSlot(); renderHerkomst(); renderVandaagAct(); renderVooruit();
+  renderDials(); renderHerkomst(); renderVandaagAct(); renderVooruit();
 }
 
 /* =======================================================================
