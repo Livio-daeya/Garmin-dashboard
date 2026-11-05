@@ -218,9 +218,9 @@
   test("Rustige duur via handbal is niet groen op verwachting alleen", () => {
     DATA.planbasis.vandaag = "2026-11-05";
     renderBelFocus();
-    const chip = document.querySelector('[data-kaart="laag"]').className;
+    const chip = document.querySelector('[data-meet="laag"] .u-status').className;
     const m = weekMinuten();
-    return {ok: m.handbal.z2 >= 60 || !/fstatus--groen/.test(chip), detail: `zone 2 gedaan ${m.handbal.z2}, verwacht ${m.handbal.verwZ2}; ${chip.match(/fstatus--\w+/)[0]}`};
+    return {ok: m.handbal.z2 >= 60 || !/u-status--ok/.test(chip), detail: `zone 2 gedaan ${m.handbal.z2}, verwacht ${m.handbal.verwZ2}; ${chip}`};
   });
 
 
@@ -245,21 +245,22 @@
     const acts = DATA.activities.filter(a => a.date >= ma && a.date <= zo && a.hr_zones && (a.sport === "Handbal" || CONDITIE_TYPE.test(a.type_key || "")));
     const ids = new Set(acts.map(a => a.id));
     const verwacht = Math.round(acts.reduce((t, a) => t + a.hr_zones.filter(z => z.zone <= 2).reduce((u, z) => u + z.sec, 0), 0) / 60);
-    const getal = +document.querySelector('[data-kaart="laag"] .fgroot').childNodes[0].textContent;
+    const getal = +document.querySelector('[data-meet="laag"] .u-meet-getal').childNodes[0].textContent;
     return {ok: getal === verwacht && ids.size === acts.length, detail: `kaart ${getal}, berekend ${verwacht}, activiteiten ${acts.length}`};
   });
 
   test("Tempo: 16 werkmin, geplande prikkel uitgevoerd, geen verborgen minimum", () => {
     DATA.planbasis.vandaag = "2026-11-05"; uitgevoerdBijwerken(); renderBelFocus();
-    const k = document.querySelector('[data-kaart="hoog"]');
-    const getal = +k.querySelector(".fgroot").childNodes[0].textContent;
-    return {ok: getal === 16 && /fstatus--groen/.test(k.className) && !/19/.test(k.querySelector(".fkop-knop").textContent),
-            detail: `${getal} werkmin, ${k.className.match(/fstatus--\w+/)[0]}, label "${k.querySelector(".fchip").textContent}"`};
+    const k = document.querySelector('[data-meet="hoog"]');
+    const getal = +k.querySelector(".u-meet-getal").childNodes[0].textContent;
+    const st = k.querySelector(".u-status");
+    return {ok: getal === 16 && /u-status--ok/.test(st.className) && !/19/.test(k.textContent),
+            detail: `${getal} werkmin, label "${st.textContent.trim()}"`};
   });
 
   test("Geen doel en onvoldoende gegevens zijn verschillende labels", () => {
     DATA.planbasis.vandaag = "2026-11-05"; renderBelFocus();
-    const laag = document.querySelector('[data-kaart="laag"] .fchip').textContent;
+    const laag = document.querySelector('[data-meet="laag"] .u-status').textContent.trim().toLowerCase();
     DATA.planbasis.vandaag = "2026-11-09";   // na de week: zaalsessies zonder registratie
     const items = routeWeek("2026-11-02").dagen.flatMap(d => d.items.map(it => ({...it, iso: d.iso})));
     const wk = blokStatus(items, ["handbal", "wedstrijd", "ana"], 0, null).w;
@@ -269,30 +270,58 @@
 
   test("Advies en tempoblok spreken elkaar niet tegen", () => {
     DATA.planbasis.vandaag = "2026-11-05"; uitgevoerdBijwerken(); renderBelFocus();
-    const groen = /fstatus--groen/.test(document.querySelector('[data-kaart="hoog"]').className);
+    const groen = /u-status--ok/.test(document.querySelector('[data-meet="hoog"] .u-status').className);
     const a = routeAdvies();
     return {ok: !(groen && /weinig aandacht/.test(a.zin)), detail: `${a.kop} ${a.zin}`};
   });
 
 
-  test("Aanvulling alleen na jouw terugkoppeling, niet voor de wedstrijd, niet bij onbekende pees", () => {
-    DATA.planbasis.vandaag = DI;
-    const zonder = handbalPrikkel(DI, {soort: "handbal"});            // geen terugkoppeling: nooit
-    instel({hbgevoel: {[DI]: "technisch", [DO]: "technisch"}});
-    const onbekend = handbalPrikkel(DI, {soort: "handbal"});          // pees onbekend
+  test("Geen automatische extra intervallen na een lichte handbalavond; actie met echte reden", () => {
+    /* dinsdag 10/11, 0 min zone 4-5, zwaarte 4, pees vrij: geen extra */
+    const D = "2026-11-10";
+    DATA.activities.push({id: "test-licht", date: D, sport: "Handbal", name: "test", duration_s: 5400,
+      hr_zones: [{zone: 1, sec: 1500, vanaf: 95}, {zone: 2, sec: 1200, vanaf: 114}, {zone: 3, sec: 600, vanaf: 133}, {zone: 4, sec: 0, vanaf: 152}, {zone: 5, sec: 0, vanaf: 171}]});
     instel({status: {...(bewaardLees(INSTEL_KEY, {}).status || {}), achilles: "vrij"}});
-    const vrij = handbalPrikkel(DI, {soort: "handbal"});
+    DATA.planbasis.vandaag = D;
+    rpeZet(D, "Handbal", 4);
+    const licht = handbalPrikkel(D, {soort: "handbal", id: "hb"});
+    DATA.activities.pop();
     DATA.planbasis.vandaag = DO;
-    const dO = handbalPrikkel(DO, {soort: "handbal"});
-    return {ok: zonder.aanvulling === null && /achillespees/.test(onbekend.aanvulling || "") && !/airbike/.test(onbekend.aanvulling || "")
-              && /versnellen/.test(vrij.aanvulling || "") && /Niet aanvullen/.test(dO.aanvulling || ""),
-            detail: `zonder: ${zonder.aanvulling} | pees onbekend: ${onbekend.aanvulling} | pees vrij: ${vrij.aanvulling} | do: ${dO.aanvulling}`};
+    const dO = handbalPrikkel(DO, {soort: "handbal", id: "hb"});
+    const drie = licht.bijdrage.map(b => b.naam).join(", ");
+    return {ok: licht.extra === null && /^Vandaag niets extra · volgende prikkel/.test(licht.nu)
+              && /wedstrijd zaterdag/.test(dO.nu) && licht.bijdrage.length === 3 && /niet uit één training/.test(licht.conditie),
+            detail: `di: ${licht.nu} | do: ${dO.nu} | ${drie}`};
+  });
+
+  test("Handbal: geen oordeel op eigen spreiding of zelfgekozen grens; actie met echte reden", () => {
+    const zet = (D, z4, rpe) => {
+      DATA.activities.push({id: "test-oordeel", date: D, sport: "Handbal", name: "test", duration_s: 5400,
+        hr_zones: [{zone: 1, sec: 1500, vanaf: 95}, {zone: 2, sec: 1200, vanaf: 114}, {zone: 3, sec: 600, vanaf: 133}, {zone: 4, sec: z4, vanaf: 152}, {zone: 5, sec: 0, vanaf: 171}]});
+      rpeZet(D, "Handbal", rpe);
+      DATA.planbasis.vandaag = D;
+      const h = handbalPrikkel(D, {soort: "handbal", id: "hb"});
+      DATA.activities.pop();
+      return h;
+    };
+    const diLicht = zet(DI, 0, 4), doVeel = zet(DO, 1800, 9);
+    return {ok: diLicht.oordeel === null && doVeel.oordeel === null && diLicht.extra === null
+              && /volgende prikkel/.test(diLicht.nu) && /wedstrijd zaterdag/.test(doVeel.nu),
+            detail: `di licht, zwaarte 4: ${diLicht.nu} | do veel, zwaarte 9: ${doVeel.nu}`};
   });
 
   test("Ontbrekende hartslag is onbekend, geen 0", () => {
-    DATA.planbasis.vandaag = "2026-11-05"; FOCUS_OPEN = "kort"; renderBelFocus();
-    const t = document.querySelector('[data-kaart="kort"] .fdetail').innerText;
-    return {ok: /onbekend deze week/.test(t) && !/: 0 min/.test(t) && /3 nog gepland/.test(document.querySelector('[data-kaart="kort"]').innerText),
+    /* deze week zonder hartslag: haal de zones van de handbalsessies tijdelijk weg */
+    DATA.planbasis.vandaag = "2026-11-05"; FOCUS_OPEN = "kort";
+    const weg = (DATA.activities || []).filter(x => x.sport === "Handbal" && x.date >= "2026-11-02" && x.date <= "2026-11-08")
+      .map(x => [x, x.hr_zones, x.z4_s, x.z5_s]);
+    weg.forEach(([x]) => { x.hr_zones = null; x.z4_s = null; x.z5_s = null; });
+    renderBelFocus();
+    const d = document.createElement("div"); d.innerHTML = BEL_DETAIL.kort[1];
+    const t = d.textContent;
+    const kaart = document.querySelector('[data-meet="kort"]').innerText;
+    weg.forEach(([x, z, z4, z5]) => { x.hr_zones = z; x.z4_s = z4; x.z5_s = z5; });
+    return {ok: /onbekend deze week/.test(t) && !/Hoge hartslag[^.]*: 0 min/.test(t) && !/\b0 ?min/.test(kaart),
             detail: t.split("\n").filter(Boolean).slice(0, 3).join(" | ")};
   });
 

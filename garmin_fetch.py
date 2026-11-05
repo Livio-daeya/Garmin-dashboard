@@ -211,6 +211,86 @@ DAILY_ENDPOINTS = {
 }
 
 
+def lap_start(act: dict[str, Any], lap: dict[str, Any]) -> int | None:
+    """Begin van een ronde in seconden na de start van de activiteit."""
+    try:
+        a = datetime.fromisoformat(str(act.get("startTimeGMT")).replace(" ", "T").replace("Z", ""))
+        b = datetime.fromisoformat(str(lap.get("startTimeGMT")).replace(" ", "T").replace("Z", "").split(".")[0])
+        return max(0, round((b - a).total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def hartslagreeks(details: dict[str, Any], max_punten: int = 6000) -> dict[str, Any] | None:
+    """De hartslag per meetpunt met de verstreken tijd in seconden, voor de
+    grafiek. Ontbrekende meetpunten blijven null, zodat een meetgat in de
+    grafiek een onderbreking is. Alleen bij heel lange registraties wordt
+    voor de weergave elk n-de punt genomen; de berekeningen gebruiken de
+    samenvatting, niet deze reeks."""
+    ix = {m.get("key"): m.get("metricsIndex") for m in details.get("metricDescriptors") or []}
+    rows = [r.get("metrics") for r in details.get("activityDetailMetrics") or []]
+    if "directHeartRate" not in ix or "sumElapsedDuration" not in ix or not rows:
+        return None
+    t = [r[ix["sumElapsedDuration"]] if r else None for r in rows]
+    h = [r[ix["directHeartRate"]] if r else None for r in rows]
+    stap = max(1, -(-len(rows) // max_punten))
+    paren = [(round(t[i]), round(h[i]) if h[i] is not None else None) for i in range(0, len(rows), stap) if t[i] is not None]
+    return {"t": [p[0] for p in paren], "hr": [p[1] for p in paren], "stap": stap}
+
+
+def samenvatting_reeks(details: dict[str, Any], floors: dict[int, int]) -> dict[str, Any] | None:
+    """Blokken, pieken en versnellingen uit de reeks per seconde.
+
+    Blok: aaneengesloten boven een zonegrens; dips tot 15 s (zone 3, minimaal
+    2 min) of 10 s (zone 4, minimaal 1 min) breken een blok niet.
+    Piek: je hartslag schiet zone 4 in en blijft er minstens 5 s.
+    Versnelling: geschatte snelheid van minstens 3 m/s (11 km/u), 2 s of
+    langer. Binnen schat het horloge snelheid uit de pols; dat is een
+    indicatie, geen sprintmeting.
+    """
+    ix = {m.get("key"): m.get("metricsIndex") for m in details.get("metricDescriptors") or []}
+    rows = [r.get("metrics") for r in details.get("activityDetailMetrics") or []]
+    if "directHeartRate" not in ix or not rows:
+        return None
+
+    def kolom(k: str) -> list:
+        return [r[ix[k]] if r and ix[k] < len(r) else None for r in rows] if k in ix else [None] * len(rows)
+
+    def stukken(vlag: list[bool], min_len: int, max_gat: int) -> list[tuple[int, int]]:
+        uit, start, gat = [], None, 0
+        for i, f in enumerate(vlag + [False] * (max_gat + 1)):
+            if f:
+                start = i if start is None else start
+                gat = 0
+            elif start is not None:
+                gat += 1
+                if gat > max_gat:
+                    eind = i - gat
+                    if eind - start + 1 >= min_len:
+                        uit.append((start, eind))
+                    start, gat = None, 0
+        return uit
+
+    hr, sp = kolom("directHeartRate"), kolom("directSpeed")
+    tijd = kolom("sumElapsedDuration")
+    res: dict[str, Any] = {"n": len(rows)}
+    z3, z4 = floors.get(3), floors.get(4)
+    sec = lambda i: round(tijd[i]) if i < len(tijd) and tijd[i] is not None else i
+    if z3:
+        bl3 = stukken([h is not None and h >= z3 for h in hr], 120, 15)
+        res["blokken_z3"] = [round((e - b + 1) / 60, 1) for b, e in bl3]
+        res["blokken_z3_pos"] = [[sec(b), sec(e)] for b, e in bl3]
+    if z4:
+        boven4 = [h is not None and h >= z4 for h in hr]
+        res["blokken_z4"] = [round((e - b + 1) / 60, 1) for b, e in stukken(boven4, 60, 10)]
+        res["pieken_z4"] = len(stukken(boven4, 5, 20))
+    snel = [v for v in sp if v is not None]
+    if snel and max(snel) > 0.5:
+        res["versnellingen"] = len(stukken([v is not None and v >= 3.0 for v in sp], 2, 1))
+        res["snelheid_max"] = round(max(snel), 2)
+    return res
+
+
 def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
               force: bool = False, activity_weeks: int | None = None) -> dict[str, Any]:
     """Haal activiteiten + dagelijkse metrics op. Gebruikt de cache waar mogelijk.
@@ -249,6 +329,57 @@ def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
         if isinstance(z, list) and z:
             zones[aid] = [{"zone": x.get("zoneNumber"), "sec": round(x.get("secsInZone") or 0),
                            "vanaf": x.get("zoneLowBoundary")} for x in z if isinstance(x, dict)]
+
+    # ---- verloop per seconde: blokken, pieken, versnellingen ---------------
+    # Uit de hartslag- en snelheidsreeks van een training: hoe lang je
+    # aaneengesloten boven zone 3 en zone 4 zat, hoe vaak je hartslag zone 4
+    # inschoot, en (als het horloge snelheid schatte) hoe vaak je versnelde.
+    # Alleen de samenvatting gaat de cache in, niet de hele reeks.
+    detail = cache.setdefault("hrdetail", {})
+    grens = today - timedelta(weeks=weeks)
+    kand = [aid for aid, a in cache["activities"].items()
+            if aid not in detail and aid in zones and a.get("averageHR")
+            and (a.get("duration") or 0) >= 30 * 60
+            and str(a.get("startTimeLocal", ""))[:10] >= grens.isoformat()]
+    if kand:
+        print(f"  → verloop per seconde: {len(kand)} activiteiten")
+    for aid in sorted(kand, reverse=True)[:60]:
+        floors = {z["zone"]: z["vanaf"] for z in zones.get(aid, []) if z.get("vanaf")}
+        d = fetcher.call("get_activity_details", int(aid), 10000)
+        som = samenvatting_reeks(d, floors) if isinstance(d, dict) else None
+        if som:
+            detail[aid] = som
+
+    # De laatste 28 dagen ook de hartslagreeks (voor de grafiek in de
+    # workoutsamenvatting) en de rondes. Oudere activiteiten hebben alleen
+    # de samenvatting; zo blijft de pagina klein.
+    reeksen = cache.setdefault("hrreeks", {})
+    rondes = cache.setdefault("rondes", {})
+    recent = (today - timedelta(days=28)).isoformat()
+    for aid in list(reeksen):
+        if str((cache["activities"].get(aid) or {}).get("startTimeLocal", ""))[:10] < recent:
+            reeksen.pop(aid, None); rondes.pop(aid, None)
+    nieuw_r = [aid for aid, a in cache["activities"].items()
+               if aid not in reeksen and a.get("averageHR") and str(a.get("startTimeLocal", ""))[:10] >= recent]
+    if nieuw_r:
+        print(f"  → hartslagreeks en rondes: {len(nieuw_r)} activiteiten")
+    for aid in sorted(nieuw_r, reverse=True)[:30]:
+        floors = {z["zone"]: z["vanaf"] for z in zones.get(aid, []) if z.get("vanaf")}
+        d = fetcher.call("get_activity_details", int(aid), 10000)
+        if not isinstance(d, dict):
+            continue
+        r = hartslagreeks(d)
+        if r:
+            reeksen[aid] = r
+        som = samenvatting_reeks(d, floors)
+        if som:
+            detail[aid] = som
+        sp = fetcher.call("get_activity_splits", int(aid))
+        laps = (sp or {}).get("lapDTOs") if isinstance(sp, dict) else None
+        if laps:
+            rondes[aid] = [{"start": lap_start(cache["activities"][aid], l), "duur": round(l.get("duration") or 0),
+                            "afstand": round(l.get("distance") or 0), "hr": l.get("averageHR"), "max": l.get("maxHR"),
+                            "intensiteit": l.get("intensityType")} for l in laps]
 
     # ---- dode endpoints opsporen -----------------------------------------
     # Een endpoint dat gisteren leeg was, hoeft niet dood te zijn: VO2max
