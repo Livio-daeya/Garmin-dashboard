@@ -231,6 +231,25 @@ def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
             cache["activities"][aid] = a
     print(f"    {len(acts)} activiteiten")
 
+    # ---- hartslagzones per activiteit --------------------------------------
+    # De grenzen van je zones (zoals ingesteld in Garmin) en de tijd per zone.
+    # Eén call per nieuwe activiteit; daarna staan ze in de cache. Zonder
+    # hartslag levert Garmin niets, en dan blijven de zones onbekend.
+    zones = cache.setdefault("zones", {})
+    nieuw = [aid for aid, a in cache["activities"].items()
+             if aid not in zones and a.get("averageHR")]
+    if nieuw:
+        print(f"  → hartslagzones: {len(nieuw)} activiteiten")
+    # De zone-instelling zelf: methode, gebruikte maximale hartslag, per sport.
+    inst = fetcher.call("connectapi", "/biometric-service/heartRateZones")
+    if isinstance(inst, list) and inst:
+        cache.setdefault("meta", {})["hr_instelling"] = inst
+    for aid in nieuw[:200]:
+        z = fetcher.call("get_activity_hr_in_timezones", int(aid))
+        if isinstance(z, list) and z:
+            zones[aid] = [{"zone": x.get("zoneNumber"), "sec": round(x.get("secsInZone") or 0),
+                           "vanaf": x.get("zoneLowBoundary")} for x in z if isinstance(x, dict)]
+
     # ---- dode endpoints opsporen -----------------------------------------
     # Een endpoint dat gisteren leeg was, hoeft niet dood te zijn: VO2max
     # verschijnt bijvoorbeeld alleen op dagen met een kwalificerende training.

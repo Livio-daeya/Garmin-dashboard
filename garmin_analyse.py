@@ -47,6 +47,23 @@ def classify(activity: dict[str, Any]) -> str:
             return label
         if any(n in name for n in names):
             return label
+    # Sinds september 2026 staat handbal op je band als "Activiteit met
+    # tijdmeting" (stop_watch). Alleen herkend als handbal als het past bij je
+    # vaste ritme: een zaaltraining op di/do/vr met start tussen 17:00 en
+    # 21:30, of een wedstrijd in het weekend van minstens 90 minuten. Al het
+    # andere blijft Overig: liever onbekend dan verkeerd geteld.
+    if type_key == "stop_watch":
+        stamp = str(activity.get("startTimeLocal") or "")
+        try:
+            dag = datetime.fromisoformat(stamp[:19])
+        except ValueError:
+            return DEFAULT_SPORT
+        minuten = (activity.get("duration") or 0) / 60
+        start = dag.hour * 60 + dag.minute
+        if dag.weekday() in (1, 3, 4) and 17 * 60 <= start <= 21 * 60 + 30 and minuten >= 45:
+            return "Handbal"
+        if dag.weekday() in (5, 6) and start >= 10 * 60 and minuten >= 90:
+            return "Handbal"
     return DEFAULT_SPORT
 
 
@@ -201,7 +218,17 @@ def nacht_hrv_reeks(raw: dict[str, Any]) -> list[list] | None:
     Een lege grafiek tonen zou suggereren dat er niets te meten viel, terwijl
     het apparaat het simpelweg niet levert.
     """
-    def klok(tekst: str) -> str:
+    # hrvData geeft startGMT als epoch in milliseconden, niet als tekst. Het
+    # verschil tussen de lokale en de GMT-starttijd van de slaap is de
+    # tijdzone van die nacht; daarmee wordt het weer een kloktijd.
+    dto = (raw.get("sleep") or {}).get("dailySleepDTO") or {}
+    gmt, lokaal = dto.get("sleepStartTimestampGMT"), dto.get("sleepStartTimestampLocal")
+    verschuiving_ms = (lokaal - gmt) if isinstance(gmt, (int, float)) and isinstance(lokaal, (int, float)) else 0
+
+    def klok(tekst) -> str:
+        if isinstance(tekst, (int, float)):
+            moment = datetime.fromtimestamp((tekst + verschuiving_ms) / 1000, tz=timezone.utc)
+            return moment.strftime("%H:%M")
         # "2026-08-27T23:50:00.0" of "2026-08-27 23:50:00" -> "23:50"
         t = str(tekst or "")
         for scheider in ("T", " "):
@@ -461,6 +488,14 @@ def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str,
         if vo2_val is None:
             vo2_val = _vo2_from((raw.get("training_status") or {}).get("mostRecentVO2Max"))
         row["vo2max"] = round(vo2_val, 1) if vo2_val else None
+        # Garmin herhaalt de laatste schatting elke dag. De datum van de
+        # schatting zelf laat zien wanneer er echt een nieuwe kwam.
+        vo2_node = raw.get("vo2max")
+        if isinstance(vo2_node, list) and vo2_node:
+            vo2_node = vo2_node[0]
+        gen = ((vo2_node or {}).get("generic") if isinstance(vo2_node, dict) else None) \
+            or (((raw.get("training_status") or {}).get("mostRecentVO2Max") or {}).get("generic")) or {}
+        row["vo2max_datum"] = gen.get("calendarDate") if vo2_val else None
 
         # --- Garmin's eigen trainingsbelasting ---
         ts = raw.get("training_status") or {}
@@ -469,6 +504,24 @@ def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str,
         if vals and isinstance(vals[0], dict):
             row["garmin_load_7d"] = (_num(vals[0].get("trainingLoadAcute"))
                                      or _num(vals[0].get("trainingLoadChronic")))
+            # Garmins belastingsfocus: je belasting van de laatste vier weken,
+            # verdeeld over aeroob laag, aeroob hoog en anaeroob, elk met een
+            # doelband die Garmin uit je eigen niveau afleidt. Krachttraining
+            # telt hierin gewoon mee.
+            v = vals[0]
+            if _num(v.get("monthlyLoadAerobicLow")) is not None:
+                row["bal_laag"] = round(_num(v.get("monthlyLoadAerobicLow")))
+                row["bal_hoog"] = round(_num(v.get("monthlyLoadAerobicHigh")) or 0)
+                row["bal_ana"] = round(_num(v.get("monthlyLoadAnaerobic")) or 0)
+                row["bal_doel"] = {
+                    "laag": [_num(v.get("monthlyLoadAerobicLowTargetMin")),
+                             _num(v.get("monthlyLoadAerobicLowTargetMax"))],
+                    "hoog": [_num(v.get("monthlyLoadAerobicHighTargetMin")),
+                             _num(v.get("monthlyLoadAerobicHighTargetMax"))],
+                    "ana": [_num(v.get("monthlyLoadAnaerobicTargetMin")),
+                            _num(v.get("monthlyLoadAnaerobicTargetMax"))],
+                }
+                row["bal_fase"] = v.get("trainingBalanceFeedbackPhrase")
         status_map = ts.get("mostRecentTrainingStatus") or {}
         smap = list((status_map.get("latestTrainingStatusData") or {}).values())
         if smap and isinstance(smap[0], dict):
@@ -551,6 +604,8 @@ def prepare_activities(cache: dict[str, Any], rest_hr: float, max_hr: float,
             "sport": classify(raw),
             "distance_m": dist_m,
             "duration_s": dur_s,
+            "elapsed_s": raw.get("elapsedDuration"),
+            "moving_s": raw.get("movingDuration"),
             "avg_hr": raw.get("averageHR"),
             "max_hr": raw.get("maxHR"),
             "calories": raw.get("calories"),
@@ -558,13 +613,30 @@ def prepare_activities(cache: dict[str, Any], rest_hr: float, max_hr: float,
             "load_source": load_src,
             "aerobic_te": raw.get("aerobicTrainingEffect"),
             "anaerobic_te": raw.get("anaerobicTrainingEffect"),
+            # Garmins eigen belastingspunten voor deze sessie (EPOC-gebaseerd).
+            # Hiermee schat het plan wat een vergelijkbare workout oplevert.
+            # Hoe Garmin ze over laag/hoog aeroob en anaeroob verdeelt, geeft
+            # de API per sessie niet mee -- dat verzinnen we dus ook niet.
+            "garmin_load": round(raw["activityTrainingLoad"]) if isinstance(raw.get("activityTrainingLoad"), (int, float)) else None,
+            "te_label": raw.get("trainingEffectLabel"),
+            # Zonegrenzen zoals in Garmin ingesteld, met minuten per zone.
+            "hr_zones": (cache.get("zones") or {}).get(str(raw.get("activityId"))),
             "hard_frac": round(hard_frac, 3) if hard_frac is not None else None,
             **{f"z{z}_s": raw.get(f"hrTimeInZone_{z}") or 0 for z in range(1, 6)},
             "pace_s_per_km": round(dur_s / (dist_m / 1000), 1) if dist_m and dist_m > 400 and dur_s else None,
             "elev_gain": raw.get("elevationGain"),
         })
-    acts.sort(key=lambda a: a["datetime"], reverse=True)
-    return acts
+    # Dubbele activiteiten: Garmin geeft soms dezelfde sessie twee keer terug
+    # (bijvoorbeeld na een handmatige correctie). Zelfde startminuut en sport
+    # met nagenoeg dezelfde duur telt één keer.
+    gezien, uniek = set(), []
+    for a in sorted(acts, key=lambda a: a["datetime"], reverse=True):
+        sleutel = (a["datetime"], a["sport"], round((a["duration_s"] or 0) / 60))
+        if sleutel in gezien:
+            continue
+        gezien.add(sleutel)
+        uniek.append(a)
+    return uniek
 
 
 def effort_grade(a: dict[str, Any], max_hr: float) -> str:

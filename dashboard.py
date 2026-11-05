@@ -55,11 +55,13 @@ PUBLISH_TARGET = "~/Documents/GitHub/Garmin dashboard"
 # van eerdere sessies van die sport). Wil je een dag zwaarder of lichter
 # inschatten, vul dan zelf een getal in.
 # "doel": True markeert de dag waar je fris voor wilt zijn.
+# Sinds november 2026: zaaltraining op dinsdag, donderdag en vrijdag, wedstrijd
+# op zaterdag. Dinsdag is niet de belangrijkste training, maar er wordt vaak
+# meer gelopen; dat telt gewoon mee in de belasting.
 WEEKPLAN = {
-    0: {"sport": "Handbal", "label": "Handbaltraining", "min_minuten": 75},
-    1: {"sport": "Handbal", "label": "Handbaltraining", "min_minuten": 75},
-    3: {"sport": "Handbal", "label": "Handbaltraining", "min_minuten": 75},
-    4: {"sport": "Handbal", "label": "Handbaltraining", "min_minuten": 75},
+    1: {"sport": "Handbal", "label": "Zaaltraining", "min_minuten": 75},
+    3: {"sport": "Handbal", "label": "Zaaltraining", "min_minuten": 75},
+    4: {"sport": "Handbal", "label": "Zaaltraining", "min_minuten": 75},
     5: {"sport": "Handbal", "label": "Wedstrijd", "doel": True},
 }
 PLAN_HORIZON = 14   # dagen vooruit kijken
@@ -104,8 +106,19 @@ def sync_config() -> dict[str, str]:
     return uit
 
 
+def vandaag_nl() -> date:
+    """De datum in Nederland. De bouw draait bij GitHub in UTC; tussen
+    middernacht en een uur of twee 's nachts zou 'vandaag' daar nog gisteren
+    zijn."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Amsterdam")).date()
+    except Exception:  # noqa: BLE001 - zonder tzdata vallen we terug op de klok
+        return date.today()
+
+
 def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
-    today = date.today()
+    today = vandaag_nl()
     start = today - timedelta(weeks=weeks)
     days = [(start + timedelta(days=i)).isoformat() for i in range((today - start).days + 1)]
 
@@ -754,6 +767,8 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         "sync": sync_config(),
         "weeks": weeks,
         "max_hr": MAX_HR,
+        # Garmins eigen zone-instelling (methode, gebruikte maximale hartslag).
+        "hr_instelling": (cache.get("meta") or {}).get("hr_instelling"),
         "rest_hr": round(rest_hr),
         "days": days,
         "daily": [daily[d] for d in days],
