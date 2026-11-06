@@ -5735,6 +5735,19 @@ async function supaInloggen(email) {
     options: {shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname}});
   if (error) throw new Error(error.message);
 }
+/* Inloggen met wachtwoord: werkt overal, ook in een app op je beginscherm
+   (die heeft op iPhone een eigen opslag, waar een inloglink niet in landt).
+   Je blijft daarna ingelogd tot je uitlogt. */
+async function supaInloggenWachtwoord(email, wachtwoord) {
+  const {data, error} = await SUPA.client.auth.signInWithPassword({email, password: wachtwoord});
+  if (error) throw new Error(/invalid login credentials/i.test(error.message) ? "E-mailadres of wachtwoord klopt niet." : error.message);
+  SUPA.sessie = data.session || null;
+  return SUPA.sessie;
+}
+async function supaWachtwoordZetten(wachtwoord) {
+  const {error} = await SUPA.client.auth.updateUser({password: wachtwoord});
+  if (error) throw new Error(error.message);
+}
 async function supaUitloggen() {
   if (SUPA.client) await SUPA.client.auth.signOut();
   SUPA.sessie = null; syncInit(); supaLive();
@@ -12919,13 +12932,22 @@ function renderSyncPaneel() {
     ? `<div class="melding melding--stil"><strong>Ingelogd${SUPA.sessie.user && SUPA.sessie.user.email ? ` als ${veiligeTekst(SUPA.sessie.user.email)}` : ""}.</strong>
         Je invoer synchroniseert live via Supabase, ook wat de coach vastlegt.
         ${SYNC.laatst ? `Laatst bijgewerkt om ${new Date(SYNC.laatst).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"})}.` : ""}
-        <div class="planbar" style="margin-top:var(--sp2)"><button class="knop knop--secundair knop--klein" id="supaUit">Uitloggen</button></div></div>`
+        <div class="planbar" style="margin-top:var(--sp2)"><button class="knop knop--secundair knop--klein" id="supaUit">Uitloggen</button></div></div>
+      <details class="verdieping verdieping--binnen" style="margin-top:var(--sp3)"><summary>Wachtwoord instellen of wijzigen</summary>
+        <p class="hint">Daarmee log je op elk apparaat in zonder mail, ook in de app op je beginscherm. Minstens 10 tekens.</p>
+        <form class="velden" style="grid-template-columns:minmax(220px,1fr)" onsubmit="return false">
+          <input type="email" autocomplete="username" value="${veiligeTekst((SUPA.sessie.user || {}).email || "")}" hidden>
+          <div class="veld"><label for="supaWwNieuw">Nieuw wachtwoord</label><input id="supaWwNieuw" type="password" autocomplete="new-password" minlength="10"></div></form>
+        <div class="planbar"><button class="knop knop--secundair knop--klein" id="supaWwZet">Opslaan</button></div>
+        <p class="hint" id="supaWwMelding"></p></details>`
     : `<div class="melding melding--stil melding--let"><strong>Log in om alles live te houden.</strong> Je invoer, je coach en je
         Garmin-gegevens komen dan samen; je apparaten zien direct hetzelfde.${SUPA.fout ? `<br>${veiligeTekst(SUPA.fout)}` : ""}</div>
-      <div class="velden" style="margin-top:var(--sp3);grid-template-columns:minmax(220px,1fr)">
-        <div class="veld"><label for="supaMail">E-mailadres</label><input id="supaMail" type="email" autocomplete="email" spellcheck="false"></div></div>
-      <div class="planbar"><button class="knop knop--primair knop--klein" id="supaIn">Stuur inloglink</button></div>
-      <p class="hint" id="supaMelding">Open de link in deze browser; daar wordt hij gekoppeld.</p>`;
+      <form id="supaForm" class="velden" style="margin-top:var(--sp3);grid-template-columns:minmax(220px,1fr)" onsubmit="return false">
+        <div class="veld"><label for="supaMail">E-mailadres</label><input id="supaMail" type="email" autocomplete="username" spellcheck="false"></div>
+        <div class="veld"><label for="supaWw">Wachtwoord</label><input id="supaWw" type="password" autocomplete="current-password"></div></form>
+      <div class="planbar"><button class="knop knop--primair knop--klein" id="supaInWw">Inloggen</button>
+        <button class="knop knop--secundair knop--klein" id="supaIn">Stuur inloglink</button></div>
+      <p class="hint" id="supaMelding">Nog geen wachtwoord? Log één keer in met de link (in deze browser) en stel daarna hier een wachtwoord in.</p>`;
   const status = SYNC.via === "supabase" ? (SYNC.fout ? `<div class="melding melding--stil melding--let"><strong>Er gaat iets mis.</strong> ${veiligeTekst(SYNC.fout)}</div>` : "")
     : !SYNC.aan
     ? `<div class="melding melding--stil melding--let">Staat uit. Alles wat je invult blijft in deze browser.</div>`
@@ -12973,6 +12995,28 @@ function renderSyncPaneel() {
     supaIn.disabled = true; m.textContent = "Versturen…";
     try { await supaInloggen(mail); m.textContent = "Verstuurd. Open de link uit je mail in deze browser."; }
     catch (e) { m.textContent = `Lukte niet: ${e.message}`; supaIn.disabled = false; }
+  };
+  const supaInWw = document.getElementById("supaInWw");
+  if (supaInWw) {
+    const inloggen = async () => {
+      const mail = document.getElementById("supaMail").value.trim(), ww = document.getElementById("supaWw").value, m = document.getElementById("supaMelding");
+      if (!mail || !ww) { m.textContent = "Vul je e-mailadres en wachtwoord in."; return; }
+      if (!SUPA.client) { m.textContent = "Supabase is nog niet geladen; probeer het zo opnieuw."; return; }
+      supaInWw.disabled = true; m.textContent = "Inloggen…";
+      try { await supaInloggenWachtwoord(mail, ww); syncInit(); supaLive(); renderSyncPaneel(); renderCoachSetup(); syncStatus(); syncRonde(); supaStandDelen(); }
+      catch (e) { m.textContent = e.message; supaInWw.disabled = false; }
+    };
+    supaInWw.onclick = inloggen;
+    document.getElementById("supaWw").addEventListener("keydown", e => { if (e.key === "Enter") inloggen(); });
+  }
+  const supaWwZet = document.getElementById("supaWwZet");
+  if (supaWwZet) supaWwZet.onclick = async () => {
+    const ww = document.getElementById("supaWwNieuw").value, m = document.getElementById("supaWwMelding");
+    if (ww.length < 10) { m.textContent = "Kies minstens 10 tekens."; return; }
+    supaWwZet.disabled = true; m.textContent = "Opslaan…";
+    try { await supaWachtwoordZetten(ww); document.getElementById("supaWwNieuw").value = ""; m.textContent = "Opgeslagen. Log voortaan in met je e-mailadres en dit wachtwoord."; }
+    catch (e) { m.textContent = `Lukte niet: ${e.message}`; }
+    finally { supaWwZet.disabled = false; }
   };
   const supaUit = document.getElementById("supaUit");
   if (supaUit) supaUit.onclick = async () => { await supaUitloggen(); renderSyncPaneel(); renderCoachSetup(); syncStatus(); };

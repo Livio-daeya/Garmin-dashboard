@@ -103,6 +103,25 @@
     const b = COACH_GESPREK[COACH_GESPREK.length - 1];
     return {ok: /Het lukte niet/.test(b.tekst) && /inlog verlopen/.test(b.tekst) && !b.bezig, detail: b.tekst};
   });
+  await test("Inloggen met wachtwoord, en een wachtwoord instellen als je ingelogd bent", async () => {
+    const c = nepClient(); let gevraagd = null, gezet = null;
+    c.auth.signInWithPassword = async ({email, password}) => { gevraagd = {email, password};
+      return password === "goed-wachtwoord" ? {data: {session: {access_token: "t2", user: {email}}}, error: null} : {data: {}, error: {message: "Invalid login credentials"}}; };
+    c.auth.updateUser = async ({password}) => { gezet = password; return {error: null}; };
+    SUPA.client = c; SUPA.sessie = null; DATA.supabase = {url: "u", publishable_key: "k"};
+    let fout = null; try { await supaInloggenWachtwoord("ik@voorbeeld.nl", "fout"); } catch (e) { fout = e.message; }
+    await supaInloggenWachtwoord("ik@voorbeeld.nl", "goed-wachtwoord"); syncInit();
+    renderSyncPaneel();
+    const html = document.getElementById("syncPaneel").innerHTML;
+    await supaWachtwoordZetten("nieuw-wachtwoord-123");
+    return {ok: fout === "E-mailadres of wachtwoord klopt niet." && SYNC.via === "supabase" && /Ingelogd als ik@voorbeeld.nl/.test(html) && /Wachtwoord instellen/.test(html) && gezet === "nieuw-wachtwoord-123",
+      detail: `fout "${fout}", via ${SYNC.via}, gezet ${gezet}`};
+  });
+  await test("Uitgelogd: inlogscherm met e-mail en wachtwoord", () => {
+    SUPA.client = nepClient(); SUPA.sessie = null; DATA.supabase = {url: "u", publishable_key: "k"}; syncInit(); renderSyncPaneel();
+    const el = document.getElementById("syncPaneel");
+    return {ok: !!el.querySelector("#supaMail") && !!el.querySelector("#supaWw[type=password]") && !!el.querySelector("#supaInWw"), detail: el.innerText.slice(0, 80)};
+  });
   await test("Zonder inlog blijft alles zoals het was (gist, sleutel in browser)", () => {
     SUPA.sessie = null; SUPA.client = null; syncInit();
     return {ok: SYNC.via !== "supabase" && !coachServer(), detail: `via ${SYNC.via}, coachServer ${coachServer()}`};
