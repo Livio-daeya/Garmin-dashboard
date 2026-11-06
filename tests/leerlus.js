@@ -21,7 +21,7 @@
       sleep_h: 7.5 + (j - 3) * 0.1, huidtemp_afw: (j - 3) * 0.05, resp_sleep: 13 + (j % 3) * 0.2, ...f(d, i, n)}; });
   const zet = (rijen, acts) => { DATA.historie = rijen; DATA.historie_acts = acts || []; DATA.activities = acts || []; DATA.planbasis.vandaag = V; HB_CACHE.clear(); };
   const schoon = () => { localStorage.removeItem(CHECK_KEY); localStorage.removeItem(LOG_KEY); localStorage.removeItem(LEER_KEY);
-    const I = bewaardLees(INSTEL_KEY, {}); delete I.hbModel; delete I.hbVoorstellen; bewaardSchrijf(INSTEL_KEY, I); HB_CACHE.clear(); };
+    const I = bewaardLees(INSTEL_KEY, {}); delete I.hbModel; delete I.hbVoorstellen; delete I.hbToetsGebruikt; bewaardSchrijf(INSTEL_KEY, I); HB_CACHE.clear(); };
 
   await test("Telefoon- en browserinvoer worden per onderdeel samengevoegd", () => {
     const tel = {"2026-11-04": {gevoel: 4, lijf: {benen: 1}, sessies: [], _t: 100}};
@@ -89,12 +89,12 @@
     const pt = herstelKern(V).ind.prestatie.punten.find(x => x.soort === "lopen");
     return {ok: !!pt && pt.aandacht && !pt.slechter, detail: pt ? pt.tekst : "geen vergelijking"};
   });
-  await test("Ontbrekende RIR verlaagt de zekerheid, de vergelijking blijft", () => {
+  await test("Ontbrekende RIR: beperkte vergelijkbaarheid, de vergelijking blijft", () => {
     schoon(); zet(reeks());
     const k = (datum, reps, rir, id) => ({_id: id, type: "A", datum, plek: null, oefeningen: {bench: {kg: 100, reps, sets: 3, rir}}});
     logZet([k(isoPlus(V, -10), 6, null, "a"), k(isoPlus(V, -3), 5, 2, "b")]); HB_CACHE.clear();
     const pt = herstelKern(V).ind.prestatie.punten.find(x => x.soort === "kracht");
-    return {ok: !!pt && pt.gewicht === 0.5 && pt.slechter, detail: pt ? `${pt.tekst} (${pt.noot})` : "geen vergelijking"};
+    return {ok: !!pt && pt.gewicht === 0.5 && pt.slechter && /beperkte vergelijkbaarheid: RIR ontbreekt/.test(pt.noot), detail: pt ? `${pt.tekst} (${pt.noot})` : "geen vergelijking"};
   });
   await test("Een modelvoorstel verandert het actieve advies niet vóór goedkeuring; versies zijn terug te draaien", () => {
     schoon(); zet(reeks((d, i, n) => i >= n - 7 ? {rhr: 47.6} : {})); checkZet({[V]: {gevoel: 4, lijf: {benen: 0}, _t: 1}}); HB_CACHE.clear();
@@ -111,7 +111,7 @@
   await test("Een afgewezen voorstel blijft afgewezen tot er genoeg nieuwe gegevens zijn", () => {
     schoon(); zet(reeks());
     let n = 30;
-    stub("hbControle", (p) => ({n, positief: 8, ba: p.bandK === 1.0 ? 0.8 : 0.6, gemist: 1, zonderBevestiging: 1, wissels: 0}));
+    stub("hbControle", (p) => ({n, positief: 8, periodes: 6, ba: p.bandK === 1.0 ? 0.8 : 0.6, gemist: 1, zonderBevestiging: 1, wissels: 0}));
     const eerste = hbVoorstelZoeken();
     if (!eerste.voorstel) return {ok: false, detail: "geen eerste voorstel: " + eerste.reden};
     hbVoorstelBewaar(eerste.voorstel); hbVoorstelBesluit(eerste.voorstel.id, "afgewezen");
@@ -134,7 +134,7 @@
     const met = hbEvalueer(rec, {k: "gevoel_terug", eval: isoPlus(V, -3)});
     const orig = uiPaneel; let html = ""; window.uiPaneel = (t, h) => { html = h; };
     try { hbLeerPaneel(); } finally { window.uiPaneel = orig; }
-    return {ok: zonder.uitkomst === "onbekend" && met.uitkomst === "bevestigd" && /bewijst niet/.test(html), detail: `zonder check-in ${zonder.uitkomst}, met check-in ${met.uitkomst}`};
+    return {ok: zonder.uitkomst === "onbekend" && met.uitkomst === "waargenomen" && /bewijst niet/.test(html), detail: `zonder check-in ${zonder.uitkomst}, met check-in ${met.uitkomst} (${met.waarneming})`};
   });
   await test("De weekscore volgt de specifieke planaanpassing", () => {
     schoon();
@@ -155,6 +155,142 @@
     const balk = document.querySelector("#hsVermoeid .hb-balk-status").textContent.trim();
     const k = herstelKern(V), s = herstelSignalen(V), c = coachContext().herstel;
     return {ok: balk === HB_KORT_TITEL[k.niveau] && s.niveau === k.niveau && c.status === HB_NIVEAU[k.niveau].titel, detail: `balk "${balk}", kern ${k.niveau}, plan ${s.niveau}, coach "${c.status}"`};
+  });
+
+  /* ---- synchronisatie: conflicten en verwijderingen ---- */
+  const syncMet = async (gist, opties = {}) => {
+    let geschreven = null;
+    stub("gistHaal", async () => JSON.parse(JSON.stringify(gist)));
+    stub("gistZet", opties.faalt ? async () => { throw new Error("netwerk weg"); } : async doc => { geschreven = doc; });
+    const aan = SYNC.aan; SYNC.aan = true;
+    try { await syncRonde(false); } finally { SYNC.aan = aan; }
+    return geschreven;
+  };
+  const D = "2026-11-03";
+  await test("Echt conflict: beide versies blijven bewaard met moment en herkomst", async () => {
+    schoon();
+    /* beide kanten veranderden sinds versie t=100 */
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 2, _t: 300, _bron: "browser-aaaa", _basis: 100, _ongesync: true}}));
+    const g = await syncMet({v: 1, check: {[D]: {gevoel: 4, _t: 200, _bron: "telefoon-bbbb", _basis: 100}}});
+    const r = checkLees()[D], c = (r._conflicten || [])[0];
+    const ok = r.gevoel === 2 && c && c.gevoel === 4 && c._bron === "telefoon-bbbb" && c._t === 200 && g.check[D]._conflicten.length === 1 && syncConflicten().length === 1;
+    return {ok, detail: `actief ${r.gevoel} (${r._bron}); bewaard ${c ? `${c.gevoel} van ${c._bron} t=${c._t}` : "niets"}`};
+  });
+  await test("Opvolger zonder conflict: een later gewijzigd record vervangt de vorige versie", async () => {
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 3, _t: 300, _bron: "browser-aaaa", _basis: 200, _ongesync: true}}));
+    await syncMet({v: 1, check: {[D]: {gevoel: 4, _t: 200, _bron: "telefoon-bbbb", _basis: 100}}});
+    const r = checkLees()[D];
+    return {ok: r.gevoel === 3 && !r._conflicten && !r._ongesync, detail: JSON.stringify(r)};
+  });
+  await test("Een gewist veld komt niet terug van het andere apparaat", async () => {
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 3, _t: 300, _bron: "browser-aaaa", _basis: 200, _ongesync: true}}));
+    await syncMet({v: 1, check: {[D]: {gevoel: 3, lijf: {benen: 2}, _t: 200, _bron: "telefoon-bbbb"}}});
+    const r = checkLees()[D];
+    return {ok: !r.lijf, detail: JSON.stringify(r)};
+  });
+  await test("Verwijderen gaat mee naar het andere apparaat, en komt niet terug", async () => {
+    schoon();
+    /* hier verwijderd, in de gist nog de oude versie */
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 3, _t: 100, _bron: "telefoon-bbbb"}}));
+    const c = checkLees(); delete c[D]; checkZet(c);
+    const g = await syncMet({v: 1, check: {[D]: {gevoel: 3, _t: 100, _bron: "telefoon-bbbb"}}});
+    const weg1 = g && g.check[D]._weg && !checkLees()[D];
+    /* andersom: op het andere apparaat verwijderd, hier ongewijzigd */
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 3, _t: 100, _bron: "telefoon-bbbb"}}));
+    await syncMet({v: 1, check: {[D]: {_weg: true, _t: 400, _bron: "browser-aaaa", _basis: 100}}});
+    const weg2 = !checkLees()[D] && JSON.parse(localStorage.getItem(CHECK_KEY))[D]._weg;
+    return {ok: !!weg1 && !!weg2, detail: `hier verwijderd → gist ${weg1 ? "grafsteen" : "nog aanwezig"}; elders verwijderd → hier ${weg2 ? "weg (grafsteen bewaard)" : "nog aanwezig"}`};
+  });
+  await test("Verwijderen tegelijk met een wijziging elders: de wijziging blijft bewaard", async () => {
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {_weg: true, _t: 500, _bron: "browser-aaaa", _basis: 100, _ongesync: true}}));
+    await syncMet({v: 1, check: {[D]: {gevoel: 1, _t: 300, _bron: "telefoon-bbbb", _basis: 100}}});
+    const rauw = JSON.parse(localStorage.getItem(CHECK_KEY))[D];
+    return {ok: rauw._weg && (rauw._conflicten || []).some(x => x.gevoel === 1), detail: JSON.stringify(rauw)};
+  });
+  await test("Mislukt opslaan bij GitHub: lokale wijziging blijft 'nog te synchroniseren'", async () => {
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 2, _t: 300, _bron: "browser-aaaa", _basis: null, _ongesync: true}}));
+    await syncMet({v: 1, check: {}}, {faalt: true});
+    const r = JSON.parse(localStorage.getItem(CHECK_KEY))[D];
+    return {ok: r._ongesync === true && !!SYNC.fout, detail: `ongesync ${r._ongesync}; fout "${SYNC.fout}"`};
+  });
+  await test("Invoer tijdens het synchroniseren wordt niet overschreven", async () => {
+    schoon();
+    localStorage.setItem(CHECK_KEY, JSON.stringify({[D]: {gevoel: 2, _t: 300, _bron: "browser-aaaa", _ongesync: true}}));
+    stub("gistHaal", async () => { checkZet({...checkLees(), "2026-11-04": {gevoel: 5}}); return {v: 1, check: {}}; });
+    stub("gistZet", async () => {});
+    const aan = SYNC.aan; SYNC.aan = true; try { await syncRonde(false); } finally { SYNC.aan = aan; clearTimeout(SYNC_TIMER); }
+    const c = checkLees();
+    return {ok: c["2026-11-04"] && c["2026-11-04"].gevoel === 5 && c[D].gevoel === 2, detail: Object.keys(c).join(", ")};
+  });
+
+  /* ---- beoordelingen: origineel en herberekening ---- */
+  await test("Het oorspronkelijke oordeel blijft; een herberekening wordt een nieuwe versie", () => {
+    schoon(); zet(reeks());
+    const v = vandaagIso();
+    herstelBewaar(herstelStatus(v));
+    const eerst = JSON.parse(JSON.stringify(leerLees()[v]));
+    checkZet({[v]: {gevoel: 1, lijf: {benen: 2}}}); HB_CACHE.clear();
+    herstelBewaar(herstelStatus(v));
+    const na = leerLees()[v];
+    const ok = na.oorspronkelijk.niveau === eerst.niveau && na.oorspronkelijk.berekend === eerst.berekend && na.herberekeningen.length === 1
+      && na.nr === 2 && /check-in/.test(na.herberekeningen[0].aanleiding) && na.oorspronkelijk.bekend.checkin === false;
+    return {ok, detail: `origineel ${na.oorspronkelijk.niveau} (check-in bekend: ${na.oorspronkelijk.bekend.checkin}); versie 2 ${na.niveau}: ${na.herberekeningen[0] && na.herberekeningen[0].aanleiding}`};
+  });
+  await test("Controles zijn een evaluatiemoment, geen voorspelde hersteltermijn", () => {
+    schoon(); zet(reeks((d, i, n) => i >= n - 7 ? {hrv_week: 70} : {}));
+    const v = vandaagIso(); checkZet({[v]: {gevoel: 1, lijf: {benen: 2}}, [isoPlus(v, -1)]: {gevoel: 1}}); HB_CACHE.clear();
+    const w = hbVerwachtingen(herstelStatus(v));
+    const ctrl = w.filter(hbIsControle);
+    const ok = ctrl.length >= 1 && ctrl.every(x => x.soort === "controle" && /geen voorspel/.test(x.tekst)) && !w.some(x => /binnen 3 dagen|weer zoals je eigen normaal|over 2 nachten weer/.test(x.tekst));
+    return {ok, detail: w.map(x => `${x.soort}: ${x.tekst}`).join(" | ")};
+  });
+
+  /* ---- historische controle: onafhankelijke toetsing ---- */
+  await test("Keuze- en toetsdeel delen geen meet- of uitkomstvensters; toetsdagen worden niet hergebruikt", () => {
+    schoon(); zet(reeks());
+    const gezien = [];
+    stub("hbControle", (p, dagen) => { gezien.push(dagen.slice()); return {n: 40, positief: 8, periodes: 6, ba: p.bandK === 1.0 ? 0.9 : 0.6, gemist: 1, zonderBevestiging: 1, wissels: 0}; });
+    const a = hbVoorstelZoeken({zonderBoekhouding: false});
+    const keus = gezien[1] || [], toets = gezien[0] || [];
+    const gat = keus.length && toets.length ? dagVerschil(keus[keus.length - 1], toets[0]) : 0;
+    const b = hbVoorstelZoeken();
+    return {ok: gat > HB_EMBARGO && a.gebruikt === null && b.toetsVan > toets[toets.length - 1], detail: `gat ${gat} dagen (embargo ${HB_EMBARGO}); tweede toets vanaf ${b.toetsVan}, eerste liep t/m ${toets[toets.length - 1]}`};
+  });
+  await test("Opeenvolgende slechte dagen tellen als één herstelperiode", () => {
+    schoon(); zet(reeks());
+    const c = {};
+    for (let i = 60; i >= 10; i--) c[isoPlus(V, -i)] = {gevoel: 4};
+    for (let i = 30; i >= 26; i--) c[isoPlus(V, -i)] = {gevoel: 1};     // één slechte periode van 5 dagen
+    checkZet(c); HB_CACHE.clear();
+    const dagen = Array.from({length: 40}, (_, i) => isoPlus(V, -50 + i));
+    const t = hbControle(hbModel().params, dagen);
+    return {ok: t.periodes === 1, detail: `${t.n} beoordeelbare dagen, ${t.positief} ongunstige uitkomstdagen, ${t.periodes} periode(s)`};
+  });
+
+  /* ---- HRV: grootheid en referentie ---- */
+  await test("Zonder Garmin-band wordt het weekgemiddelde vergeleken met eerdere weekgemiddelden", () => {
+    schoon(); zet(reeks((d, i, n) => ({hrv_week: null, hrv_band_laag: null, hrv_band_hoog: null, hrv: 100 + ((i * 37) % 21) - 10})));
+    const h = herstelKern(V).ind.hart.hrv, r = h.weekRef;
+    const dagBand = hbReferentie("hrv", V, {log: true});
+    const ok = r && r.grootheid === "weekgemiddelde" && r.onafh >= HB.weekMinOnafh && r.n > r.onafh && (r.hoog - r.laag) < (dagBand.hoog - dagBand.laag);
+    return {ok, detail: r ? `weekband ${Math.round(r.laag)}–${Math.round(r.hoog)} (${r.n} weekgemiddelden, ${r.onafh} niet-overlappend); nachtband ${Math.round(dagBand.laag)}–${Math.round(dagBand.hoog)}` : "geen weekreferentie"};
+  });
+  await test("Te weinig nachten: geen weekgemiddelde, geen oordeel", () => {
+    schoon(); zet(reeks((d, i, n) => ({hrv_week: null, hrv_band_laag: null, hrv: i >= n - 7 && i % 2 ? null : (i >= n - 7 ? null : 100)})));
+    const h = herstelKern(V).ind.hart.hrv;
+    return {ok: h.week == null && h.weekStand == null, detail: `week ${h.week}, stand ${h.weekStand}`};
+  });
+  await test("Leerpaneel zegt eerlijk dat de leerlus in opbouw is", () => {
+    schoon(); zet(reeks());
+    const orig = uiPaneel; let html = ""; window.uiPaneel = (t, h) => { html = h; };
+    try { hbLeerPaneel(); } finally { window.uiPaneel = orig; }
+    const tekst = document.querySelector("#hsVermoeid") ? "" : "";
+    return {ok: /Persoonlijke leerlus in opbouw/.test(html) && /afzonderlijke herstelperiodes/.test(html) && !/halve zekerheid/.test(document.documentElement.innerHTML + html), detail: html.match(/Persoonlijke leerlus in opbouw[^<]*<\/b>[^<]*/)?.[0] || "niet gevonden"};
   });
   herstel(); renderVermoeidheid();
   await test("Testgegevens blijven buiten je opslag", () => {
