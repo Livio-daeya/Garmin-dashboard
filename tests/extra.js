@@ -63,6 +63,32 @@
     const l = ongeplandOp(vrij);
     return {ok: l.some(x => x.bron === "eigen" && x.doel === "kracht"), detail: l.map(x => `${x.wat}/${x.bron}`).join(", ")};
   });
+  await test("Activiteit toont de prikkel (Training Effect) onder de hartslaggrafiek", () => {
+    const a = (DATA.activities || []).find(x => x.aerobic_te != null && x.anaerobic_te != null);
+    if (!a) return {ok: false, detail: "geen activiteit met Training Effect"};
+    let html = ""; const orig = uiPaneel; window.uiPaneel = (t, h) => { html = h; };
+    try { activiteitPaneel(a.id); } finally { window.uiPaneel = orig; }
+    const iTe = html.indexOf("Prikkel (Training Effect)"), iGraf = html.indexOf("as-grafiek"), iZone = html.indexOf("Hartslagzones");
+    return {ok: iTe > 0 && (iGraf < 0 || iGraf < iTe) && (iZone < 0 || iTe < iZone) && /Aeroob/.test(html) && /Anaeroob/.test(html), detail: `${a.sport} ${a.aerobic_te}/${a.anaerobic_te}`};
+  });
+  await test("Een overgeslagen sessie verdwijnt uit de lijst en is terug te zetten", () => {
+    const d = dagen.find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort !== "rust")) || v;
+    const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort !== "rust");
+    planStatusZet(d, it.id, "overgeslagen");
+    ROUTE_DAG = d; renderTrainingRoute();
+    const host = document.getElementById("wkVandaag");
+    const weg = !host.querySelector(`[data-sessie="${d}|${it.id}"]`) && !!host.querySelector(`[data-overgeslagen="${d}|${it.id}"]`);
+    host.querySelector(`[data-overgeslagen="${d}|${it.id}"]`).click();
+    const terug = itemStatus(d, it).k !== "overgeslagen";
+    ROUTE_DAG = null;
+    return {ok: weg && terug, detail: `${d} ${it.titel}: weg ${weg}, teruggezet ${terug}`};
+  });
+  await test("Advies weet van een ongeplande training vandaag", () => {
+    DATA.activities = [...echt, {...kracht(v, 40, 9990011), name: "Kracht extra"}, {id: 9990012, date: v, datetime: `${v}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 2400, load: 60}];
+    HB_CACHE.clear();
+    const a = routeAdvies();
+    return {ok: !/^Volg vandaag je plan/.test(a.kop) && /extra|niet gepland|trainde/.test(a.kop + a.label + a.zin), detail: `${a.label} | ${a.kop} | ${a.zin}`};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }

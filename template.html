@@ -677,6 +677,11 @@ body.up-open { overflow: hidden; }
 /* ---- Coach ---- */
 .coach-context { margin: var(--sp3) 0; padding: var(--sp2) var(--sp3); border: 1px solid var(--hair-strong); border-radius: var(--r-md); }
 .coach-kern p { margin: 0 0 6px; display: flex; gap: 6px; align-items: flex-start; }
+.te-blok { display: flex; flex-direction: column; gap: 8px; margin: var(--sp2) 0; }
+.te-rij { display: grid; grid-template-columns: 72px 1fr 34px minmax(0, 120px); gap: 8px; align-items: center; font-size: var(--t-klein); }
+.te-spoor { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.te-spoor i { display: block; height: 100%; border-radius: 4px; background: var(--c-int); }
+.te-rij b { text-align: right; }
 .coach-acties { display: flex; flex-direction: column; gap: 4px; margin-top: var(--sp2); font-size: var(--t-klein); color: var(--ink-2); }
 .coach-acties .coach-vast { display: flex; gap: 6px; align-items: flex-start; color: var(--ink); }
 .coach-acties .ic { width: 14px; height: 14px; margin-top: 2px; flex: none; }
@@ -7183,7 +7188,7 @@ function activiteitPaneel(id) {
         ${(a.rondes || []).length > 1 ? `<span><i class="as-ronde"></i>${rondesAuto(a) ? "automatische ronde" : "ronde of interval"}</span>` : ""}
         <span class="u-klein">Aanwijzen toont tijd en hartslag</span></div>`
     : `<p class="u-klein">${a.avg_hr ? "Het hartslagverloop is alleen van de laatste 28 dagen beschikbaar." : "Geen hartslag geregistreerd."}</p>`;
-  uiPaneel(a.name || a.sport, kop + grafiek + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
+  uiPaneel(a.name || a.sport, kop + grafiek + trainingEffectHtml(a) + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
     if (a.hr_reeks) activiteitGrafiek(a, box.querySelector("#chActiviteit"));
     box.querySelectorAll("[data-as]").forEach(b => b.onclick = e => {
       e.stopPropagation();
@@ -7192,6 +7197,20 @@ function activiteitPaneel(id) {
       if (b.dataset.as === "status" && plan) statusMenu(b, a.date, plan);
     });
   }, {breed: true, bijSluiten: () => { if (ACT_GRAFIEK) { ACT_GRAFIEK.destroy(); ACT_GRAFIEK = null; } }});
+}
+/* De prikkel volgens Garmin: aeroob en anaeroob Training Effect (0-5), met
+   Garmins eigen omschrijving per niveau en het hoofddoel dat Garmin noemt. */
+const TE_WOORD = ["geen effect", "licht", "onderhoudend", "verbeterend", "sterk verbeterend", "overbelastend"];
+const TE_LABEL = {RECOVERY: "herstel", AEROBIC_BASE: "aerobe basis", TEMPO: "tempo", LACTATE_THRESHOLD: "drempel", VO2MAX: "VO2max",
+  ANAEROBIC_CAPACITY: "anaerobe capaciteit", SPEED: "snelheid"};
+function trainingEffectHtml(a) {
+  if (a.aerobic_te == null && a.anaerobic_te == null) return "";
+  const rij = (naam, w) => w == null ? "" : `<div class="te-rij"><span>${naam}</span>
+      <span class="te-spoor"><i style="width:${Math.min(100, w / 5 * 100).toFixed(0)}%"></i></span>
+      <b>${komma(w.toFixed(1))}</b><span class="u-klein">${TE_WOORD[Math.min(5, Math.floor(w + 1e-9))]}</span></div>`;
+  const hoofd = TE_LABEL[a.te_label];
+  return `<h4 class="as-sub">Prikkel (Training Effect)</h4><div class="te-blok">${rij("Aeroob", a.aerobic_te)}${rij("Anaeroob", a.anaerobic_te)}</div>
+    <p class="u-klein">${hoofd ? `Hoofdeffect volgens Garmin: ${hoofd}. ` : ""}Garmins schaal van 0 tot 5, berekend uit je hartslag; een inschatting van de prikkel, geen meting van je vorm.</p>`;
 }
 const rondesAuto = a => (a.rondes || []).length > 1 && a.rondes.slice(0, -1).every(x => Math.abs(x.afstand - 1609) < 25 || Math.abs(x.afstand - 1000) < 15);
 
@@ -7277,8 +7296,6 @@ function activiteitDetails(a, plan) {
       `<li><span>${(OEF[k] || {}).naam || o.naam || k}</span><span>${(o.reeksen || []).map(s => `${s.reps}${OEF[k] && OEF[k].eenheid ? " " + OEF[k].eenheid : ""}${s.kg != null ? ` × ${komma(s.kg)} kg` : ""}`).join(", ")}</span></li>`).join("")}</ul>` : "";
   return `<details class="up-deel as-details"><summary>Details</summary><div>
       <dl class="u-dl">
-        ${rij("Training Effect aeroob", a.aerobic_te != null ? komma(a.aerobic_te.toFixed(1)) : null)}
-        ${rij("Training Effect anaeroob", a.anaerobic_te != null ? komma(a.anaerobic_te.toFixed(1)) : null)}
         ${rij("Calorieën totaal", a.calories != null ? `${r0(a.calories)} kcal` : null)}
         ${rij("waarvan actief", actief != null ? `${r0(actief)} kcal` : null)}
         ${rij("Werkminuten", bev ? `${bev.werk} (${bev.titel}, door jou bevestigd)` : null)}
@@ -7319,13 +7336,15 @@ function renderVandaagNieuw() {
     const gekoppeld = new Map();
     items.forEach(i => (itemStatus(v, i).acts || []).forEach(a => gekoppeld.set(String(a.id), i)));
     const metAct = new Set([...gekoppeld.values()].map(i => i.id));
-    const plan = items.filter(i => !metAct.has(i.id));
+    const plan = items.filter(i => !metAct.has(i.id)).filter(nietOvergeslagen(v));
     tr.innerHTML = (acts.length ? `<div class="sectie-kop sectie-kop--eerst"><h3>Gedaan</h3></div>
         <div class="act-lijst">${acts.map(a => activiteitKaart(a, gekoppeld.get(String(a.id)))).join("")}</div>` : "") +
       (plan.length ? `<div class="sectie-kop${acts.length ? "" : " sectie-kop--eerst"}"><h3>${plan.every(i => ["gedaan", "overgeslagen"].includes(itemStatus(v, i).k)) ? "Gepland" : "Nog gepland"}</h3></div>
         <div class="tk-lijst">${plan.map(i => trainingKaart(v, i, {compact: true})).join("")}</div>` : "") ||
-      `<p class="u-leeg">${ic("bed")}Geen training vandaag.</p>`;
+      (items.length ? "" : `<p class="u-leeg">${ic("bed")}Geen training vandaag.</p>`);
+    tr.innerHTML += overgeslagenRegel(v, items);
     tr.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
+    overgeslagenKoppel(tr);
   }
 
   /* peilmoment van de drie bollen: ze komen niet allemaal van hetzelfde moment */
@@ -8829,24 +8848,32 @@ function routeAdvies() {
   const klaar = x => x.k === "gedaan" || x.k === "overgeslagen" || x.k === "optioneel";
   const open = items.filter((i, n) => !klaar(st[n]) && !i.wacht);
   const gedaan = items.filter((i, n) => st[n].k === "gedaan");
+  /* trainingen die niet gepland waren, telt het advies ook mee */
+  const extra = ongeplandOp(iso);
+  const extraNamen = zinLijst(extra.map(x => String(x.sport || x.wat).toLowerCase()));
+  const extraMin = extra.reduce((t, x) => t + (x.minuten || 0), 0);
 
   let kop, zinnen = [], status = "good", moment = "vooraf", label = "Vandaag";
   if (r.wijzigingen.some(w => w.regel === "ziek")) {
     kop = "Vandaag niet trainen."; status = "critical";
     zinnen.push("Je gaf aan ziek te zijn; het plan pakt het weer op als je klachtenvrij bent.");
+  } else if (!items.length && extra.length) {
+    kop = `Rustdag, maar je trainde: ${extraNamen}.`; status = "warning"; moment = "na"; label = `${extraMin} min niet gepland`;
+    zinnen.push(wedMorgen ? "Morgen is je wedstrijd; houd de rest van de dag rustig." : "Telt mee in je week; houd de rest van de dag rustig.");
   } else if (!items.length) {
     kop = wedMorgen ? "Rust vandaag." : "Rustdag."; status = "neutral";
     zinnen.push(wedMorgen ? "Morgen is je wedstrijd; je wilt fris aan de start." : "Niets gepland. Rustig bewegen mag.");
   } else if (!open.length) {
     /* na afronding: wat is klaar en wat volgt */
     kop = "Vandaag afgerond."; moment = "na";
-    label = gedaan.length ? `${zinLijst(gedaan.map(i => i.titel.split(" · ")[0]))} gedaan` : "Niets meer gepland";
+    label = gedaan.length || extra.length ? hoofdletter(`${zinLijst([...gedaan.map(i => i.titel.split(" · ")[0]), ...extra.map(x => `${String(x.sport || x.wat).toLowerCase()} (extra)`)])} gedaan`) : "Niets meer gepland";
     const morgenItems = morgen.filter(i => i.soort !== "rust");
     zinnen.push(wedMorgen ? "Morgen wedstrijd; herstel vandaag." : morgenItems.length ? `Morgen: ${zinLijst(morgenItems.map(i => i.titel.split(" · ")[0].toLowerCase()))}.` : "Morgen rust.");
-  } else if (gedaan.length) {
+  } else if (gedaan.length || extra.length) {
     /* tussen twee sessies: wat staat nog open */
     moment = "tussen";
-    label = `${zinLijst(gedaan.map(i => i.titel.split(" · ")[0]))} gedaan`;
+    label = hoofdletter(`${zinLijst([...gedaan.map(i => i.titel.split(" · ")[0]), ...extra.map(x => `${String(x.sport || x.wat).toLowerCase()} (extra)`)])} gedaan`);
+    if (extra.length) { status = "warning"; zinnen.push(`Je trainde vandaag al ${extraMin} min buiten je plan; kijk of ${open.length === 1 ? "dit" : "dit nog"} erbij past, of vraag het je coach.`); }
     kop = `Nog open: ${zinLijst(open.map(i => i.titel.split(" · ")[0].toLowerCase()))}.`;
     if (open.some(i => i.verkort)) zinnen.push("Verkort na een zware zaaltraining.");
     else if (open[0].waarom) zinnen.push(open[0].waarom.split(". ")[0].replace(/\.$/, "") + ".");
@@ -9714,7 +9741,8 @@ function renderTrainingRoute() {
   const iso = ROUTE_DAG || vandaagIso();
   const ma = maandagVan(iso);
   const r = dagRoute(iso, {alleenLezen: iso !== vandaagIso()});
-  const items = r.items.filter(i => i.soort !== "rust");
+  const alleItems = r.items.filter(i => i.soort !== "rust");
+  const items = alleItems.filter(nietOvergeslagen(iso));
   host.innerHTML = `
     <div class="pg-kop"><h2>${iso === vandaagIso() ? "Vandaag" : hoofdletter(dagNaam(iso))}<span>${kortDatum(iso)}</span></h2>
       <div class="pg-kop-acties">
@@ -9723,7 +9751,8 @@ function renderTrainingRoute() {
         <button class="u-icoonknop" data-week="7" aria-label="Volgende week">${ic("volgende")}</button></div></div>
     ${uiWeekstrook(weekDagen(ma, iso), iso)}
     <div class="tk-lijst">${items.length ? items.map(i => trainingKaart(iso, i)).join("")
-      : `<p class="u-leeg">${ic("bed")}Geen training gepland op ${dagNaam(iso)}.</p>`}</div>
+      : `<p class="u-leeg">${ic("bed")}${alleItems.length ? `Niets meer open op ${dagNaam(iso)}.` : `Geen training gepland op ${dagNaam(iso)}.`}</p>`}</div>
+    ${overgeslagenRegel(iso, alleItems)}
     ${iso <= vandaagIso() ? ongeplandHtml(iso) : ""}
     ${iso <= vandaagIso() ? `<button class="u-knop u-knop--stil u-knop--rand" data-toevoegen="${iso}">${ic("plus")}Training toevoegen</button>` : ""}`;
   host.querySelectorAll("[data-dag]").forEach(b => b.onclick = () => { ROUTE_DAG = b.dataset.dag; renderTrainingRoute(); renderTrainingMeet(); });
@@ -9732,6 +9761,7 @@ function renderTrainingRoute() {
   const tv = host.querySelector("[data-toevoegen]");
   if (tv) tv.onclick = () => trainingToevoegen(tv.dataset.toevoegen);
   host.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
+  overgeslagenKoppel(host);
   renderTrainingMeet();
 }
 
@@ -11432,6 +11462,20 @@ function ongeplandOp(d) {
   });
   return uit;
 }
+/* Overgeslagen sessies verdwijnen uit de lijsten; één regel eronder houdt
+   ze terug te vinden en terug te zetten. In de weekscore tellen ze gewoon. */
+const nietOvergeslagen = d => i => itemStatus(d, i).k !== "overgeslagen";
+function overgeslagenRegel(d, items) {
+  const weg = items.filter(i => itemStatus(d, i).k === "overgeslagen");
+  if (!weg.length) return "";
+  return `<p class="u-klein tk-weg">${weg.map(i => `<button class="u-link" data-overgeslagen="${d}|${i.id}">${i.titel.split(" · ")[0]} overgeslagen · terugzetten</button>`).join(" ")}</p>`;
+}
+function overgeslagenKoppel(host) {
+  host.querySelectorAll("[data-overgeslagen]").forEach(b => b.onclick = () => {
+    const [d, id] = b.dataset.overgeslagen.split("|");
+    planStatusZet(d, id, null); uiMelding("Teruggezet"); allesNaInvoer();
+  });
+}
 function ongeplandHtml(d) {
   const lijst = ongeplandOp(d);
   if (!lijst.length) return "";
@@ -11651,7 +11695,8 @@ function renderPlanNieuw() {
   const week = document.getElementById("plWeek");
   if (week) {
     const dagen = weekDagen(v, dag);
-    const items = dagRoute(dag, {alleenLezen: dag !== v}).items.filter(i => i.soort !== "rust");
+    const alleItems = dagRoute(dag, {alleenLezen: dag !== v}).items.filter(i => i.soort !== "rust");
+    const items = alleItems.filter(nietOvergeslagen(dag));
     week.innerHTML = `<div class="pg-kop"><h2>Komende 7 dagen</h2>
         <div class="pg-kop-acties" role="tablist">
           <button class="u-keuze" aria-pressed="${PLAN_WEERGAVE === "week"}" data-weergave="week">Week</button>
@@ -11666,10 +11711,11 @@ function renderPlanNieuw() {
             <span class="u-rij-tekst"><b>${i.titel}</b><span class="u-klein">${i.plek ? PLEK_KORT[i.plek] + " · " : ""}${i.voorschrift ? i.voorschrift.split(".")[0] : ""}</span></span>
             ${sessieStatusLabel(dag, s)}</button>`;
         }).join("") : ongeplandOp(dag).length ? "" : `<p class="u-leeg">${ic("bed")}Rust.</p>`}
-        ${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
+        ${overgeslagenRegel(dag, alleItems)}${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
     week.querySelectorAll("[data-pdag]").forEach(b => b.onclick = () => { PLAN_DAG = b.dataset.pdag; renderPlanNieuw(); });
     week.querySelectorAll("[data-weergave]").forEach(b => b.onclick = () => { PLAN_WEERGAVE = b.dataset.weergave; renderPlanNieuw(); });
     week.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
+    overgeslagenKoppel(week);
     week.querySelectorAll("[data-psessie]").forEach(b => b.onclick = () => {
       const [d, i] = sessieZoek(b.dataset.psessie);
       if (i) uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, trainingKaart(d, i) +
