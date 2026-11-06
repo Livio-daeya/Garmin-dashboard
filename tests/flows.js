@@ -223,19 +223,19 @@
     return {ok: titels.every(t => t === titels[0]), detail: titels.join(" | ")};
   });
 
-  await test("Weekscore: onzeker, goed, te licht, goed met minder, te zwaar", async () => {
+  await test("Weekscore: getal voor uitvoering, onbekend telt niet, nooit boven 100", async () => {
     const ma = maandagVan(V), di = "2026-11-03";
     const it = dagRoute(di, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
-    const k = () => weekScore(ma).kop;
+    const w = () => weekScore(ma);
+    const klopt = x => x.score == null || x.score === Math.min(100, Math.round(100 * (x.tel.gedaan + 0.5 * x.tel.deels) / (x.tel.gepland - x.tel.onbekend)));
+    it.forEach(i => planStatusZet(di, i.id, null)); const onb = w();
+    it.forEach(i => planStatusZet(di, i.id, "gedaan")); const goed = w();
+    it.forEach(i => planStatusZet(di, i.id, "overgeslagen")); const mis = w();
     it.forEach(i => planStatusZet(di, i.id, null));
-    const nu = k();
-    it.forEach(i => planStatusZet(di, i.id, "gedaan")); const goed = k();
-    it.forEach(i => planStatusZet(di, i.id, "overgeslagen")); const licht = k();
-    const c = checkLees(); ["2026-11-03", "2026-11-04"].forEach(d => { c[d] = {...(c[d] || {}), gevoel: 2, lijf: {benen: 2}}; }); checkZet(c);
-    const minder = k();
-    it.forEach(i => planStatusZet(di, i.id, "gedaan")); const zwaar = k();
-    return {ok: nu === "Nog onzeker" && goed === "Goed" && (licht === "Te licht" || licht.startsWith("Genoeg belasting, te weinig")) && minder === "Goed, met minder" && zwaar === "Te zwaar",
-      detail: [nu, goed, licht, minder, zwaar].join(" → ")};
+    const html = weekScoreHtml(mis, {kort: true});
+    const ok = onb.tel.onbekend >= it.length && goed.score > mis.score && [onb, goed, mis].every(klopt) && goed.score <= 100
+      && /Weekplan uitgevoerd/.test(html) && /ws-spoor/.test(html) && !/Te licht|Te zwaar/.test(html);
+    return {ok, detail: `onbekend ${onb.kop} (${onb.tel.onbekend} onbekend) → gedaan ${goed.kop} → overgeslagen ${mis.kop}; ${weekScoreKort(mis)}`};
   });
 
   await test("Sessie uit de planning halen telt overal mee en is terug te draaien", async () => {
@@ -249,27 +249,28 @@
     return {ok: weg && inWijz && terugOk, detail: `verwijderd ${weg}, bij wijzigingen ${inWijz}, terug ${terugOk} (gepland tot nu ${voor})`};
   });
 
-  await test("Weekscore per doel: wat mist, gevaar en opvang volgende week", async () => {
+  await test("Weekscore per doel: wat mist en volgende week weer oppakken, zonder garanties", async () => {
     const di = "2026-11-03", it = dagRoute(di, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
     it.forEach(i => planStatusZet(di, i.id, "overgeslagen"));
     const w = weekScore(maandagVan(V)), d = weekDoelen(w).filter(x => x.t.gemist);
     it.forEach(i => planStatusZet(di, i.id, null));
-    const ok = d.length > 0 && d.every(x => x.gevolg && /augustus 2027|patroon|goede keuze/.test(x.gevolg) && /Volgende week/.test(x.opvang) && /niet extra inhalen|coach/.test(x.opvang));
-    return {ok, detail: d.map(x => `${x.naam}: ${x.oordeel} | ${x.gevolg} | ${x.opvang}`).join(" || ")};
+    const ok = d.length > 0 && d.every(x => x.woord === "achter" && /Pak volgende week|coach/.test(x.tekst) && /Geen extra inhaaltraining|coach/.test(x.tekst) && !/gevaar|risico/.test(x.tekst));
+    return {ok, detail: d.map(x => `${x.naam}: ${x.woord} | ${x.tekst}`).join(" || ")};
   });
 
-  await test("Vermoeidheid: groen, oranje bij twee bronnen, rood bij drie", async () => {
-    const kopie = JSON.parse(JSON.stringify(DATA.daily)), c0 = JSON.parse(JSON.stringify(checkLees()));
-    const van = isoPlus(V, -6), rij = DATA.daily.filter(x => x.date >= van && x.date <= V);
-    const groen = vermoeidheid(V).niveau;
-    rij.slice(-4).forEach(x => { x.sleep_h = 5.2; });
-    const c = checkLees(); [V, isoPlus(V, -1)].forEach(d => { c[d] = {...(c[d] || {}), gevoel: 2}; }); checkZet(c);
-    const oranje = vermoeidheid(V).niveau;
-    const b = bandVan("hrv"); rij.forEach(x => { if (b && b.genoeg) x.hrv = Math.floor(b.onder) - 5; });
-    const rood = vermoeidheid(V).niveau;
-    renderVermoeidheid(); const kaart = !!document.querySelector("#hsVermoeid .vm-rood");
-    DATA.daily = kopie; checkZet(c0); renderVermoeidheid();
-    return {ok: groen === "groen" && oranje === "oranje" && rood === "rood" && kaart, detail: `${groen} → ${oranje} → ${rood}; rode kaart ${kaart}`};
+  await test("Herstelstatus: grijs zonder check-in, oranje bij aanhoudend gevoel, rood bij ziek of pijn", async () => {
+    const c0 = JSON.parse(JSON.stringify(checkLees()));
+    const zet = o => { checkZet(o); };
+    zet({}); const grijs = herstelStatus(V);
+    zet({[V]: {gevoel: 4, lijf: {benen: 0, energie: 1}}}); const normaal = herstelStatus(V).ind.gevoel.niveau;
+    zet({[V]: {gevoel: 1, lijf: {benen: 2}}, [isoPlus(V, -1)]: {gevoel: 2, lijf: {benen: 2}}}); const oranje = herstelStatus(V);
+    zet({[V]: {gevoel: 3, lijf: {ziek: 1}}}); const rood = herstelStatus(V).niveau;
+    zet({[V]: {gevoel: 4, lijf: {achilles: 2}}}); const pees = herstelStatus(V);
+    zet(c0); renderVermoeidheid();
+    const kaart = document.querySelector("#hsVermoeid .hs-kaart") && document.querySelectorAll("#hsVermoeid .hs-i").length === 4 && document.querySelectorAll("#hsVermoeid .hs-dag").length === 7;
+    const ok = grijs.niveau === "grijs" && /onbekend/.test(grijs.oorzaak) && ["groen", "blauw"].includes(normaal)
+      && oranje.niveau === "oranje" && /^Vandaag:/.test(oranje.actie) && rood === "rood" && pees.niveau === "rood" && pees.klachten.length === 1 && kaart;
+    return {ok, detail: `grijs "${grijs.oorzaak}"; gevoel normaal ${normaal}; ${oranje.niveau} "${oranje.actie}"; ziek ${rood}; pees ${pees.niveau}; kaart ${!!kaart}`};
   });
 
   terug();
