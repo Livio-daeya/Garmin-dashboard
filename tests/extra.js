@@ -159,10 +159,10 @@
       DATA.activities = [...echt.filter(a => a.date < ma || a.date > isoPlus(ma, 6)),
         act(9991001, ma, "18:00", "Kracht", "strength_training", 50, 40, 1.2, 0.3, "Kracht thuis"),
         act(9991002, di, "20:00", "Handbal", "basketball", 75, 130, 3.1, 1.8, "Zaaltraining"),
-        act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"),
+        {...act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"), hr_detail: {blokken_z3: [4, 4, 4, 4], blokken_z4: [3, 3.5, 3.5, 4], pieken_z4: 4}},
         act(9991004, dn, "20:00", "Handbal", "basketball", 75, 120, 3.0, 1.6, "Zaaltraining"),
         act(9991005, vr, "17:00", "Kracht", "strength_training", 40, 30, 1.0, 0.2, "Krachtsport"),
-        act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen")];
+        {...act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen"), hr_detail: {blokken_z3: [3, 3, 3, 3], blokken_z4: [2, 2, 2.5], pieken_z4: 6}}];
       HB_CACHE.clear();
       /* dinsdagochtend kracht zelf ingevuld; haltraining dinsdag niet gedaan */
       const diHal = dagRoute(di, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (diHal) planStatusZet(di, diHal.id, "overgeslagen");
@@ -193,10 +193,10 @@
     DATA.activities = [...echt.filter(a => a.date < ma || a.date > isoPlus(ma, 6)),
       act(9991001, ma, "18:00", "Kracht", "strength_training", 50, 40, 1.2, 0.3, "Kracht thuis"),
       act(9991002, di, "20:00", "Handbal", "basketball", 75, 130, 3.1, 1.8, "Zaaltraining", 55),
-      act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"),
+      {...act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"), hr_detail: {blokken_z3: [4, 4, 4, 4], blokken_z4: [3, 3.5, 3.5, 4], pieken_z4: 4}},
       act(9991004, dn, "20:00", "Handbal", "basketball", 75, 120, 3.0, 1.6, "Zaaltraining", extraOpties.doZaal ?? 60),
       act(9991005, vr, "17:00", "Kracht", "strength_training", 40, 30, 1.0, 0.2, "Krachtsport"),
-      act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen")].filter(a => a.date <= DATA.planbasis.vandaag);
+      {...act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen"), hr_detail: {blokken_z3: [3, 3, 3, 3], blokken_z4: [2, 2, 2.5], pieken_z4: 6}}].filter(a => a.date <= DATA.planbasis.vandaag);
     HB_CACHE.clear();
     const diHal = dagRoute(di, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (diHal) planStatusZet(di, diHal.id, "overgeslagen");
     const c = checkLees(); checkZet({...c, [di]: {...(c[di] || {}), sessies: [{sport: "Kracht", naam: "Kracht", minuten: 45, rpe: 7, handmatig: true, toegevoegd: true}]}});
@@ -307,6 +307,61 @@
     const r = leerLees()[vandaagIso()];
     return {ok: !!eerst && JSON.stringify(r.advies) === JSON.stringify(eerst) && r.adviesFeedback.gevolgd === "deels",
       detail: `oorspronkelijk ${eerst && eerst.titel} (${eerst && eerst.t.slice(11, 16)}); versies ${(r.adviesVersies || []).map(x => x.titel).join(", ") || "geen"}; antwoord ${r.adviesFeedback.gevolgd}`};
+  });
+  /* ---- workouts via de coach: RIR, sessies, koppeling ---- */
+  const wkRuw = (rir, naam = "bench press") => ({date: vrij, type: "kracht", workout: null, exercises: [{name: naam, sets: [{reps: 5, weight_kg: 80, ...(rir != null ? {rir} : {})}, {reps: 5, weight_kg: 80, ...(rir != null ? {rir} : {})}]}]});
+  await test("Geen genoemde RIR blijft onbekend en telt niet als bevestigd uitdagend", () => {
+    localStorage.removeItem(LOG_KEY);
+    const v = workoutVoorstelBouwen(wkRuw(null));
+    const o = Object.values(v.oefeningen)[0];
+    workoutWegschrijven(v); HB_CACHE.clear();
+    const K = trainingsAdvies(ma).kracht;
+    return {ok: o.rir === null && o.reeksen.every(x => x.rir === null) && v.rirBron === "niet genoemd" && K.uitdagend === 0 && K.zonderRir >= 2, detail: `rir ${o.rir}; uitdagend ${K.uitdagend}, zonder RIR ${K.zonderRir}`};
+  });
+  await test("Genoemde RIR blijft behouden en is zichtbaar vóór opslaan", () => {
+    const v = workoutVoorstelBouwen(wkRuw(2));
+    const html = workoutKaart(v, 0), o = Object.values(v.oefeningen)[0];
+    return {ok: o.rir === 2 && /@ RIR 2/.test(html) && /RIR zoals je hem noemde/.test(html), detail: `rir ${o.rir}, kaart toont RIR ${/@ RIR 2/.test(html)}`};
+  });
+  await test("Twee krachtsessies van hetzelfde type op dezelfde dag blijven apart; correctie raakt alleen de gekozen; herhaald bevestigen geeft geen dubbel", () => {
+    localStorage.removeItem(LOG_KEY);
+    const v1 = workoutVoorstelBouwen(wkRuw(2)), v2 = workoutVoorstelBouwen(wkRuw(1, "pull-ups"));
+    workoutWegschrijven(v1); workoutWegschrijven(v2);
+    const na2 = lijstLees(LOG_KEY);
+    const dubbel = workoutWegschrijven(v2), na3 = lijstLees(LOG_KEY);
+    const kaart = workoutKaart(workoutVoorstelBouwen(wkRuw(3)), 0);
+    const v3 = workoutVoorstelBouwen(wkRuw(3));
+    workoutWegschrijven(v3, na2[0].sessieId);
+    const na4 = lijstLees(LOG_KEY);
+    const een = na4.find(x => x.sessieId === na2[0].sessieId), twee = na4.find(x => x.sessieId === na2[1].sessieId);
+    const ok = na2.length === 2 && na2[0].sessieId !== na2[1].sessieId && dubbel.dubbel && na3.length === 2 && /Als nieuwe sessie opslaan/.test(kaart) && /Vervang/.test(kaart)
+      && na4.length === 2 && Object.values(een.oefeningen)[0].rir === 3 && (een.historie || []).length === 1 && JSON.stringify(twee.oefeningen) === JSON.stringify(na2[1].oefeningen);
+    return {ok, detail: `na twee: ${na2.length}; opnieuw bevestigen: ${na3.length} (dubbel ${!!dubbel.dubbel}); na correctie: ${na4.length}, historie ${(een.historie || []).length}, andere sessie ongewijzigd ${JSON.stringify(twee.oefeningen) === JSON.stringify(na2[1].oefeningen)}`};
+  });
+  await test("Een onduidelijke Garmin-koppeling wordt niet automatisch de langste sessie", () => {
+    DATA.activities = [...echt, {id: 9994001, date: vrij, datetime: `${vrij}T07:00:00`, sport: "Kracht", type_key: "strength_training", duration_s: 1800, load: 20},
+      {id: 9994002, date: vrij, datetime: `${vrij}T19:00:00`, sport: "Kracht", type_key: "strength_training", duration_s: 3600, load: 40}];
+    const v = workoutVoorstelBouwen(wkRuw(null)), html = workoutKaart(v, 0);
+    return {ok: v.sessie === null && v.kandidaten.length >= 2 && /welke Garmin-sessie hoort hierbij/.test(html), detail: `${v.kandidaten.length} kandidaten, koppeling ${v.sessie ? v.sessie.id : "niet automatisch"}`};
+  });
+  await test("Hoog aeroob Training Effect zonder inhoudelijke gegevens wordt niet automatisch langer intensief", () => {
+    const a = {id: 9994101, date: vrij, datetime: `${vrij}T18:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 2700, aerobic_te: 4.2, anaerobic_te: 2.5, load: 90};
+    DATA.activities = [...echt, a]; HB_CACHE.clear();
+    const k = conditieInhoud(a), adv = trainingsAdvies(ma), x = adv.conditie.lijst.find(y => y.a.id === 9994101);
+    return {ok: k.soort === "inhoud niet vastgesteld" && x && x.soort === "inhoud niet vastgesteld" && adv.belasting.garminPunten >= 0, detail: `${k.soort} (${k.bron}); ${k.steun.join("; ")}`};
+  });
+  await test("Gecorrigeerde gegevens werken door: advies, krachtvolume, coach, leerlus; oude coach-RIR onzeker", () => {
+    localStorage.removeItem(LOG_KEY);
+    /* een oude coachregel met standaard-RIR 2, zoals die vóór 7-11 werd opgeslagen */
+    lijstZet(LOG_KEY, [{type: "los", datum: vrij, bron: "coach", oefeningen: {bench: {kg: 80, reps: 5, sets: 3, rir: 2, reeksen: [{reps: 5, kg: 80}, {reps: 5, kg: 80}, {reps: 5, kg: 80}]}}}]);
+    workoutWegschrijven(workoutVoorstelBouwen(wkRuw(1, "pull-ups"))); HB_CACHE.clear();
+    const oud = logLees().find(x => x.bron === "coach" && !x.rirBron);
+    const K = trainingsAdvies(ma).kracht, vol = weekVolume(), comb = dagCombinatie(vrij);
+    const coach = coachContext().trainingsadvies.kracht;
+    const ok = oud.rirOnzeker && oud.oefeningen.bench.rir === null && oud.oefeningen.bench.rirOrigineel === 2
+      && K.rirOnzeker === 3 && K.uitdagend === 2 && K.dagen.some(x => x.d === vrij && x.bron.includes("krachtlog")) && Object.keys(vol).length > 0
+      && coach.uitdagende_sets === 2 && comb.gelogdeKracht === true;
+    return {ok, detail: `oude RIR onzeker (origineel ${oud.oefeningen.bench.rirOrigineel}); uitdagend ${K.uitdagend} (alleen genoemde RIR 1), onzeker ${K.rirOnzeker}; volume ${Object.keys(vol).join(",")}; coach ${coach.uitdagende_sets}; leerlus gelogd ${comb.gelogdeKracht}`};
   });
   herstel(); allesHertekenen();
   return uit;

@@ -71,7 +71,7 @@ export const GEREEDSCHAP = [
     input_schema: {type: "object", properties: {datum: {type: "string"}, onderwerp: {type: "string"}, tekst: {type: "string"}}, required: ["datum", "tekst"], additionalProperties: false}},
   {name: "stel_workout_voor", description: "Een krachtworkout die hij beschrijft klaarzetten voor zijn krachtlog. Hij bevestigt hem zelf in het dashboard; dit schrijft nog niets weg.",
     input_schema: {type: "object", properties: {date: {type: "string"}, type: {type: "string", enum: ["kracht", "conditie"]}, workout: {type: ["string", "null"]},
-      exercises: {type: "array", items: {type: "object", properties: {name: {type: "string"}, sets: {type: "array", items: {type: "object", properties: {reps: {type: "integer"}, weight_kg: {type: ["number", "null"]}}, required: ["reps"], additionalProperties: false}}}, required: ["name", "sets"], additionalProperties: false}}},
+      exercises: {type: "array", items: {type: "object", properties: {name: {type: "string"}, sets: {type: "array", items: {type: "object", properties: {reps: {type: "integer"}, weight_kg: {type: ["number", "null"]}, rir: {type: "integer", minimum: 0, maximum: 10, description: "alleen als hij het noemde; anders weglaten"}}, required: ["reps"], additionalProperties: false}}}, required: ["name", "sets"], additionalProperties: false}}},
       required: ["date", "type", "exercises"], additionalProperties: false}},
 ];
 
@@ -143,7 +143,10 @@ export async function voerUit(db, naam, invoer, nu = Date.now()) {
     if (!VAKKEN.includes(invoer.vak)) return {fout: "onbekend vak"};
     const rijen = await db.lees("records", `select=sleutel,data&vak=eq.${invoer.vak}&order=sleutel.asc`);
     const lijst = rijen.filter(r => !(r.data && r.data._weg) && recordInPeriode(r, invoer.van, invoer.tot))
-      .map(r => { const d = {...r.data}; ["_basis", "_conflicten", "_ongesync"].forEach(k => delete d[k]); return {sleutel: r.sleutel, ...d}; });
+      .map(r => { const d = {...r.data}; ["_basis", "_conflicten", "_ongesync"].forEach(k => delete d[k]);
+        /* oude coachinvoer kreeg standaard RIR 2: onzeker, niet als bevestigd behandelen */
+        if (invoer.vak === "log" && d.bron === "coach" && !d.rirBron) d.rir_onzeker = "RIR van vóór 7-11-2026 mogelijk een standaardwaarde, niet door hem genoemd";
+        return {sleutel: r.sleutel, ...d}; });
     return {aantal: lijst.length, records: lijst.slice(-60)};
   }
   if (naam === "bewaar_sessie" || naam === "bewaar_checkin") {

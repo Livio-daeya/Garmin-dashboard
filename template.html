@@ -4621,7 +4621,21 @@ function faseNu(iso) {
   return {code, naam: FASE_NAAM[code], tot, dagenTot: tot ? tussen(dag, tot) : null,
           dagenTotDoel: doel && dag <= doel ? tussen(dag, doel) : null, doelDatum: doel};
 }
-const logLees     = () => lijstLees(LOG_KEY);
+/* Coachinvoer van vóór 7-11-2026 kreeg standaard RIR 2, ook als je niets
+   noemde. Die herkomst is niet te reconstrueren: bij het lezen wordt zo'n
+   RIR als onbekend behandeld (rirOnzeker), de opgeslagen waarde blijft als
+   rirOrigineel bewaard. Echte invoer wordt niet verwijderd. */
+function rirHerkomst(r) {
+  if (!r || r.bron !== "coach" || r.rirBron) return r;
+  let geraakt = false;
+  /* de oude koppeling koos bij meer kandidaten de langste sessie: dan onzeker */
+  try { if (r.sessie && sessieKandidaten(r.datum, r.soort === "conditie" ? "conditie" : "kracht").length > 1) { r = {...r, koppelingOnzeker: true}; } } catch (e) { /* zonder data */ }
+  const oef = Object.fromEntries(Object.entries(r.oefeningen || {}).map(([k, o]) => {
+    if (o && o.rir != null) { geraakt = true; return [k, {...o, rir: null, rirOrigineel: o.rir}]; }
+    return [k, o]; }));
+  return geraakt ? {...r, oefeningen: oef, rirOnzeker: true} : r;
+}
+const logLees     = () => lijstLees(LOG_KEY).map(rirHerkomst);
 const logZet      = a => lijstZet(LOG_KEY, a);
 
 /* -----------------------------------------------------------------------
@@ -11067,7 +11081,7 @@ function dagCombinatie(d) {
   const kracht = acts.some(a => a.sport === "Kracht") || extra.some(x => x.doel === "kracht") || items.some(i => i.soort === "kracht" && itemStatus(d, i).k === "gedaan");
   const zaal = acts.some(a => a.sport === "Handbal");
   const tijden = acts.map(a => a.datetime && a.datetime.length > 10 ? new Date(a.datetime).getTime() : null).filter(Boolean).sort();
-  const intensief = x => (DATA.activities || []).some(a => a.date === x && (a.sport === "Handbal" || (a.aerobic_te || 0) >= 3 || (a.anaerobic_te || 0) >= 2));
+  const intensief = x => (DATA.activities || []).some(a => a.date === x && (a.sport === "Handbal" || (CONDITIE_TYPE.test(a.type_key || "") && /intensief/.test(conditieInhoud(a).soort))));
   let opRij = 0; for (let n = 0; n < 7; n++) { if (intensief(isoPlus(d, -n))) opRij++; else break; }
   const wed = [0, 1, 2, 3, 4, 5, 6, 7].map(n => isoPlus(d, n)).find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort === "wedstrijd"));
   const c = checkLees()[d] || {};
@@ -11905,6 +11919,37 @@ const TA_STATUS = {
   blauw: "Aanvullende prikkel zinvol", groen: "Prikkel passend", oranje: "Belasting begrenzen",
   rood: "Training aanpassen", grijs: "Nog niet te beoordelen",
 };
+/* Wat een conditiesessie inhoudelijk was, uit werkelijke informatie:
+   1. je bevestigde workout (soort en werkminuten),
+   2. werkblokken in je hartslag (aaneengesloten tijd boven zone 3 of 4),
+   3. tijd per hartslagzone.
+   Training Effect en je zwaarte-feedback zijn aanvullend, nooit zelfstandig
+   beslissend. Te weinig informatie: "inhoud niet betrouwbaar vastgesteld";
+   de sessie telt dan wel als uitgevoerd en in je totale belasting.
+   Grenzen [modelkeuze]: langer intensief bij minstens 10 min in blokken
+   boven zone 3 of 6 min boven zone 4, of 12 min in zone 4-5; kort intensief
+   bij minstens 6 pieken in zone 4 zonder lange blokken; rustig bij 80% of
+   meer in zone 1-2 en minder dan 3 min in zone 4-5. */
+function conditieInhoud(a) {
+  const bev = uitgevoerdLees().find(x => String(x.activiteit) === String(a.id));
+  const fb = ((checkLees()[a.date] || {}).sessies || []).find(x => x.sport === a.sport && x.rpe != null);
+  const steun = [a.aerobic_te != null ? `Training Effect aeroob ${komma(a.aerobic_te.toFixed(1))}, anaeroob ${komma((a.anaerobic_te || 0).toFixed(1))} (aanvullend)` : null,
+    fb ? `jouw zwaarte ${fb.rpe}/10` : null].filter(Boolean);
+  if (bev) return {soort: bev.soort === "laag" ? "rustig" : bev.soort === "ana" ? "kort intensief" : "langer intensief", bron: `bevestigde workout${bev.werk ? ` (${bev.werk} werkmin)` : ""}`, steun};
+  const det = a.hr_detail;
+  const z = [a.z1_s, a.z2_s, a.z3_s, a.z4_s, a.z5_s].map(x => x || 0), zt = z.reduce((t, x) => t + x, 0);
+  const z45 = (z[3] + z[4]) / 60;
+  if (det) {
+    const b3 = (det.blokken_z3 || []).reduce((t, x) => t + x, 0), b4 = (det.blokken_z4 || []).reduce((t, x) => t + x, 0);
+    if (b3 >= 10 || b4 >= 6) return {soort: "langer intensief", bron: `werkblokken: ${komma(hbRond(b3, 1))} min boven zone 3, ${komma(hbRond(b4, 1))} min boven zone 4`, steun};
+    if ((det.pieken_z4 || 0) >= 6) return {soort: "kort intensief", bron: `${det.pieken_z4} korte pieken in zone 4`, steun};
+    if (zt && (z[0] + z[1]) / zt >= 0.8 && z45 < 3) return {soort: "rustig", bron: "vooral zone 1–2, geen werkblokken", steun};
+  } else if (zt) {
+    if (z45 >= 12) return {soort: "langer intensief", bron: `${Math.round(z45)} min in zone 4–5 (zonder blokstructuur)`, steun};
+    if ((z[0] + z[1]) / zt >= 0.8 && z45 < 3) return {soort: "rustig", bron: "vooral zone 1–2", steun};
+  }
+  return {soort: "inhoud niet vastgesteld", bron: det || zt ? "hartslag niet eenduidig" : "geen werkblokken of zones beschikbaar", steun};
+}
 function trainingsAdvies(ma) {
   const v = vandaagIso(); ma = ma || maandagVan(v);
   const zo = isoPlus(ma, 6), tot = zo < v ? zo : v, lopend = zo >= v;
@@ -11923,10 +11968,9 @@ function trainingsAdvies(ma) {
 
   /* conditie */
   const cond = acts.filter(a => CONDITIE_TYPE.test(a.type_key || "") && (a.duration_s || 0) >= 10 * 60);
-  const soortCond = a => (a.aerobic_te || 0) >= 3 ? "langer intensief" : (a.anaerobic_te || 0) >= 2 ? "kort intensief" : "rustig";
-  const condLijst = cond.map(a => { const e = extra.find(x => x.act && x.act.id === a.id) || {};
-    return {a, d: a.date, soort: soortCond(a), vervangt: e.vervangt || null, vraag: e.vervangVraag ? e.vervangVraag.titel : null}; });
-  const intensief = condLijst.filter(x => x.soort !== "rustig");
+  const condLijst = cond.map(a => { const e = extra.find(x => x.act && x.act.id === a.id) || {}, k = conditieInhoud(a);
+    return {a, d: a.date, soort: k.soort, bron: k.bron, steun: k.steun, vervangt: e.vervangt || null, vraag: e.vervangVraag ? e.vervangVraag.titel : null}; });
+  const intensief = condLijst.filter(x => x.soort === "langer intensief" || x.soort === "kort intensief");
   const condLater = later.filter(x => ["hoog", "ana"].includes(x.i.soort));
   const conditie = {lijst: condLijst, intensief: intensief.length, geleverd: intensief.length > 0, later: condLater};
 
@@ -11938,13 +11982,15 @@ function trainingsAdvies(ma) {
   extra.filter(x => x.doel === "kracht" && x.bron === "eigen").forEach(x => zet(x.d, "zelf ingevuld"));
   items.filter(x => x.i.soort === "kracht" && x.st.k === "gedaan").forEach(x => zet(x.d, x.st.eigen ? "zelf bevestigd" : "plan"));
   const logs = logLees().filter(x => x.datum >= ma && x.datum <= tot);
-  const sets = logs.flatMap(x => Object.entries(x.oefeningen || {}).flatMap(([k, o]) => (o.reeksen && o.reeksen.length ? o.reeksen : Array.from({length: o.sets || 0}, () => ({}))).map(r => ({k, rir: r.rir ?? o.rir}))));
+  const sets = logs.flatMap(x => Object.entries(x.oefeningen || {}).flatMap(([k, o]) => (o.reeksen && o.reeksen.length ? o.reeksen : Array.from({length: o.sets || 0}, () => ({})))
+    .map(r => ({k, rir: x.rirOnzeker ? null : (r.rir ?? o.rir), onzeker: !!x.rirOnzeker}))));
   const rirGetal = x => typeof x === "number" ? x : (m => m ? Number(m[1]) : null)(String(x ?? "").match(/(\d+)/));
   const uitdagend = sets.filter(x => rirGetal(x.rir) != null && rirGetal(x.rir) <= 3).length;
   const zonderRir = sets.filter(x => rirGetal(x.rir) == null).length;
+  const rirOnzeker = sets.filter(x => x.onzeker).length;
   const spieren = weekVolume();
   const kracht = {sessies: krachtDagen.size, dagen: [...krachtDagen.entries()].map(([d, b]) => ({d, bron: [...b]})).sort((a, b) => a.d.localeCompare(b.d)),
-    sets: sets.length, uitdagend, zonderRir, spieren, geleverd: krachtDagen.size > 0, later: later.filter(x => x.i.soort === "kracht"), gelogd: logs.length > 0};
+    sets: sets.length, uitdagend, zonderRir, rirOnzeker, spieren, geleverd: krachtDagen.size > 0, later: later.filter(x => x.i.soort === "kracht"), gelogd: logs.length > 0};
 
   /* handbal */
   const hb = items.filter(x => ["handbal", "wedstrijd"].includes(x.i.soort));
@@ -12002,7 +12048,7 @@ function trainingsAdvies(ma) {
   const ongeplandWezenlijk = garminPunten > 0 && ongeplandPunten > 0.2 * garminPunten;
   const afwijking = bovenGewoon && (bovenPlan === true || ongeplandWezenlijk);
   /* zware dagen achter elkaar: intensieve conditie, handbal of kracht */
-  const zwareDag = d => acts.some(a => a.date === d && (a.sport === "Handbal" || (a.aerobic_te || 0) >= 3 || (a.anaerobic_te || 0) >= 2))
+  const zwareDag = d => acts.some(a => a.date === d && (a.sport === "Handbal" || (CONDITIE_TYPE.test(a.type_key || "") && /intensief/.test(conditieInhoud(a).soort))))
     || extra.some(x => x.d === d && x.doel === "kracht") || items.some(x => x.d === d && x.i.soort === "kracht" && x.st.k === "gedaan");
   let opRij = 0; for (let n = 0; n < 7; n++) { if (zwareDag(isoPlus(v, -n))) opRij++; else break; }
   const zwaar = afwijking && (opRij >= 3 || (wedstrijd != null && totWedstrijd <= 2) || hk.ind.prestatie.ongunstig);
@@ -12025,7 +12071,7 @@ function trainingsAdvies(ma) {
   let status, reden, actie;
   const wedWoord = wedstrijd ? `je wedstrijd ${dagWoord(wedstrijd, totWedstrijd)}` : null;
   function wedWoordVoor() { return wedWoord; }
-  const samen = `${conditie.intensief ? `${conditie.intensief} intensieve conditieprikkel${conditie.intensief > 1 ? "s" : ""}` : "geen intensieve conditieprikkel"}${condLijst.length > conditie.intensief ? ` en ${condLijst.length - conditie.intensief} rustig` : ""}, ${kracht.sessies} krachtsessie${kracht.sessies === 1 ? "" : "s"}${handbal.gedaan ? `, ${handbal.gedaan} keer handbal` : ""}`;
+  const samen = `${conditie.intensief ? `${conditie.intensief} intensieve conditieprikkel${conditie.intensief > 1 ? "s" : ""}` : "geen intensieve conditieprikkel"}${(n => n ? ` en ${n} rustig` : "")(condLijst.filter(x => x.soort === "rustig").length)}${(n => n ? `, ${n} conditiesessie${n > 1 ? "s" : ""} met onbekende inhoud` : "")(condLijst.filter(x => x.soort === "inhoud niet vastgesteld").length)}, ${kracht.sessies} krachtsessie${kracht.sessies === 1 ? "" : "s"}${handbal.gedaan ? `, ${handbal.gedaan} keer handbal` : ""}`;
   if (hk.niveau === "rood") {
     status = "rood"; reden = hk.oorzaak || hk.regel; actie = hk.actie || "Volg de aanpassing bij Herstel.";
   } else if (niets) {
@@ -12126,16 +12172,16 @@ function adviesHtml(a, opties = {}) {
   const benenTekst = B.benen48 === undefined ? "lokale beenbelasting onbekend (geen krachtlog)" : B.benen48 ? `zwaar beenwerk op ${kortDatum(B.benen48)} (laatste 48 uur)` : "geen zwaar beenwerk in de laatste 48 uur";
   return `<div class="ta">${kop}
     <h4 class="ws-sub">Conditie</h4>
-    ${C.lijst.length ? `<ul class="u-lijst u-lijst--tekst">${C.lijst.map(x => `<li><b>${d(x.d)}</b> ${x.a.name || x.a.sport} · ${Math.round((x.a.duration_s || 0) / 60)} min · ${x.soort}${te(x.a) ? ` (${te(x.a)})` : ""}${x.vervangt ? ` · vervanging van ${x.vervangt.toLowerCase()}` : x.vraag ? ` · vervanging van ${x.vraag.toLowerCase()}? (bevestig bij Training)` : ""}</li>`).join("")}</ul>` : `<p class="u-klein">Nog geen loop-, fiets- of roeisessie deze week.</p>`}
+    ${C.lijst.length ? `<ul class="u-lijst u-lijst--tekst">${C.lijst.map(x => `<li><b>${d(x.d)}</b> ${x.a.name || x.a.sport} · ${Math.round((x.a.duration_s || 0) / 60)} min · ${x.soort}<span class="u-klein"> (${x.bron}${x.steun.length ? `; ${x.steun.join("; ")}` : ""})</span>${x.vervangt ? ` · vervanging van ${x.vervangt.toLowerCase()}` : x.vraag ? ` · vervanging van ${x.vraag.toLowerCase()}? (bevestig bij Training)` : ""}</li>`).join("")}</ul>` : `<p class="u-klein">Nog geen loop-, fiets- of roeisessie deze week.</p>`}
     <p><b>Prikkel:</b> ${C.geleverd ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""}; langer aanhoudend intensief werk is wat je Coopertest en de Yo-Yo IR2 vragen.` : C.later.length ? `nog geen intensieve prikkel; gepland: ${zinLijst(C.later.map(x => `${x.i.titel.split(" · ")[0].toLowerCase()} ${dagWoord(x.d, dagVerschil(vandaagIso(), x.d))}`))}.` : "geen intensieve conditieprikkel deze week."}<br>
       <b>Vervolg:</b> extra conditiewerk ${condV[0]}; ${condV[1]}.</p>
-    <p class="u-klein">Intensief = Training Effect aeroob 3 of hoger (langer) of anaeroob 2 of hoger (kort) [modelkeuze]. Of je VO2max stijgt, blijkt pas over weken, uit je tests.</p>
+    <p class="u-klein">De soort komt uit je bevestigde workout, werkblokken in je hartslag of tijd per zone; Training Effect en je zwaarte zijn aanvullend. "Inhoud niet vastgesteld" telt wel als uitgevoerd en in je belasting, niet als intensieve prikkel. Of je VO2max stijgt, blijkt pas over weken, uit je tests.</p>
     <h4 class="ws-sub">Je week, per sessie</h4>
     <div class="ta-week">${a.sessies.map(x => `<div class="ta-rij"><b>${d(x.d)}</b><span>${x.wat}<span class="u-klein"> · ${x.status}${x.inhoud ? ` · ${x.inhoud}` : ""}${x.bron ? ` · ${x.bron}` : ""}</span></span></div>`).join("") || `<p class="u-klein">Nog niets deze week.</p>`}</div>
     ${a.extra.some(x => x.vervangVraag) ? `<p class="u-klein">Een training op de dag van een overgeslagen sessie telt pas als vervanging als jij dat bevestigt, bij Training of Plan op die dag.</p>` : ""}
     <h4 class="ws-sub">Kracht</h4>
     ${K.dagen.length ? `<ul class="u-lijst u-lijst--tekst">${K.dagen.map(x => `<li><b>${d(x.d)}</b> ${x.bron.join(", ")}</li>`).join("")}</ul>` : `<p class="u-klein">Geen krachtsessie deze week.</p>`}
-    <p>${K.gelogd ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"}, ${K.sets} gelogde sets; ${K.uitdagend} met RIR 3 of minder${K.zonderRir ? `, ${K.zonderRir} zonder RIR` : ""}. RIR 3 of minder is een telcategorie, geen grens tussen zinvol en zinloos: werk verder van falen hoort ook bij kracht- en explosiviteitstraining.`
+    <p>${K.gelogd ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"}, ${K.sets} gelogde sets; ${K.uitdagend} met RIR 3 of minder${K.zonderRir ? `, ${K.zonderRir} zonder RIR${K.rirOnzeker ? ` (waarvan ${K.rirOnzeker} met een RIR van vóór 7-11 die mogelijk een standaardwaarde was)` : ""}` : ""}. RIR 3 of minder is een telcategorie, geen grens tussen zinvol en zinloos: werk verder van falen hoort ook bij kracht- en explosiviteitstraining.`
       : K.sessies ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"} bevestigd. Omvang en prikkel nog onvoldoende bekend: niets in je krachtlog.` : ""}
       ${topSpieren.length ? `<br><span class="u-klein">Sets per spiergroep (laatste 7 dagen, indirect telt half): ${topSpieren.map(([k, n]) => `${k} ${komma(hbRond(n, 1))}`).join(" · ")}</span>` : ""}</p>
     <p><b>Prikkel:</b> ${K.sessies ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"}${K.gelogd ? ", inhoud in je krachtlog (zie hierboven)" : ", omvang en prikkel nog onvoldoende bekend"}` : "geen krachtsessie"}; ${benenTekst}.<br>
@@ -15710,11 +15756,20 @@ function coachTeken() {
   /* Pas na jouw bevestiging naar het logboek. Een verkeerd uitgelezen zin
      die er stilzwijgend in verdwijnt vervuilt je gewichten en je volume; dat
      merk je pas weken later. */
+  log.querySelectorAll("[data-wkkoppel]").forEach(b => b.onclick = () => {
+    const [i, id] = b.dataset.wkkoppel.split("|"); const blok = COACH_GESPREK[Number(i)];
+    if (!blok || !blok.workout) return;
+    blok.workout.sessie = id ? (DATA.activities || []).find(a => String(a.id) === id) || null : null;
+    blok.workout.kandidaten = id ? blok.workout.kandidaten : [];
+    coachTeken();
+  });
   log.querySelectorAll("[data-wkja]").forEach(b => b.onclick = () => {
     tik(true);
-    const blok = COACH_GESPREK[Number(b.dataset.wkja)];
+    const [i, vervang] = b.dataset.wkja.split("|");
+    const blok = COACH_GESPREK[Number(i)];
     const kaart = b.closest(".voorstel");
-    if (blok && blok.workout && workoutWegschrijven(blok.workout)) {
+    const uit = blok && blok.workout ? workoutWegschrijven(blok.workout, vervang || null) : null;
+    if (uit && uit.ok) {
       kaart.classList.add("gedaan");
       kaart.querySelector(".k").textContent = "In je logboek gezet";
       kaart.querySelector(".knoppen").remove();
@@ -15786,8 +15841,9 @@ function lijktOpWorkout(tekst) {
 const WK_UITLEES = `Je leest een trainingsverslag uit en geeft ALLEEN JSON terug, zonder
 uitleg en zonder code-fences. Schema:
 {"date":"YYYY-MM-DD","type":"kracht"|"conditie","workout":"push"|"pull"|"boven"|"duur"|"vo2"|null,
- "exercises":[{"name":"...","sets":[{"reps":8,"weight_kg":10}]}]}
+ "exercises":[{"name":"...","sets":[{"reps":8,"weight_kg":10,"rir":2}]}]}
 Regels: reps is een geheel getal, weight_kg mag null zijn bij lichaamsgewicht.
+rir alleen als hij het noemt ("RIR 2", "2 in reserve", "@2"); noemt hij het niet, laat rir dan weg.
 "4x6 80kg" betekent vier sets van zes met 80 kg, dus vier identieke items in sets.
 Staat er geen datum in de tekst, gebruik dan de meegegeven datum van vandaag.
 Is het een loop- of fietssessie zonder oefeningen, zet exercises dan op [].
@@ -15839,12 +15895,15 @@ function oefeningZoeken(naam) {
 /* De Garmin-sessie van diezelfde dag erbij zoeken. Kracht koppelt aan een
    krachtsessie, conditie aan een loop of rit. Zijn het er meerdere, dan pakken
    we de langste -- dat is vrijwel altijd de sessie die je bedoelt. */
-function sessieZoeken(datum, soort) {
+function sessieKandidaten(datum, soort) {
   const wil = soort === "conditie" ? ["Hardlopen", "Fietsen"] : ["Kracht"];
-  const kandidaten = (DATA.activities || [])
-    .filter(a => a.date === datum && wil.includes(a.sport))
-    .sort((a, b) => (b.duration_s || 0) - (a.duration_s || 0));
-  return kandidaten[0] || null;
+  return (DATA.activities || []).filter(a => a.date === datum && wil.includes(a.sport))
+    .sort((a, b) => (a.datetime || "").localeCompare(b.datetime || ""));
+}
+/* Eén kandidaat: die. Meer dan één: geen gok, jij kiest. */
+function sessieZoeken(datum, soort) {
+  const k = sessieKandidaten(datum, soort);
+  return k.length === 1 ? k[0] : null;
 }
 
 /* Van de uitgelezen JSON naar iets dat je kunt nakijken en dat past in het
@@ -15859,13 +15918,16 @@ function workoutVoorstelBouwen(ruw) {
   (Array.isArray(ruw.exercises) ? ruw.exercises : []).forEach(o => {
     const sets = (Array.isArray(o.sets) ? o.sets : [])
       .map(x => ({reps: parseInt(x.reps, 10),
-                  kg: x.weight_kg == null ? null : parseFloat(x.weight_kg)}))
+                  kg: x.weight_kg == null ? null : parseFloat(x.weight_kg),
+                  rir: x.rir == null || x.rir === "" || !Number.isFinite(Number(x.rir)) ? null : Number(x.rir)}))
       .filter(x => Number.isFinite(x.reps) && x.reps > 0);
     if (!sets.length) return;
     const sleutel = oefeningZoeken(o.name);
     const top = sets.slice().sort((a, b) => (b.kg || 0) - (a.kg || 0) || b.reps - a.reps)[0];
     const id = sleutel || ("vrij:" + String(o.name || "eigen oefening").trim().toLowerCase());
-    oefeningen[id] = {kg: top.kg, reps: top.reps, sets: sets.length, rir: 2, reeksen: sets,
+    /* RIR alleen als je hem noemde; anders onbekend (nooit een standaardwaarde) */
+    const rirs = sets.map(x => x.rir).filter(x => x != null);
+    oefeningen[id] = {kg: top.kg, reps: top.reps, sets: sets.length, rir: top.rir ?? (rirs.length ? Math.min(...rirs) : null), reeksen: sets,
                       ...(sleutel ? {} : {naam: String(o.name || "Eigen oefening").trim()})};
     regels.push({naam: sleutel ? OEF[sleutel].naam : String(o.name || "").trim(),
                  herkend: !!sleutel, sets});
@@ -15874,8 +15936,13 @@ function workoutVoorstelBouwen(ruw) {
   /* Welk type workout het was. Staat het er niet bij, dan raden we het niet:
      "los" is een geldige waarde en houdt je logboek eerlijk. */
   const type = WORKOUTS[ruw.workout] ? ruw.workout : (soort === "conditie" ? "duur" : "los");
-  return {datum, soort, type, oefeningen, regels,
-          sessie: sessieZoeken(datum, soort),
+  const kandidaten = sessieKandidaten(datum, soort);
+  const rirGenoemd = Object.values(oefeningen).some(o => (o.reeksen || []).some(x => x.rir != null));
+  return {datum, soort, type, oefeningen, regels, rirBron: rirGenoemd ? "genoemd" : "niet genoemd",
+          voorstelId: `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+          kandidaten: kandidaten.map(a => ({id: a.id, sport: a.sport, datetime: a.datetime, minuten: Math.round((a.duration_s || 0) / 60), naam: a.name})),
+          /* alleen bij precies één kandidaat een koppeling; bij meer kies jij */
+          sessie: kandidaten.length === 1 ? kandidaten[0] : null,
           typeGeraden: !WORKOUTS[ruw.workout]};
 }
 
@@ -15901,13 +15968,21 @@ async function workoutUitlezen(tekst) {
 }
 
 function workoutKaart(v, i) {
+  const tijd = x => x && x.datetime ? new Date(x.datetime).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"}) : "";
   const rij = r => `${veiligeTekst(r.naam)}${r.herkend ? "" : " <em>(eigen oefening)</em>"}: ` +
-    r.sets.map(s => `${s.reps}${s.kg != null ? `×${s.kg} kg` : ""}`).join(", ");
+    r.sets.map(s => `${s.reps}${s.kg != null ? `×${s.kg} kg` : ""}${s.rir != null ? ` @ RIR ${s.rir}` : ""}`).join(", ");
+  const kand = v.kandidaten || [];
   const koppeling = v.sessie
-    ? `gekoppeld aan je ${veiligeTekst(v.sessie.sport.toLowerCase())}sessie van ` +
-      `${new Date(v.sessie.datetime).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"})}`
-    : `<b>niet gekoppeld</b> — geen ${v.soort === "conditie" ? "loop- of fietssessie" : "krachtsessie"}
-       van Garmin op ${veiligeTekst(v.datum)}`;
+    ? `gekoppeld aan je ${veiligeTekst(String(v.sessie.sport).toLowerCase())}sessie van ${tijd(v.sessie)}${kand.length > 1 ? " (door jou gekozen)" : ""}`
+    : kand.length > 1 ? `<b>welke Garmin-sessie hoort hierbij?</b> ${kand.map(k => `<button class="u-link" data-wkkoppel="${i}|${k.id}">${tijd(k)} · ${k.minuten} min</button>`).join(" · ")} · <button class="u-link" data-wkkoppel="${i}|">geen</button>`
+    : `<b>niet gekoppeld</b> — geen ${v.soort === "conditie" ? "loop- of fietssessie" : "krachtsessie"} van Garmin op ${veiligeTekst(v.datum)}`;
+  /* bestaande sessies op die dag: een tweede training is een eigen sessie;
+     vervangen alleen als jij die sessie kiest */
+  const bestaand = lijstLees(LOG_KEY).filter(x => x.datum === v.datum && (v.soort === "conditie" ? x.soort === "conditie" : x.soort !== "conditie"));
+  const knoppen = bestaand.length
+    ? `<button class="knop knop--primair knop--klein" data-wkja="${i}|">Als nieuwe sessie opslaan</button>
+       ${bestaand.map(x => `<button class="knop knop--secundair knop--klein" data-wkja="${i}|${x.sessieId || x._id}">Vervang ${veiligeTekst(WORKOUTS[x.type] ? WORKOUTS[x.type].naam : x.type || "sessie")} (${Object.keys(x.oefeningen || {}).length} oef.)</button>`).join("")}`
+    : `<button class="knop knop--primair knop--klein" data-wkja="${i}|">Klopt, zet in mijn logboek</button>`;
   return `<div class="voorstel" data-wk="${i}">
     <div class="k">Zo heb ik het begrepen</div>
     <div class="w">
@@ -15915,26 +15990,37 @@ function workoutKaart(v, i) {
       ${WORKOUTS[v.type] ? veiligeTekst(WORKOUTS[v.type].naam) : "losse sessie"}
       ${v.typeGeraden ? " <em>(type niet genoemd)</em>" : ""}<br>
       ${v.regels.length ? v.regels.map(rij).join("<br>") : "geen oefeningen, alleen de sessie"}
+      <br><small>${v.rirBron === "genoemd" ? "RIR zoals je hem noemde" : "RIR niet genoemd: blijft onbekend"}${bestaand.length ? ` · er staat al ${bestaand.length} sessie op deze dag` : ""}</small>
       <br><small>${koppeling}</small>
     </div>
-    <div class="knoppen">
-      <button class="knop knop--primair knop--klein" data-wkja="${i}">Klopt, zet in mijn logboek</button>
+    <div class="knoppen">${knoppen}
       <button class="knop knop--secundair knop--klein" data-wknee="${i}">Nee, laat maar</button>
     </div>
   </div>`;
 }
 
-function workoutWegschrijven(v) {
-  const log = logLees();
-  /* Zelfde soort workout op dezelfde dag overschrijft, net als in het
-     invulscherm -- anders staat hij er twee keer als je hem corrigeert. */
-  const idx = log.findIndex(x => x.type === v.type && x.datum === v.datum);
-  const item = {type: v.type, datum: v.datum, oefeningen: v.oefeningen,
-                bron: "coach", ...(v.sessie ? {sessie: v.sessie.id} : {})};
-  if (idx >= 0) log[idx] = item; else log.push(item);
-  logZet(log);
+/* Wegschrijven via dezelfde route als het krachtlog (lijstZet: id, herkomst,
+   synchronisatie). Vaste sessie-id; een tweede training op dezelfde dag is
+   een eigen sessie; vervangen alleen de gekozen sessie, met de vorige versie
+   in de historie. Hetzelfde voorstel twee keer bevestigen geeft geen dubbel. */
+function workoutWegschrijven(v, vervangId) {
+  const ruw = lijstLees(LOG_KEY);
+  if (v.voorstelId && ruw.some(x => x.voorstelId === v.voorstelId)) return {ok: true, dubbel: true};
+  const item = {type: v.type, datum: v.datum, soort: v.soort, oefeningen: v.oefeningen, bron: "coach", rirBron: v.rirBron || "niet genoemd",
+    voorstelId: v.voorstelId || null, opgeslagen: new Date().toISOString(), ...(v.sessie ? {sessie: v.sessie.id} : {})};
+  if (vervangId) {
+    const idx = ruw.findIndex(x => (x.sessieId || x._id) === vervangId);
+    if (idx < 0) return {ok: false, fout: "die sessie bestaat niet meer"};
+    const oud = ruw[idx];
+    const {historie, _t, _bron, _basis, _ongesync, _conflicten, ...vorige} = oud;
+    ruw[idx] = {...item, _id: oud._id, sessieId: oud.sessieId || oud._id,
+      historie: [...(historie || []), {...vorige, vervangen: new Date().toISOString()}].slice(-10)};
+  } else {
+    ruw.push({...item, sessieId: `wk-${v.datum}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`});
+  }
+  const ok = logZet(ruw) !== false;
   try { renderWorkout(); renderDoelen(); } catch (e) { /* ander tabblad, niet erg */ }
-  return true;
+  return {ok};
 }
 
 async function workoutHerkennen(vraag) {
