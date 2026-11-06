@@ -137,16 +137,53 @@
     const a = trainingsAdvies(ma);
     return {ok: ongeplandOp(d).some(x => x.doel === "kracht" && x.bron === "eigen") && a.kracht.dagen.some(x => x.d === d), detail: `${d}: ${JSON.stringify(a.kracht.dagen)}`};
   });
-  await test("Een ongeplande loop op de dag van een overgeslagen zaaltraining is een vervanging", () => {
+  await test("Een ongeplande loop op de dag van een overgeslagen zaaltraining is pas na bevestiging een vervanging", () => {
     const d = dagen.find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort === "handbal"));
     if (!d) return {ok: true, detail: "geen zaaltraining deze week"};
     const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort === "handbal");
     planStatusZet(d, it.id, "overgeslagen");
     DATA.activities = [...echt.filter(a => !(a.date === d && a.sport === "Handbal")), {id: 9990051, date: d, datetime: `${d}T18:00:00`, sport: "Hardlopen", type_key: "running", name: "Buitenintervallen", duration_s: 2700, aerobic_te: 3.6, anaerobic_te: 2.4, load: 120}];
     HB_CACHE.clear();
+    const voor = ongeplandOp(d).find(y => y.act && y.act.id === 9990051);
+    vervangingZet(`${d}|9990051`, it.id, "Zaaltraining", true); HB_CACHE.clear();
     const a = trainingsAdvies(ma), x = ongeplandOp(d).find(y => y.act && y.act.id === 9990051);
     const html = adviesHtml(a);
-    return {ok: !!x && !!x.vervangt && /vervanging van zaaltraining/.test(html) && /geen techniek/.test(html), detail: `${d}: vervangt ${x && x.vervangt}`};
+    return {ok: !!voor && !voor.vervangt && !!voor.vervangVraag && !!x && x.vervangt === "Zaaltraining" && /vervanging van zaaltraining/.test(html) && /geen techniek/.test(html),
+      detail: `${d}: eerst vraag "${voor && voor.vervangVraag && voor.vervangVraag.titel}", na bevestiging vervangt ${x && x.vervangt}`};
+  });
+  await test("Jouw beschreven week: 3 krachtsessies, 2 zaaltrainingen, loop als bevestigde vervanging, geen extra intensief werk richting de wedstrijd", () => {
+    const vr = isoPlus(ma, 4), di = isoPlus(ma, 1), wo = isoPlus(ma, 2), dn = isoPlus(ma, 3);
+    const oudV = DATA.planbasis.vandaag; DATA.planbasis.vandaag = vr;
+    try {
+      const act = (id, d, uur, sport, type, min, load, te, ana, naam) => ({id, date: d, datetime: `${d}T${uur}:00`, sport, type_key: type, name: naam, duration_s: min * 60, load, aerobic_te: te, anaerobic_te: ana});
+      DATA.activities = [...echt.filter(a => a.date < ma || a.date > isoPlus(ma, 6)),
+        act(9991001, ma, "18:00", "Kracht", "strength_training", 50, 40, 1.2, 0.3, "Kracht thuis"),
+        act(9991002, di, "20:00", "Handbal", "basketball", 75, 130, 3.1, 1.8, "Zaaltraining"),
+        act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"),
+        act(9991004, dn, "20:00", "Handbal", "basketball", 75, 120, 3.0, 1.6, "Zaaltraining"),
+        act(9991005, vr, "17:00", "Kracht", "strength_training", 40, 30, 1.0, 0.2, "Krachtsport"),
+        act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen")];
+      HB_CACHE.clear();
+      /* dinsdagochtend kracht zelf ingevuld; haltraining dinsdag niet gedaan */
+      const diHal = dagRoute(di, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (diHal) planStatusZet(di, diHal.id, "overgeslagen");
+      const dnHal = dagRoute(dn, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (dnHal) planStatusZet(dn, dnHal.id, "overgeslagen");
+      const c = checkLees(); checkZet({...c, [di]: {...(c[di] || {}), sessies: [{sport: "Kracht", naam: "Kracht", minuten: 45, rpe: 7, handmatig: true, toegevoegd: true}]}});
+      const vrZaal = dagRoute(vr, {alleenLezen: true}).items.find(i => i.soort === "handbal");
+      if (vrZaal) { planStatusZet(vr, vrZaal.id, "overgeslagen"); vervangingZet(`${vr}|9991006`, vrZaal.id, "Zaaltraining", true); }
+      HB_CACHE.clear();
+      const a = trainingsAdvies(ma);
+      const ok = a.kracht.sessies === 3 && a.handbal.gedaan === 2 && a.conditie.intensief >= 2 && a.conditie.lijst.some(x => x.vervangt === "Zaaltraining")
+        && ["oranje", "groen", "grijs"].includes(a.status) && a.status !== "blauw" && /Geen extra/.test(a.actie) && a.sessies.length >= 7;
+      return {ok, detail: `kracht ${a.kracht.sessies} (${a.kracht.dagen.map(x => x.d.slice(8) + ":" + x.bron.join("+")).join(" ")}), handbal ${a.handbal.gedaan}/${a.handbal.gepland}, intensief ${a.conditie.intensief}; ${a.status} "${a.titel}": ${a.reden} → ${a.actie} | belasting ${a.belasting.nu} (${a.belasting.verhouding}%), verwacht ${a.belasting.verwacht}, op rij ${a.belasting.opRij}`};
+    } finally { DATA.planbasis.vandaag = oudV; }
+  });
+  await test("Combinaties per dag worden vastgelegd, zonder conclusie", () => {
+    const d = isoPlus(vandaagIso(), -1);
+    const c = dagCombinatie(d);
+    herstelBewaar(herstelStatus(vandaagIso()));
+    const r = leerLees()[d];
+    return {ok: !!r && !!r.combinatie && "krachtEnZaal" in r.combinatie && "dagenTotWedstrijd" in r.combinatie && "daarna" in r && hbLeerStats().beoordelingen === Object.values(leerLees()).filter(x => !x.alleenContext).length,
+      detail: JSON.stringify(c).slice(0, 160)};
   });
   herstel(); allesHertekenen();
   return uit;
