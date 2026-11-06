@@ -1,0 +1,10 @@
+{
+  "name": "sportdashboard",
+  "private": true,
+  "type": "module",
+  "description": "Coach-API voor het sportdashboard (Vercel Functions). De pagina zelf is statisch.",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0"
+  }
+}

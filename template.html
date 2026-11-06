@@ -677,6 +677,9 @@ body.up-open { overflow: hidden; }
 /* ---- Coach ---- */
 .coach-context { margin: var(--sp3) 0; padding: var(--sp2) var(--sp3); border: 1px solid var(--hair-strong); border-radius: var(--r-md); }
 .coach-kern p { margin: 0 0 6px; display: flex; gap: 6px; align-items: flex-start; }
+.coach-acties { display: flex; flex-direction: column; gap: 4px; margin-top: var(--sp2); font-size: var(--t-klein); color: var(--ink-2); }
+.coach-acties .coach-vast { display: flex; gap: 6px; align-items: flex-start; color: var(--ink); }
+.coach-acties .ic { width: 14px; height: 14px; margin-top: 2px; flex: none; }
 .coach-kern .ic { width: 16px; height: 16px; margin-top: 3px; }
 .coach-onder summary { cursor: pointer; color: var(--ink-2); min-height: 36px; display: flex; align-items: center; }
 .coach-kopie { margin-top: var(--sp3); }
@@ -5349,7 +5352,11 @@ const SYNC_VAKKEN = {
   /* de leerlus: per dag de beoordeling, verwachtingen, uitkomst en jouw
      terugkoppeling; zo leert de app op telefoon en browser hetzelfde */
   leer:   {sleutel: () => LEER_KEY,   vorm: "kaart"},
+  /* aanpassingen die je in een workout maakte, en wat de coach vastlegde */
+  wkaan:  {sleutel: () => WKAAN_KEY,  vorm: "kaart"},
+  notitie:{sleutel: () => NOTITIE_KEY, vorm: "kaart"},
 };
+const NOTITIE_KEY = "sportdashboard.notities.v1";
 
 const SYNC = {
   aan: false, bezig: false, laatst: null, fout: null,
@@ -5366,8 +5373,12 @@ function syncInit() {
   const eigen = bewaardLees("sportdashboard.sync.v1", {});
   SYNC.gist  = eigen.gist  || c.gist  || null;
   SYNC.token = eigen.token || c.token || null;
-  SYNC.aan = !!(SYNC.gist && SYNC.token);
+  /* Ingelogd bij Supabase: dat gaat voor de gist (live, met inlog) */
+  SYNC.via = (typeof SUPA !== "undefined" && SUPA.sessie) ? "supabase" : (SYNC.gist && SYNC.token) ? "gist" : null;
+  SYNC.aan = !!SYNC.via;
 }
+const syncHaal = () => SYNC.via === "supabase" ? supaHaal() : gistHaal();
+const syncZet = (doc, ver) => SYNC.via === "supabase" ? supaZet(doc, ver) : gistZet(doc);
 
 /* ---- lezen en schrijven van de lokale kant ---- */
 
@@ -5524,7 +5535,7 @@ async function syncRonde(opnieuwTekenen = true) {
   SYNC.bezig = true; SYNC.fout = null; syncStatus();
   try {
     const begin = Object.fromEntries(Object.keys(SYNC_VAKKEN).map(n => [n, lokaalVakRauw(n)]));
-    const ver = await gistHaal();
+    const ver = await syncHaal();
     /* onderdelen die deze versie niet kent, blijven in de gist staan */
     const doc = {...(ver || {}), v: 1};
     let veranderdVer = false;
@@ -5541,7 +5552,7 @@ async function syncRonde(opnieuwTekenen = true) {
     /* eerst de gist, dan pas lokaal als gesynchroniseerd markeren: mislukt
        het opslaan bij GitHub, dan blijven je wijzigingen 'nog te
        synchroniseren' en gaan ze bij de volgende ronde alsnog mee */
-    if (veranderdVer) await gistZet(doc);
+    if (veranderdVer) await syncZet(doc, ver);
     let veranderdLokaal = false, tussendoor = false;
     for (const [naam, samen] of Object.entries(lokaalNieuw)) {
       /* tijdens het ophalen iets ingevuld? Dan niet overschrijven, maar
@@ -5665,6 +5676,123 @@ function blokZet(sleutel, obj) {
   const ok = bewaardSchrijf(sleutel, zelfde ? {...obj, ..._meta(oud)} : nieuweVersie(oud, obj, nu()));
   syncStraks();
   return ok;
+}
+
+/* =======================================================================
+   Supabase: inloggen, live synchroniseren en je stand delen met de coach
+   -----------------------------------------------------------------------
+   Inloggen met een link per e-mail (PKCE: de link werkt alleen in de
+   browser waar je hem aanvroeg). Daarna:
+   - je invoer staat per record in de tabel 'records' en komt via dezelfde
+     samenvoeging als de gist binnen (herkomst, conflicten, grafstenen);
+   - wijzigingen van een ander apparaat of van de coach komen live binnen;
+   - je huidige stand (planning, belasting, herstel, doelen) wordt gedeeld,
+     zodat de coach op de server hetzelfde ziet als jij hier.
+   Alleen de eigenaar kan iets lezen of schrijven (RLS in de database).
+   ======================================================================= */
+const SUPA = {cfg: null, client: null, sessie: null, kanaal: null, laden: null, fout: null};
+const SUPA_LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js";
+
+function supaLaadLib() {
+  if (window.supabase && window.supabase.createClient) return Promise.resolve();
+  if (SUPA.laden) return SUPA.laden;
+  SUPA.laden = new Promise((ok, nee) => {
+    const el = document.createElement("script");
+    el.src = SUPA_LIB; el.async = true; el.crossOrigin = "anonymous";
+    el.onload = ok; el.onerror = () => { SUPA.laden = null; nee(new Error("de Supabase-bibliotheek kon niet geladen worden")); };
+    document.head.appendChild(el);
+  });
+  return SUPA.laden;
+}
+async function supaInit() {
+  const c = DATA.supabase || {};
+  if (!c.url || !c.publishable_key) return false;
+  SUPA.cfg = c;
+  try { await supaLaadLib(); } catch (e) { SUPA.fout = e.message; return false; }
+  SUPA.client = window.supabase.createClient(c.url, c.publishable_key,
+    {auth: {flowType: "pkce", detectSessionInUrl: false, persistSession: true, autoRefreshToken: true, storageKey: "sportdashboard.supabase.auth"}});
+  /* terug van de inloglink: ?code=... omruilen en uit de adresbalk halen */
+  const u = new URL(location.href), code = u.searchParams.get("code");
+  if (code) {
+    try { const {error} = await SUPA.client.auth.exchangeCodeForSession(code); if (error) throw error; }
+    catch (e) { SUPA.fout = `Inloggen mislukte: ${e.message}. Open de link in dezelfde browser als waar je hem aanvroeg.`; }
+    u.searchParams.delete("code");
+    history.replaceState(history.state, "", u.pathname + u.search + location.hash);
+  }
+  const {data} = await SUPA.client.auth.getSession();
+  SUPA.sessie = data.session || null;
+  SUPA.client.auth.onAuthStateChange((_e, sessie) => {
+    const was = !!SUPA.sessie; SUPA.sessie = sessie || null;
+    if (!!sessie === was) return;
+    syncInit(); supaLive(); renderSyncPaneel(); renderCoachSetup(); syncStatus();
+    if (sessie) { syncRonde(); supaStandDelen(); }
+  });
+  syncInit(); supaLive();
+  return !!SUPA.sessie;
+}
+async function supaInloggen(email) {
+  const {error} = await SUPA.client.auth.signInWithOtp({email,
+    options: {shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname}});
+  if (error) throw new Error(error.message);
+}
+async function supaUitloggen() {
+  if (SUPA.client) await SUPA.client.auth.signOut();
+  SUPA.sessie = null; syncInit(); supaLive();
+}
+async function supaHaal() {
+  const doc = {v: 1}, stap = 1000;
+  for (let van = 0; ; van += stap) {
+    const {data, error} = await SUPA.client.from("records").select("vak,sleutel,data")
+      .in("vak", Object.keys(SYNC_VAKKEN)).order("vak").order("sleutel").range(van, van + stap - 1);
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    data.forEach(r => { (doc[r.vak] = doc[r.vak] || {})[r.sleutel] = r.data; });
+    if (data.length < stap) break;
+  }
+  return doc;
+}
+/* alleen records die echt anders zijn dan wat er al stond */
+async function supaZet(doc, ver) {
+  const rijen = [];
+  Object.keys(SYNC_VAKKEN).forEach(vak => {
+    const nieuw = doc[vak] || {}, oud = (ver && ver[vak]) || {};
+    Object.entries(nieuw).forEach(([k, r]) => { if (JSON.stringify(r) !== JSON.stringify(oud[k])) rijen.push({vak, sleutel: k, data: r}); });
+  });
+  for (let i = 0; i < rijen.length; i += 500) {
+    const {error} = await SUPA.client.from("records").upsert(rijen.slice(i, i + 500), {onConflict: "vak,sleutel"});
+    if (error) throw new Error(`Opslaan bij Supabase mislukte: ${error.message}`);
+  }
+}
+/* live: een wijziging elders (ander apparaat, de coach) start een ronde */
+function supaLive() {
+  if (SUPA.kanaal && SUPA.client) { SUPA.client.removeChannel(SUPA.kanaal); SUPA.kanaal = null; }
+  if (!SUPA.client || !SUPA.sessie) return;
+  SUPA.kanaal = SUPA.client.channel("sportdashboard")
+    .on("postgres_changes", {event: "*", schema: "public", table: "records"}, p => {
+      const vak = (p.new && p.new.vak) || (p.old && p.old.vak);
+      if (vak && SYNC_VAKKEN[vak]) syncStraks();
+    })
+    .on("postgres_changes", {event: "INSERT", schema: "public", table: "coach_berichten"}, () => coachServerHerlaad())
+    .subscribe();
+}
+/* Je stand delen met de coach. Een apparaat met oudere Garmin-gegevens
+   overschrijft de stand van een apparaat met nieuwere niet. */
+let SUPA_STAND_TIMER = null;
+function supaStandDelen(direct = false) {
+  if (!SUPA.sessie || !SUPA.client) return Promise.resolve(false);
+  clearTimeout(SUPA_STAND_TIMER);
+  const doe = async () => {
+    try {
+      const {data: oud} = await SUPA.client.from("records").select("data").eq("vak", "context").eq("sleutel", "actueel").maybeSingle();
+      if (oud && oud.data && oud.data.garmin && DATA.generated && oud.data.garmin > DATA.generated) return false;
+      const {error} = await SUPA.client.from("records").upsert([{vak: "context", sleutel: "actueel",
+        data: {vandaag: vandaagIso(), garmin: DATA.generated || null, systeem: COACH_SYSTEEM, context: coachContext(), _t: Date.now(), _bron: apparaatNaam()}}],
+        {onConflict: "vak,sleutel"});
+      if (error) throw error;
+      return true;
+    } catch (e) { console.warn("stand delen mislukt", e); return false; }
+  };
+  if (direct) return doe();
+  return new Promise(ok => { SUPA_STAND_TIMER = setTimeout(() => doe().then(ok), 2500); });
 }
 
 function syncStatus() {
@@ -9409,6 +9537,7 @@ function sessieFeedback(iso, i) {
    zonder dat de pagina naar boven springt. */
 function allesNaInvoer() {
   const y = window.scrollY;
+  try { supaStandDelen(); } catch (e) { /* geen Supabase */ }
   try { renderTrainingRoute(); } catch (e) { console.error(e); }
   try { renderRouteAlles(); } catch (e) { console.error(e); }
   try { renderVandaagNieuw(); } catch (e) { console.error(e); }
@@ -12720,8 +12849,8 @@ const EXPLOS_KEY = "sportdashboard.explosiviteit.v1";
    aanpassing daarop uit elkaar te houden blijven -- en je met een knop terug
    kunt naar het voorstel. */
 const WKAAN_KEY = "sportdashboard.workoutaanpassing.v1";
-const wkAanLees = () => bewaardLees(WKAAN_KEY, {});
-const wkAanZet  = o => bewaardSchrijf(WKAAN_KEY, o);
+const wkAanLees = () => kaartLees(WKAAN_KEY);
+const wkAanZet  = o => kaartZet(WKAAN_KEY, o);
 
 function wkOefeningen(type) {
   const eigen = wkAanLees()[type];
@@ -12786,7 +12915,19 @@ function renderSyncPaneel() {
   const eigen = bewaardLees("sportdashboard.sync.v1", {});
   const uitBundel = !!((DATA.sync || {}).gist) && !eigen.gist;
 
-  const status = !SYNC.aan
+  const supaHtml = !(DATA.supabase || {}).url ? "" : SUPA.sessie
+    ? `<div class="melding melding--stil"><strong>Ingelogd${SUPA.sessie.user && SUPA.sessie.user.email ? ` als ${veiligeTekst(SUPA.sessie.user.email)}` : ""}.</strong>
+        Je invoer synchroniseert live via Supabase, ook wat de coach vastlegt.
+        ${SYNC.laatst ? `Laatst bijgewerkt om ${new Date(SYNC.laatst).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit"})}.` : ""}
+        <div class="planbar" style="margin-top:var(--sp2)"><button class="knop knop--secundair knop--klein" id="supaUit">Uitloggen</button></div></div>`
+    : `<div class="melding melding--stil melding--let"><strong>Log in om alles live te houden.</strong> Je invoer, je coach en je
+        Garmin-gegevens komen dan samen; je apparaten zien direct hetzelfde.${SUPA.fout ? `<br>${veiligeTekst(SUPA.fout)}` : ""}</div>
+      <div class="velden" style="margin-top:var(--sp3);grid-template-columns:minmax(220px,1fr)">
+        <div class="veld"><label for="supaMail">E-mailadres</label><input id="supaMail" type="email" autocomplete="email" spellcheck="false"></div></div>
+      <div class="planbar"><button class="knop knop--primair knop--klein" id="supaIn">Stuur inloglink</button></div>
+      <p class="hint" id="supaMelding">Open de link in deze browser; daar wordt hij gekoppeld.</p>`;
+  const status = SYNC.via === "supabase" ? (SYNC.fout ? `<div class="melding melding--stil melding--let"><strong>Er gaat iets mis.</strong> ${veiligeTekst(SYNC.fout)}</div>` : "")
+    : !SYNC.aan
     ? `<div class="melding melding--stil melding--let">Staat uit. Alles wat je invult blijft in deze browser.</div>`
     : SYNC.fout
     ? `<div class="melding melding--stil melding--let"><strong>Er gaat iets mis.</strong> ${veiligeTekst(SYNC.fout)}</div>`
@@ -12804,7 +12945,7 @@ function renderSyncPaneel() {
         ${c.versie._weg ? "verwijderd" : "gewijzigd"} op ${tijd(c.versie._t)} (${veiligeTekst(c.versie._bron || "herkomst onbekend")});
         actief: ${c.actief._weg ? "verwijderd" : "versie"} van ${tijd(c.actief._t)} (${veiligeTekst(c.actief._bron || "herkomst onbekend")})
         ${c.versie._weg ? "" : `<br><code style="white-space:pre-wrap">${veiligeTekst(_kaal(c.versie)).slice(0, 300)}</code>`}</li>`).join("")}</ul></details>` : "";
-  host.innerHTML = status + confHtml + `
+  host.innerHTML = supaHtml + status + confHtml + (SYNC.via === "supabase" ? `<details class="verdieping verdieping--binnen" style="margin-top:var(--sp3)"><summary>Oude synchronisatie via gist</summary>` : "") + `
     <div class="velden" style="margin-top:var(--sp3)">
       <div class="veld"><label for="sGist">Gist-id</label>
         <input id="sGist" type="text" value="${veiligeTekst(eigen.gist || "")}"
@@ -12823,7 +12964,18 @@ function renderSyncPaneel() {
     <p class="hint" style="margin-top:var(--sp3)">Op je eerste computer stelt <code>sync-instellen.command</code>
       dit voor je in en komt het vanzelf in de gepubliceerde pagina terecht. Deze velden zijn voor
       een apparaat dat die pagina niet heeft. Het token wordt alleen in deze browser bewaard en
-      gaat nergens anders heen dan naar GitHub.</p>`;
+      gaat nergens anders heen dan naar GitHub.</p>` + (SYNC.via === "supabase" ? `</details>` : "");
+  const supaIn = document.getElementById("supaIn");
+  if (supaIn) supaIn.onclick = async () => {
+    const mail = document.getElementById("supaMail").value.trim(), m = document.getElementById("supaMelding");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { m.textContent = "Vul een geldig e-mailadres in."; return; }
+    if (!SUPA.client) { m.textContent = "Supabase is nog niet geladen; probeer het zo opnieuw."; return; }
+    supaIn.disabled = true; m.textContent = "Versturen…";
+    try { await supaInloggen(mail); m.textContent = "Verstuurd. Open de link uit je mail in deze browser."; }
+    catch (e) { m.textContent = `Lukte niet: ${e.message}`; supaIn.disabled = false; }
+  };
+  const supaUit = document.getElementById("supaUit");
+  if (supaUit) supaUit.onclick = async () => { await supaUitloggen(); renderSyncPaneel(); renderCoachSetup(); syncStatus(); };
 
   document.getElementById("sOpslaan").onclick = async () => {
     const g = document.getElementById("sGist").value.trim();
@@ -13632,13 +13784,16 @@ function boot() {
      tabblad. Dat laatste is het moment waarop het ertoe doet: je legt je
      telefoon weg, pakt je laptop, en wilt daar zien wat je net invulde. */
   syncStatus();
-  if (SYNC.aan) {
-    syncRonde();
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") syncRonde();
-    });
-    window.addEventListener("online", () => syncRonde());
-  }
+  if (SYNC.aan) syncRonde();
+  /* luisteraars altijd: inloggen bij Supabase kan later in deze sessie */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncRonde();
+  });
+  window.addEventListener("online", () => syncRonde());
+  supaInit().then(ingelogd => {
+    syncStatus(); renderSyncPaneel(); renderCoachSetup();
+    if (ingelogd) { syncRonde(); supaStandDelen(); }
+  }).catch(e => { SUPA.fout = e.message; renderSyncPaneel(); });
 }
 
 /* ---- klikken op een dag, en de knoppen boven de planner ---- */
@@ -14516,12 +14671,120 @@ function coachWeetTonen() {
   });
 }
 
+/* De coach op de server: ingelogd, en de pagina weet waar hij draait. Hij
+   leest dan zelf je Garmin-gegevens en invoer na en legt vast wat je vertelt;
+   je Anthropic-sleutel staat op de server, niet in deze browser. */
+const coachServerUrl = () => {
+  const c = DATA.supabase || {};
+  if (c.coach_url) return c.coach_url;
+  return /(^|\.)github\.io$/.test(location.hostname) || location.protocol === "file:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? null : "/api/coach";
+};
+const coachServer = () => !!(SUPA.sessie && coachServerUrl());
+const notitiesLees = () => kaartLees(NOTITIE_KEY);
+
+async function coachServerHerlaad(forceer = false) {
+  if (!coachServer() || COACH_BEZIG) return;
+  const {data, error} = await SUPA.client.from("coach_berichten").select("id,rol,tekst,acties").order("id", {ascending: false}).limit(30);
+  if (error || !data) return;
+  const bekend = Math.max(0, ...COACH_GESPREK.map(b => b.serverId || 0));
+  if (!forceer && data.length && data[0].id <= bekend) return;
+  COACH_GESPREK = data.reverse().map(b => ({rol: b.rol === "user" ? "jij" : "coach", tekst: b.tekst, acties: b.acties || null, serverId: b.id}));
+  coachTeken();
+}
+
+function coachActieTekst(a) {
+  const i = a.invoer || {}, d = x => isDatum(x) ? kortDatum(x) : x;
+  const periode = i.van && i.tot ? (i.van === i.tot ? d(i.van) : `${d(i.van)}–${d(i.tot)}`) : "";
+  const VAK = {check: "je check-ins", log: "je krachtlog", plan: "je planning", explos: "explosiviteit", zesmin: "6-minutentest", wkaan: "workoutaanpassingen", notitie: "eerdere notities", leer: "je herstelbeoordelingen"};
+  switch (a.gereedschap) {
+    case "lees_activiteiten": return `activiteiten ${periode}${i.sport ? ` (${i.sport.toLowerCase()})` : ""}`;
+    case "lees_activiteit": return "details van een training";
+    case "lees_dagen": return `dagwaarden ${periode}`;
+    case "lees_overzicht": return {weekly: "belasting per week", fitness: "fitheid en vorm", acwr: "belastingsverhouding", zones: "je hartslagzones"}[i.sleutel] || i.sleutel;
+    case "lees_invoer": return VAK[i.vak] || i.vak;
+    case "bewaar_sessie": return `zwaarte ${String(i.sport || "").toLowerCase()} ${d(i.datum)}${i.rpe ? `: ${i.rpe}/10` : ""}${i.notitie ? ` (${i.notitie})` : ""}`;
+    case "bewaar_checkin": return `check-in ${d(i.datum)}${i.gevoel ? `: gevoel ${i.gevoel}/5` : ""}`;
+    case "bewaar_notitie": return `notitie: ${String(i.tekst || "").slice(0, 80)}`;
+    case "stel_workout_voor": return "workout klaargezet voor je krachtlog";
+    default: return a.gereedschap;
+  }
+}
+function coachActiesHtml(acties) {
+  if (!acties || !acties.length) return "";
+  const uniek = xs => [...new Set(xs)];
+  const bekeken = uniek(acties.filter(a => a.gereedschap.startsWith("lees_")).map(coachActieTekst));
+  const vast = acties.filter(a => a.gereedschap.startsWith("bewaar_") && a.opgeslagen).map(coachActieTekst);
+  const mis = acties.filter(a => a.fout).length;
+  return `<div class="coach-acties">${bekeken.length ? `<span>Bekeken: ${bekeken.map(veiligeTekst).join(" · ")}</span>` : ""}
+    ${vast.length ? `<span class="coach-vast">${ic("vink")}Vastgelegd in je dashboard: ${vast.map(veiligeTekst).join(" · ")}</span>` : ""}
+    ${mis ? `<span>${mis} opzoeking${mis === 1 ? "" : "en"} lukte niet</span>` : ""}</div>`;
+}
+
+async function coachStuurServer() {
+  const veld = document.getElementById("coachIn");
+  const vraag = veld.value.trim();
+  if (!vraag || COACH_BEZIG) return;
+  veld.value = ""; veld.style.height = "auto";
+  COACH_GESPREK.push({rol: "jij", tekst: vraag});
+  const antwoord = {rol: "coach", tekst: "_Ik kijk je gegevens na…_", bezig: true};
+  COACH_GESPREK.push(antwoord);
+  coachTeken();
+  const knop = document.getElementById("coachStuur");
+  knop.disabled = true; knop.textContent = "Bezig";
+  COACH_BEZIG = new AbortController();
+  try {
+    await supaStandDelen(true);          // de coach ziet je stand van nu
+    const {data} = await SUPA.client.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    if (!token) throw new Error("Je bent niet meer ingelogd. Log opnieuw in onder Instellingen › Synchroniseren.");
+    const r = await fetch(coachServerUrl(), {method: "POST", signal: COACH_BEZIG.signal,
+      headers: {"content-type": "application/json", authorization: `Bearer ${token}`},
+      body: JSON.stringify({vraag, apparaat: apparaatNaam(), over: COACH_CONTEXT ? {titel: COACH_CONTEXT.titel, tekst: COACH_CONTEXT.tekst} : null})});
+    let j = {}; try { j = await r.json(); } catch (e) { /* geen JSON */ }
+    if (!r.ok) throw new Error(j.fout || `HTTP ${r.status}`);
+    antwoord.bezig = false; antwoord.tekst = j.tekst || ""; antwoord.acties = j.acties || []; antwoord.serverId = j.id || null;
+    const wk = antwoord.acties.find(a => a.workout);
+    if (wk) { try { antwoord.workout = workoutVoorstelBouwen(wk.workout); } catch (e) { /* laat de tekst staan */ } }
+    coachTeken();
+    /* wat de coach vastlegde, meteen ophalen */
+    if (antwoord.acties.some(a => a.opgeslagen)) syncRonde();
+    if (j.gebruik) document.getElementById("coachVoet").textContent =
+      `${j.gebruik.input_tokens ?? "?"} tokens erheen, ${j.gebruik.output_tokens ?? "?"} terug in de laatste stap · ${j.model || ""}`;
+  } catch (e) {
+    antwoord.bezig = false;
+    antwoord.tekst = e.name === "AbortError" ? "_Afgebroken._" : `**Het lukte niet.** ${e.message}`;
+    coachTeken();
+  } finally {
+    COACH_BEZIG = null;
+    knop.disabled = false; knop.textContent = "Vraag";
+  }
+}
+
 function renderCoachSetup() {
   const kk = document.getElementById("coachKopie");
   if (kk) kk.onclick = coachKopieer;
   const host = document.getElementById("coachSetup");
   const wrap = document.getElementById("coachWrap");
   if (!host) return;
+  if (coachServer()) {
+    const not = Object.values(notitiesLees()).sort((a, b) => (b._t || 0) - (a._t || 0)).slice(0, 5);
+    host.innerHTML = `<details class="verdieping verdieping--binnen"><summary>Coach-instellingen</summary>
+      <p class="u-klein">Je coach draait op je eigen server en kijkt zelf in je Garmin-gegevens, je planning, je belasting en je invoer.
+        Wat je hem vertelt over zwaarte, klachten of afspraken legt hij vast in je dashboard, met herkomst "coach-chat".
+        Planwijzigingen en workouts voor je krachtlog neem je zelf over. Het gesprek is op al je apparaten hetzelfde.</p>
+      <div class="planbar knoprij--ruim"><button class="knop knop--secundair knop--klein" id="coachWis">Gesprek wissen</button></div></details>
+      ${not.length ? `<details class="verdieping verdieping--binnen"><summary>Vastgelegd door je coach (${not.length})</summary><ul class="u-lijst">${not.map(n =>
+        `<li><b>${kortDatum(n.datum)}</b>${n.onderwerp ? ` · ${veiligeTekst(n.onderwerp)}` : ""}: ${veiligeTekst(n.tekst)}</li>`).join("")}</ul></details>` : ""}`;
+    wrap.style.display = "";
+    coachWeetTonen(); coachContextTonen();
+    if (!COACH_GESPREK.some(b => b.serverId)) coachServerHerlaad(true);
+    document.getElementById("coachWis").onclick = async () => {
+      if (!confirm("Het hele gesprek op al je apparaten wissen? Wat de coach in je dashboard vastlegde blijft staan.")) return;
+      await SUPA.client.from("coach_berichten").delete().gt("id", 0);
+      COACH_GESPREK = []; document.getElementById("coachLog").innerHTML = ""; document.getElementById("coachVoet").textContent = "";
+    };
+    return;
+  }
   const c = coachLees();
   if (c.sleutel) {
     host.innerHTML = `<details class="verdieping verdieping--binnen"><summary>Coach-instellingen</summary>
@@ -14699,7 +14962,7 @@ function coachTeken() {
     const voorstellen = b.rol === "coach" ? coachVoorstellen(b.tekst) : [];
     return `<div class="bericht ${b.rol === "jij" ? "jij" : ""} ${b.bezig ? "bezig" : ""}">
       <span class="wie">${b.rol === "jij" ? "JIJ" : ic("praat")}</span>
-      <div class="tekst">${coachAntwoord(b)}
+      <div class="tekst">${coachAntwoord(b)}${b.rol === "coach" && !b.bezig ? coachActiesHtml(b.acties) : ""}
         ${voorstellen.map((v, j) => `<div class="voorstel" data-b="${i}" data-v="${j}">${uiVoorstel({titel: "Voorstel van je coach", wat: voorstelTekst(v),
             waarom: v.note ? veiligeTekst(v.note) : "", knoppen: `<button class="u-knop u-knop--klein" data-doe="${i}-${j}">Overnemen</button>
               <button class="u-knop u-knop--stil u-knop--klein" data-pas="${i}-${j}">Aanpassen</button>
@@ -14962,6 +15225,7 @@ async function workoutHerkennen(vraag) {
 }
 
 async function coachStuur() {
+  if (coachServer()) return coachStuurServer();
   const veld = document.getElementById("coachIn");
   const vraag = veld.value.trim();
   if (!vraag || COACH_BEZIG) return;

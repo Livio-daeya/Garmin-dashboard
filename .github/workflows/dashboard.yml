@@ -64,13 +64,17 @@ jobs:
           SYNC_GIST:     ${{ secrets.SYNC_GIST }}
           SYNC_TOKEN:    ${{ secrets.SYNC_TOKEN }}
           WEKEN:         ${{ vars.WEKEN || 12 }}
+          SUPABASE_URL:             ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY:      ${{ secrets.SUPABASE_SECRET_KEY }}
+          COACH_URL:                ${{ vars.COACH_URL }}
         run: python cloud/bouw.py
 
       - name: Sporen wissen
         # De tokens en de cache horen niet in de repository terecht te komen.
         # Dit staat ook in .gitignore, maar een tweede slot kost niets.
         if: always()
-        run: rm -rf garmin_tokens garmin_cache.json sync.json
+        run: rm -rf garmin_tokens garmin_cache.json sync.json supabase.json
 
       - name: Publiceren
         run: |

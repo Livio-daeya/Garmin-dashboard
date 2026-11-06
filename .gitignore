@@ -3,3 +3,7 @@ garmin_cache.json
 sync.json
 cloud.json
 publish.key
+
+supabase.json
+node_modules/
+.vercel/

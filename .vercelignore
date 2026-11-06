@@ -1,0 +1,12 @@
+# Alleen de pagina en de coach-API horen online; de rest niet.
+*.py
+__pycache__/
+cloud/
+tests/
+supabase/
+template.html
+garmin_cache.json
+garmin_tokens/
+sync.json
+supabase.json
+DELEN.md

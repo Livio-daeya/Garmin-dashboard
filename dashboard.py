@@ -83,6 +83,26 @@ PLAN_HORIZON = 14   # dagen vooruit kijken
 # ==========================================================================
 
 SYNCFILE = HERE / "sync.json"
+SUPAFILE = HERE / "supabase.json"
+
+
+def supabase_config() -> dict[str, str]:
+    """Adres en publishable key van Supabase, plus waar de coach draait.
+
+    Alle drie mogen openbaar zijn: wat iemand ermee mag, bepalen de RLS-regels
+    in de database (alleen jij, na inloggen). De secret key komt hier nooit.
+    """
+    if not SUPAFILE.exists():
+        return {}
+    try:
+        cfg = json.loads(SUPAFILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not (cfg.get("url") and cfg.get("publishable_key")):
+        return {}
+    if str(cfg["publishable_key"]).startswith("sb_secret_"):
+        raise SystemExit("supabase.json bevat een secret key; die hoort niet in de pagina.")
+    return {k: cfg[k] for k in ("url", "publishable_key", "coach_url") if cfg.get(k)}
 
 
 def sync_config() -> dict[str, str]:
@@ -776,6 +796,7 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         # in en rekent de pagina het om naar de klok van wie kijkt.
         "generated": datetime.now().astimezone().isoformat(timespec="minutes"),
         "sync": sync_config(),
+        "supabase": supabase_config(),
         "weeks": weeks,
         "max_hr": MAX_HR,
         # Garmins eigen zone-instelling (methode, gebruikte maximale hartslag).

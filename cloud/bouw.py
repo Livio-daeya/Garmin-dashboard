@@ -158,6 +158,15 @@ def main() -> None:
         print("! Geen SYNC_GIST/SYNC_TOKEN gezet: de gepubliceerde pagina gaat "
               "zonder synchronisatie de lucht in.")
 
+    # Supabase: adres en publishable key gaan mee de pagina in (openbaar
+    # mag; RLS beschermt de data). De secret key blijft in deze stap.
+    supa_url = env("SUPABASE_URL", verplicht=False)
+    supa_pub = env("SUPABASE_PUBLISHABLE_KEY", verplicht=False)
+    if supa_url and supa_pub:
+        (WORTEL / "supabase.json").write_text(json.dumps(
+            {"url": supa_url, "publishable_key": supa_pub, "coach_url": env("COACH_URL", verplicht=False) or None}),
+            encoding="utf-8")
+
     import dashboard as D          # noqa: E402 - pas na GARMINTOKENS
     import garmin_fetch as F       # noqa: E402
 
@@ -190,6 +199,15 @@ def main() -> None:
     D.publish(payload, passphrase=wachtwoordzin)
     (WORTEL / ".nojekyll").write_text("", encoding="utf-8")
     print(f"Klaar. {fetcher.calls} API-calls gedaan.")
+
+    # Garmin-data ook naar Supabase, zodat de coach hem kan lezen. Mislukt
+    # dat, dan staat de pagina er wel; de fout is zichtbaar in de log.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import naar_supabase                      # noqa: E402
+    try:
+        naar_supabase.schrijf(payload)
+    except SystemExit as fout:
+        print(f"! {fout}")
 
     # ---- bewaren wat we volgende keer nodig hebben ------------------------
     cache_wegschrijven(token, gist, cache)
