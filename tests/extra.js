@@ -185,6 +185,88 @@
     return {ok: !!r && !!r.combinatie && "krachtEnZaal" in r.combinatie && "dagenTotWedstrijd" in r.combinatie && "daarna" in r && hbLeerStats().beoordelingen === Object.values(leerLees()).filter(x => !x.alleenContext).length,
       detail: JSON.stringify(c).slice(0, 160)};
   });
+  /* de beschreven week, als herbruikbare opzet */
+  const beschrevenWeek = (extraOpties = {}) => {
+    const vr = isoPlus(ma, 4), di = isoPlus(ma, 1), wo = isoPlus(ma, 2), dn = isoPlus(ma, 3);
+    DATA.planbasis.vandaag = extraOpties.vandaag || vr;
+    const act = (id, d, uur, sport, type, min, load, te, ana, naam, gl) => ({id, date: d, datetime: `${d}T${uur}:00`, sport, type_key: type, name: naam, duration_s: min * 60, load, garmin_load: gl ?? load, aerobic_te: te, anaerobic_te: ana});
+    DATA.activities = [...echt.filter(a => a.date < ma || a.date > isoPlus(ma, 6)),
+      act(9991001, ma, "18:00", "Kracht", "strength_training", 50, 40, 1.2, 0.3, "Kracht thuis"),
+      act(9991002, di, "20:00", "Handbal", "basketball", 75, 130, 3.1, 1.8, "Zaaltraining", 55),
+      act(9991003, wo, "19:00", "Hardlopen", "running", 40, 120, 4.0, 1.5, "4x4 min"),
+      act(9991004, dn, "20:00", "Handbal", "basketball", 75, 120, 3.0, 1.6, "Zaaltraining", extraOpties.doZaal ?? 60),
+      act(9991005, vr, "17:00", "Kracht", "strength_training", 40, 30, 1.0, 0.2, "Krachtsport"),
+      act(9991006, vr, "18:30", "Hardlopen", "running", 45, 110, 3.8, 2.6, "Neerpelt hardlopen")].filter(a => a.date <= DATA.planbasis.vandaag);
+    HB_CACHE.clear();
+    const diHal = dagRoute(di, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (diHal) planStatusZet(di, diHal.id, "overgeslagen");
+    const c = checkLees(); checkZet({...c, [di]: {...(c[di] || {}), sessies: [{sport: "Kracht", naam: "Kracht", minuten: 45, rpe: 7, handmatig: true, toegevoegd: true}]}});
+    if (DATA.planbasis.vandaag >= vr) { const dnHal = dagRoute(dn, {alleenLezen: true}).items.find(i => i.soort === "kracht"); if (dnHal) planStatusZet(dn, dnHal.id, "overgeslagen");
+      const vrZaal = dagRoute(vr, {alleenLezen: true}).items.find(i => i.soort === "handbal");
+      if (vrZaal) { planStatusZet(vr, vrZaal.id, "overgeslagen"); vervangingZet(`${vr}|9991006`, vrZaal.id, "Zaaltraining", true); } }
+    HB_CACHE.clear();
+    return {vr, di, wo, dn};
+  };
+  const metVandaag = f => { const oud = DATA.planbasis.vandaag; try { return f(); } finally { DATA.planbasis.vandaag = oud; } };
+
+  await test("Een onbekende verwachting wordt niet vervangen door de werkelijke sessiebelasting", () => metVandaag(() => {
+    const {wo} = beschrevenWeek();
+    const a1 = trainingsAdvies(ma);
+    /* de woensdagsessie twee keer zo zwaar: de verwachting mag daardoor niet veranderen */
+    DATA.activities = DATA.activities.map(x => x.id === 9991003 ? {...x, garmin_load: x.garmin_load + 500} : x); HB_CACHE.clear();
+    const a2 = trainingsAdvies(ma);
+    const woItem = dagRoute(wo, {alleenLezen: true}).items.find(i => ["hoog", "ana"].includes(i.soort));
+    const e = woItem ? geldigeVerwachting(wo, woItem) : null;
+    const ok = a2.belasting.verwacht === a1.belasting.verwacht && a2.belasting.garminPunten === a1.belasting.garminPunten + 500 && (!e || !e.bereik ? a1.belasting.onbekend >= 1 && /onbekend/.test(adviesHtml(a1)) : true);
+    return {ok, detail: `woensdag verwacht ${e && e.bereik ? e.bereik.join("–") : "onbekend"}; verwacht ${a1.belasting.verwacht} → ${a2.belasting.verwacht} bij +500 werkelijke punten; onbekend ${a1.belasting.onbekend}`};
+  }));
+  await test("Een onverwacht zware uitvoering blijft zichtbaar", () => metVandaag(() => {
+    const {dn} = beschrevenWeek({doZaal: 300});
+    const a = trainingsAdvies(ma), html = adviesHtml(a);
+    const zaal = dagRoute(dn, {alleenLezen: true}).items.find(i => i.soort === "handbal"), e = zaal && geldigeVerwachting(dn, zaal);
+    if (!e || !e.bereik) return {ok: true, detail: "geen verwachting voor de zaaltraining in deze data"};
+    return {ok: a.belasting.onverwachtZwaar.some(x => x.d === dn) && /Zwaarder dan verwacht/.test(html) && /zwaarder dan verwacht/.test(html), detail: JSON.stringify(a.belasting.onverwachtZwaar)};
+  }));
+  await test("Nieuwe gegevens verbeteren alleen toekomstige verwachtingen", () => {
+    verwachtingenVastleggen();
+    const toekomst = Object.values(verwachtLees()).find(r => r.datum > vandaagIso() && r.versies[0].bereik);
+    if (!toekomst) return {ok: true, detail: "geen toekomstige sessie met bereik"};
+    const voor = JSON.stringify(toekomst.versies);
+    const extraActs = Array.from({length: 8}, (_, n) => ({id: 9992000 + n, date: isoPlus(vandaagIso(), -n - 1), datetime: `${isoPlus(vandaagIso(), -n - 1)}T20:00:00`, sport: "Handbal", type_key: "basketball", name: "x", duration_s: 4500, load: 400, garmin_load: 400}));
+    DATA.activities = [...echt, ...extraActs]; HB_CACHE.clear();
+    verwachtingenVastleggen();
+    const na = verwachtLees()[`${toekomst.datum}|${toekomst.item}`];
+    const item = dagRoute(toekomst.datum, {alleenLezen: true}).items.find(i => i.id === toekomst.item);
+    const nieuw = item ? verwachtePunten(item, toekomst.datum, vandaagIso()) : null;
+    return {ok: JSON.stringify(na.versies) === voor, detail: `vastgelegd ${toekomst.versies[0].bereik.join("–")} blijft; met de nieuwe gegevens zou het nu ${nieuw && nieuw.bereik ? nieuw.bereik.join("–") : "–"} zijn (alleen voor nog niet vastgelegde sessies)`};
+  });
+  await test("De regels voor aanvullende training blokkeren de geplande donderdag niet", () => metVandaag(() => {
+    const {dn} = beschrevenWeek({vandaag: isoPlus(ma, 3)});
+    const voor = dagRoute(dn, {alleenLezen: true}).items.filter(i => i.soort === "kracht").map(i => i.id);
+    const a = trainingsAdvies(ma);
+    const na = dagRoute(dn, {alleenLezen: true}).items.filter(i => i.soort === "kracht").map(i => i.id);
+    const html = adviesHtml(a);
+    return {ok: voor.length >= 1 && JSON.stringify(voor) === JSON.stringify(na) && !/kracht.*(schrappen|niet doen)/i.test(a.actie) && /geldt niet voor je geplande trainingen/.test(html),
+      detail: `donderdag kracht gepland: ${voor.length}; advies ${a.status}: ${a.actie}`};
+  }));
+  await test("De beschreven week geeft overal dezelfde aantallen en hetzelfde advies", () => metVandaag(() => {
+    beschrevenWeek();
+    const a = trainingsAdvies(ma), c = coachContext().trainingsadvies;
+    allesHertekenen();
+    const kaart = [...document.querySelectorAll(".ta--kort .hs-chip")].map(b => b.textContent.trim());
+    const ok = c.status === a.status && c.kracht.sessies.length === a.kracht.sessies && c.handbal.gedaan === a.handbal.gedaan && kaart.every(k => k === a.titel) && kaart.length >= 1
+      && a.kracht.sessies === 3 && a.handbal.gedaan === 2;
+    return {ok, detail: `advies ${a.status}, kaarten ${kaart.join("/")}, coach ${c.status}; kracht ${a.kracht.sessies}/${c.kracht.sessies.length}, handbal ${a.handbal.gedaan}/${c.handbal.gedaan} | ${a.reden} → ${a.actie}`};
+  }));
+  await test("Het oorspronkelijke advies blijft bewaard; je antwoord over opvolgen wordt eraan gekoppeld", () => {
+    herstelBewaar(herstelStatus(vandaagIso()));
+    const eerst = JSON.parse(JSON.stringify((leerLees()[vandaagIso()] || {}).advies || null));
+    adviesFeedbackZet("deels");
+    DATA.activities = [...echt, {id: 9993001, date: vandaagIso(), datetime: `${vandaagIso()}T09:00:00`, sport: "Hardlopen", type_key: "running", name: "x", duration_s: 5400, load: 3000, garmin_load: 3000, aerobic_te: 4.5}];
+    HB_CACHE.clear(); herstelBewaar(herstelStatus(vandaagIso()));
+    const r = leerLees()[vandaagIso()];
+    return {ok: !!eerst && JSON.stringify(r.advies) === JSON.stringify(eerst) && r.adviesFeedback.gevolgd === "deels",
+      detail: `oorspronkelijk ${eerst && eerst.titel} (${eerst && eerst.t.slice(11, 16)}); versies ${(r.adviesVersies || []).map(x => x.titel).join(", ") || "geen"}; antwoord ${r.adviesFeedback.gevolgd}`};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }
