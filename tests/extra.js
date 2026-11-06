@@ -230,6 +230,29 @@
     const regel = l => l.map(x => `${x.d.slice(8)} ${x.titel} ${x.punten}${x.bereik ? ` [${x.bereik.join("–")}]` : ""}`).join("; ");
     return {ok, detail: `TESTWEEK (nagebouwd) | vergelijkbaar: ${regel(B.vergelijkbaar)} → ${B.uitgevoerdVergelijkbaar} tegenover ${B.verwachtBereik ? B.verwachtBereik.join("–") : "–"} (midden ${B.verwacht}), gedekt ${B.gedekt}/${B.geplandMetRegistratie} | zonder bereik: ${regel(B.zonderBereik) || "–"} | niet gepland: ${regel(B.ongepland) || "–"} | zonder registratie: ${B.zonderRegistratie.map(x => x.d.slice(8) + " " + x.titel).join("; ") || "–"} | totaal ${B.garminPunten}`};
   }));
+  await test("Belasting binnen verwachting maar herstel onbekend: niet groen, geen extra intensief werk", () => metVandaag(() => {
+    beschrevenWeek();
+    const a = trainingsAdvies(ma);
+    const ok = a.herstel.niveau !== "groen" ? a.status !== "groen" && (a.status !== "grijs" || /Herstel nog beoordelen/.test(a.reden) && /Geen extra intensief werk/.test(a.actie)) : true;
+    return {ok, detail: `TESTWEEK | herstel ${a.herstel.niveau}, plan ${a.belasting.bovenPlan === false ? "binnen verwachting" : a.belasting.bovenPlan === null ? "onbekend" : "boven"} → ${a.status}: ${a.reden} → ${a.actie}`};
+  }));
+  await test("Met prikkel en herstel dat op gegevens groen is: groen, met Prikkel en Vervolg apart", () => metVandaag(() => {
+    beschrevenWeek();
+    const echtK = herstelKern;
+    window.herstelKern = d => ({...echtK(d), niveau: "groen", regel: "test: herstel groen"});
+    try {
+      HB_CACHE.clear();
+      const a = trainingsAdvies(ma), html = adviesHtml(a);
+      const ok = (a.status === "groen" || a.status === "oranje") && /<b>Prikkel:<\/b>/.test(html) && /<b>Vervolg:<\/b>/.test(html) && /Binnen het plan \(achtergrond\)/.test(html) && !/\/100/.test(html);
+      return {ok, detail: `TESTWEEK met herstel groen (gesimuleerd) → ${a.status}: ${a.reden} → ${a.actie}`};
+    } finally { window.herstelKern = echtK; HB_CACHE.clear(); }
+  }));
+  await test("Teller en noemer van de dekking zijn overal gelijk", () => metVandaag(() => {
+    beschrevenWeek();
+    const B = trainingsAdvies(ma).belasting, html = adviesHtml(trainingsAdvies(ma));
+    const ok = B.gedekt === B.vergelijkbaar.length && B.geplandMetRegistratie === B.vergelijkbaar.length + B.zonderBereik.length && html.includes(`${B.gedekt} van ${B.geplandMetRegistratie} uitgevoerde sessies`);
+    return {ok, detail: `${B.gedekt} van ${B.geplandMetRegistratie} (vergelijkbaar ${B.vergelijkbaar.length}, waarvan ${B.vervangingen} vervanging; zonder bereik ${B.zonderBereik.length})`};
+  }));
   await test("Oranje door herstel geeft het hersteladvies, niet 'geplande training kan door'", () => metVandaag(() => {
     const {wo, dn} = beschrevenWeek({vandaag: isoPlus(ma, 3)});
     const c = checkLees(); checkZet({...c, [wo]: {gevoel: 1, lijf: {benen: 2}}, [dn]: {gevoel: 1, lijf: {benen: 2, energie: 2}}}); HB_CACHE.clear();

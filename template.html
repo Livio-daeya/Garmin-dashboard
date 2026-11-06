@@ -11983,8 +11983,10 @@ function trainingsAdvies(ma) {
   const verwachtLaag = som(vergelijkbaar, x => x.e.bereik[0]), verwachtHoog = som(vergelijkbaar, x => x.e.bereik[1]);
   const verwacht = som(vergelijkbaar, x => (x.e.bereik[0] + x.e.bereik[1]) / 2);
   const uitgevoerdVergelijkbaar = som(vergelijkbaar, x => x.punten);
-  const geplandMetRegistratie = vergelijkbaar.filter(x => x.soort === "gepland").length + zonderBereik.length;
-  const dekking = geplandMetRegistratie ? vergelijkbaar.filter(x => x.soort === "gepland").length / geplandMetRegistratie : 0;
+  /* dekking: van alle uitgevoerde sessies die bij je plan horen (gepland met
+     registratie, en bevestigde vervangingen), hoeveel hebben een verwachting */
+  const geplandMetRegistratie = vergelijkbaar.length + zonderBereik.length;
+  const dekking = geplandMetRegistratie ? vergelijkbaar.length / geplandMetRegistratie : 0;
   const ongeplandPunten = som(ongepland, x => x.punten), zonderBereikPunten = som(zonderBereik, x => x.punten);
   const onverwachtZwaar = vergelijkbaar.filter(x => x.punten > x.e.bereik[1] * 1.25);   // [modelkeuze] ruim boven je eigen bereik
   const hoogste8 = w.loadMax8 != null && w.load > w.loadMax8;
@@ -12005,13 +12007,17 @@ function trainingsAdvies(ma) {
   let opRij = 0; for (let n = 0; n < 7; n++) { if (zwareDag(isoPlus(v, -n))) opRij++; else break; }
   const zwaar = afwijking && (opRij >= 3 || (wedstrijd != null && totWedstrijd <= 2) || hk.ind.prestatie.ongunstig);
   const r0 = x => Math.round(x);
-  const belasting = {nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, garminPunten: r0(garminPunten),
+  /* lokale spierbelasting: zwaar beenwerk in de laatste 48 uur uit je krachtlog;
+     zonder log onbekend (een ontbrekende registratie is geen ontbrekende belasting) */
+  const ks = krachtStand();
+  const benen48 = ks && !ks.onbekend ? (ks.benen ? ks.benen.datum : null) : undefined;
+  const belasting = {benen48,nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, garminPunten: r0(garminPunten),
     verwacht: verwacht ? r0(verwacht) : null, verwachtBereik: verwacht ? [r0(verwachtLaag), r0(verwachtHoog)] : null, uitgevoerdVergelijkbaar: r0(uitgevoerdVergelijkbaar),
     vergelijkbaar: vergelijkbaar.map(x => ({d: x.d, titel: x.titel, bereik: x.e.bereik, punten: r0(x.punten), soort: x.soort})),
     zonderBereik: zonderBereik.map(x => ({d: x.d, titel: x.titel, punten: r0(x.punten)})), ongepland: ongepland.map(x => ({...x, punten: r0(x.punten)})),
     zonderRegistratie: zonderRegistratie.map(x => ({d: x.d, titel: x.titel})),
     zonderVerwachting: r0(ongeplandPunten + zonderBereikPunten), ongeplandPunten: r0(ongeplandPunten), zonderBereikPunten: r0(zonderBereikPunten),
-    dekking: r0(dekking * 100), gedekt: vergelijkbaar.filter(x => x.soort === "gepland").length, geplandMetRegistratie,
+    dekking: r0(dekking * 100), gedekt: vergelijkbaar.length, geplandMetRegistratie, vervangingen: vergelijkbaar.filter(x => x.soort === "vervanging").length,
     onverwachtZwaar: onverwachtZwaar.map(x => ({d: x.d, titel: x.titel, bereik: x.e.bereik, punten: r0(x.punten)})), bovenGewoon, bovenPlan, afwijking, opRij, zwaar,
     verhouding: w.loadNormaal ? Math.round(w.load / w.loadNormaal * 100) : null};
   const niets = !acts.length && !logs.length && !extra.length && !items.some(x => x.st.k === "gedaan");
@@ -12037,7 +12043,7 @@ function trainingsAdvies(ma) {
       const omdat = opRij >= 3 ? `${opRij} zware dagen op rij` : wedstrijd != null && totWedstrijd <= 2 ? wedWoordVoor() : "mindere prestatie bij gelijke taak";
       reden = `${hoofdletter(samen)}. ${hoofdletter(zinLijst(waarom))}, en ${omdat}.`;
       const nogGepland = later.find(x => wedstrijd == null || x.d < wedstrijd) || items.find(x => x.d === v && ["gepland", "vandaag"].includes(x.st.k));
-      const herstelBekend = ["groen", "blauw"].includes(hk.niveau);
+      const herstelBekend = hk.niveau === "groen";
       if (hk.ind.prestatie.ongunstig) actie = `Geen extra training; ${nogGepland ? `houd ${titelVan(nogGepland.i).toLowerCase()} lichter` : "houd de volgende training lichter"} en kijk of je prestatie herstelt.`;
       else if (wedstrijd != null && totWedstrijd <= 2) actie = nogGepland && herstelBekend
         ? `Geen extra training; ${titelVan(nogGepland.i).toLowerCase()} kan volgens voorschrift, zonder extra intensiteit richting ${wedWoord}.`
@@ -12059,17 +12065,28 @@ function trainingsAdvies(ma) {
     const ontbreektMet = ontbreekt.filter(o => ruimteVoor(o.includes("kracht") ? "kracht" : "conditie"));
     const ruimte = ontbreektMet.length > 0;
     /* herstel "goed" alleen op gegevens: het model is pas groen of blauw met een geldige check-in */
-    if (ontbreekt.length && ["groen", "blauw"].includes(hk.niveau) && ruimte) {
+    if (ontbreekt.length && hk.niveau === "groen" && ruimte) {
       ontbreekt.splice(0, ontbreekt.length, ...ontbreektMet);
       status = "blauw"; reden = `Deze week ontbreekt ${zinLijst(ontbreekt)}, en er staat niets meer van gepland.`;
       actie = `Ruimte voor één sessie ${zinLijst(ontbreekt)}${wedstrijd ? ` vóór ${dagWoord(isoPlus(wedstrijd, -1), totWedstrijd - 1)}; de dag voor je wedstrijd blijft rustig` : ""}.`;
-    } else if (ontbreekt.length && hk.niveau === "grijs" && ruimte) {
-      status = "grijs"; reden = `Deze week ontbreekt ${zinLijst(ontbreekt)}, maar je herstel is onbekend.`;
-      actie = "Vul je check-in in; dan zie je of aanvullen verstandig is.";
-    } else {
+    } else if (hk.niveau === "groen" && (conditie.geleverd || kracht.geleverd)) {
+      /* Groen = prikkel passend en geen extra nodig. Alleen met een geleverde
+         prikkel én herstel dat op gegevens groen is. "Binnen de verwachting van
+         je plan" is context, geen reden voor groen. */
       status = "groen";
-      reden = `${hoofdletter(samen)}.${bovenGewoon ? ` Belasting ${belasting.verhouding}% van je gewone week${bovenPlan === false ? `, binnen de verwachting voor ${vergelijkbaar.length} vergelijkbare sessies` : bovenPlan === null ? "; verwachting voor te weinig sessies bekend" : ""}.` : ""}${opRij >= 3 ? ` ${opRij} zware dagen op rij${bovenPlan === false ? ", zoals gepland" : ""}.` : ""}${hoogste8 ? " Hoogste geregistreerde belasting van de afgelopen 8 weken." : ""}${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
+      reden = `${hoofdletter(samen)}. Herstel zonder afwijking: ${String(hk.oorzaak || "binnen je eigen bereik").replace(/\.$/, "")}.${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
       actie = (bovenGewoon || opRij >= 3) && wedWoord && totWedstrijd <= 2 ? `Geen extra training nodig; geen extra intensief werk richting ${wedWoord}.` : "Geen extra training nodig.";
+    } else {
+      /* Herstel onvoldoende bekend (geen geldige check-in, of een losse
+         afwijking): niet groen, en ook niet automatisch oranje. Ontbrekende
+         zekerheid levert geen extra training op. */
+      status = "grijs";
+      const prikkels = conditie.intensief + kracht.sessies + handbal.gedaan;
+      const hkTekst = hk.niveau === "blauw" ? `een losse afwijking (${String(hk.oorzaak || hk.regel).replace(/\.$/, "")})` : "geen geldige check-in";
+      reden = `${prikkels >= 2 ? "Meerdere trainingsprikkels geleverd" : hoofdletter(samen)}${prikkels >= 2 ? ` (${samen})` : ""}. Herstel nog beoordelen: ${hkTekst}.`;
+      actie = ontbreekt.length && ruimte && !(bovenGewoon || opRij >= 3)
+        ? `Vul je check-in in; dan zie je of ${zinLijst(ontbreekt)} erbij kan.`
+        : "Geen extra intensief werk toevoegen. Vul je check-in in om je herstel te beoordelen.";
     }
   }
   /* de week per sessie: datum, wat, inhoud, bron en vervanging */
@@ -12101,11 +12118,17 @@ function adviesHtml(a, opties = {}) {
   const C = a.conditie, K = a.kracht, H = a.handbal, B = a.belasting;
   const topSpieren = Object.entries(K.spieren).sort((x, y) => y[1] - x[1]).slice(0, 6);
   const plan = weekDoelen(a.uitvoering).flatMap(x => x.wat.map(t => `${x.naam}: ${t}`));
+  /* Vervolg: zinvol, niet nodig, af te raden of nog niet te beoordelen */
+  const vervolg = (soort, ontbreekt) => a.status === "oranje" || a.status === "rood" ? ["af te raden", a.status === "rood" ? "je herstel vraagt om aanpassing" : "begrens je belasting (zie hierboven)"]
+    : a.status === "grijs" ? ["nog niet te beoordelen", "herstel nog onbekend; geen extra intensief werk toevoegen"]
+    : a.status === "blauw" && ontbreekt ? ["zinvol", "zie de actie hierboven"] : ["niet nodig", "de prikkel is geleverd of staat nog gepland"];
+  const condV = vervolg("conditie", !C.geleverd && !C.later.length), krV = vervolg("kracht", !K.geleverd && !K.later.length);
+  const benenTekst = B.benen48 === undefined ? "lokale beenbelasting onbekend (geen krachtlog)" : B.benen48 ? `zwaar beenwerk op ${kortDatum(B.benen48)} (laatste 48 uur)` : "geen zwaar beenwerk in de laatste 48 uur";
   return `<div class="ta">${kop}
     <h4 class="ws-sub">Conditie</h4>
     ${C.lijst.length ? `<ul class="u-lijst u-lijst--tekst">${C.lijst.map(x => `<li><b>${d(x.d)}</b> ${x.a.name || x.a.sport} · ${Math.round((x.a.duration_s || 0) / 60)} min · ${x.soort}${te(x.a) ? ` (${te(x.a)})` : ""}${x.vervangt ? ` · vervanging van ${x.vervangt.toLowerCase()}` : x.vraag ? ` · vervanging van ${x.vraag.toLowerCase()}? (bevestig bij Training)` : ""}</li>`).join("")}</ul>` : `<p class="u-klein">Nog geen loop-, fiets- of roeisessie deze week.</p>`}
-    <p>${C.geleverd ? `Prikkel geleverd: ${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""}.` : C.later.length ? `Nog geen intensieve prikkel; gepland: ${zinLijst(C.later.map(x => `${x.i.titel.split(" · ")[0].toLowerCase()} ${dagWoord(x.d, dagVerschil(vandaagIso(), x.d))}`))}.` : "Geen intensieve conditieprikkel deze week."}
-      ${a.status === "oranje" || a.status === "rood" ? "Aanvullen nu: nee." : a.status === "blauw" && !C.geleverd && !C.later.length ? "Aanvullen nu: ja, zie hierboven." : "Aanvullen nu: niet nodig."}</p>
+    <p><b>Prikkel:</b> ${C.geleverd ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""}; langer aanhoudend intensief werk is wat je Coopertest en de Yo-Yo IR2 vragen.` : C.later.length ? `nog geen intensieve prikkel; gepland: ${zinLijst(C.later.map(x => `${x.i.titel.split(" · ")[0].toLowerCase()} ${dagWoord(x.d, dagVerschil(vandaagIso(), x.d))}`))}.` : "geen intensieve conditieprikkel deze week."}<br>
+      <b>Vervolg:</b> extra conditiewerk ${condV[0]}; ${condV[1]}.</p>
     <p class="u-klein">Intensief = Training Effect aeroob 3 of hoger (langer) of anaeroob 2 of hoger (kort) [modelkeuze]. Of je VO2max stijgt, blijkt pas over weken, uit je tests.</p>
     <h4 class="ws-sub">Je week, per sessie</h4>
     <div class="ta-week">${a.sessies.map(x => `<div class="ta-rij"><b>${d(x.d)}</b><span>${x.wat}<span class="u-klein"> · ${x.status}${x.inhoud ? ` · ${x.inhoud}` : ""}${x.bron ? ` · ${x.bron}` : ""}</span></span></div>`).join("") || `<p class="u-klein">Nog niets deze week.</p>`}</div>
@@ -12115,24 +12138,28 @@ function adviesHtml(a, opties = {}) {
     <p>${K.gelogd ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"}, ${K.sets} gelogde sets; ${K.uitdagend} met RIR 3 of minder${K.zonderRir ? `, ${K.zonderRir} zonder RIR` : ""}. RIR 3 of minder is een telcategorie, geen grens tussen zinvol en zinloos: werk verder van falen hoort ook bij kracht- en explosiviteitstraining.`
       : K.sessies ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"} bevestigd. Omvang en prikkel nog onvoldoende bekend: niets in je krachtlog.` : ""}
       ${topSpieren.length ? `<br><span class="u-klein">Sets per spiergroep (laatste 7 dagen, indirect telt half): ${topSpieren.map(([k, n]) => `${k} ${komma(hbRond(n, 1))}`).join(" · ")}</span>` : ""}</p>
-    <p>${a.status === "oranje" || a.status === "rood" ? "Extra krachtwerk nu: nee." : a.status === "blauw" && !K.geleverd && !K.later.length ? "Extra krachtwerk: ja, één sessie." : "Extra krachtwerk: niet nodig."}</p>
+    <p><b>Prikkel:</b> ${K.sessies ? `${K.sessies} krachtsessie${K.sessies === 1 ? "" : "s"}${K.gelogd ? ", inhoud in je krachtlog (zie hierboven)" : ", omvang en prikkel nog onvoldoende bekend"}` : "geen krachtsessie"}; ${benenTekst}.<br>
+      <b>Vervolg:</b> extra krachtwerk ${krV[0]}; ${krV[1]}${B.benen48 ? "; geen extra beenwerk" : ""}.</p>
     <h4 class="ws-sub">Handbal</h4>
-    <p>${H.gepland ? `${H.gedaan} van ${H.gepland} zaaltrainingen en wedstrijden gedaan.` : "Geen handbal gepland."}
+    <p>${H.gedaan ? `${H.gedaan} keer handbal (zaaltraining of wedstrijd).` : H.gepland ? "Nog geen handbal deze week." : "Geen handbal gepland."}
       ${H.overgeslagen.map(x => `${hoofdletter(d(x.d))} ${x.titel.toLowerCase()} ${x.vervangen ? `vervangen door ${String(x.vervangen).toLowerCase()}: dat levert conditiewerk, geen techniek, wedstrijdsituaties of richtingsveranderingen` : "overgeslagen"}.`).join(" ")}</p>
     <h4 class="ws-sub">Herstel en belasting</h4>
     <dl class="u-dl hb-stapel"><dt>Herstel</dt><dd>${HB_KORT_TITEL[a.herstel.niveau]} <span class="u-klein">${a.herstel.oorzaak || ""}</span></dd>
       <dt>Totale geregistreerde weekbelasting</dt><dd>${B.garminPunten} Garmin-punten <span class="u-klein">alle registraties deze week, ook zonder verwachting</span></dd>
-      <dt>Uitgevoerd tegenover verwacht</dt><dd>${B.verwacht ? `${B.uitgevoerdVergelijkbaar} tegenover ${B.verwachtBereik[0]}–${B.verwachtBereik[1]} (midden ${B.verwacht})` : "verwachte belasting onbekend"}
-        <span class="u-klein">alleen dezelfde sessies: ${B.gedekt} van ${B.geplandMetRegistratie} uitgevoerde geplande sessies hebben een vooraf vastgelegde verwachting${B.vergelijkbaar.some(x => x.soort === "vervanging") ? ", plus bevestigde vervangingen" : ""}${B.bovenPlan === null ? "; te weinig gedekt voor een conclusie over je plan (minstens 3 sessies en 60%)" : B.bovenPlan ? "; boven het hele verwachte bereik" : "; binnen of onder het verwachte bereik"}. Geen verhouding met het totaal: sessies zonder verwachting staan hieronder apart.</span></dd>
       <dt>Uitgevoerd zonder verwachting</dt><dd>${B.zonderVerwachting} Garmin-punten <span class="u-klein">${[B.zonderBereikPunten ? `${B.zonderBereikPunten} uit geplande sessies zonder verantwoord bereik (${B.zonderBereik.map(x => x.titel.toLowerCase()).join(", ")})` : "", B.ongeplandPunten ? `${B.ongeplandPunten} uit training die niet gepland was (${B.ongepland.map(x => x.titel.toLowerCase()).join(", ")})` : ""].filter(Boolean).join("; ") || "geen"}${B.zonderRegistratie.length ? `. Zonder registratie, dus zonder punten: ${B.zonderRegistratie.map(x => x.titel.toLowerCase()).join(", ")}` : ""}.</span></dd>
       <dt>Tegenover je gebruikelijke week</dt><dd>${B.gewoon ? `${B.nu} tegenover ${B.gewoon} tot dezelfde dag (${B.verhouding}%)` : "onvoldoende historie"} <span class="u-klein">dashboardbelasting${B.max8 ? `; zwaarste van 8 weken ${B.max8}${B.hoogste8 ? ", deze week is hoger (een feit, geen grens)" : ""}` : ""}</span></dd>
       ${B.onverwachtZwaar.length ? `<dt>Zwaarder dan verwacht</dt><dd>${B.onverwachtZwaar.map(x => `${kortDatum(x.d)} ${x.titel.toLowerCase()}: ${x.punten} punten, verwacht ${x.bereik[0]}–${x.bereik[1]}`).join("; ")}</dd>` : ""}
-      <dt>Zware dagen op rij</dt><dd>${B.opRij}</dd>
+      <dt>Zware dagen op rij</dt><dd>${B.opRij} <span class="u-klein">intensieve conditie, handbal of kracht, ook zelf ingevuld zonder Garmin</span></dd>
+      <dt>Lokale spierbelasting</dt><dd>${hoofdletter(benenTekst)}</dd>
       ${a.wedstrijd ? `<dt>Volgende wedstrijd</dt><dd>${hoofdletter(dagWoord(a.wedstrijd, a.totWedstrijd))}</dd>` : ""}</dl>
     <p class="u-klein">Krachtwerk dat Garmin niet registreerde, zit niet in de Garmin-belasting; die is dan te laag. "Prikkel geleverd" en "hersteld genoeg voor meer" zijn twee aparte vragen: een goede training kan betekenen dat extra intensiteit vandaag juist ongewenst is.</p>
-    ${plan.length ? `<details class="up-deel"><summary>Ten opzichte van je plan</summary><div><ul class="u-lijst u-lijst--tekst">${plan.map(t => `<li>${t}</li>`).join("")}</ul>
-      <p class="u-klein">Ter informatie. Een extra training levert geen bonus op, een vervanging geen straf.</p></div></details>` : ""}
-    <p class="u-klein">Hoe het oordeel tot stand komt [modelkeuzes, geen universele grenzen]: oranje bij herstel dat om aandacht vraagt, of bij belasting duidelijk boven je gewone week én boven je plan, samen met 3 zware dagen op rij, een wedstrijd binnen 2 dagen of mindere prestatie. Blauw alleen met een geldige check-in (geen klachten ingevuld is niet hetzelfde als klachtenvrij) en als er nog ruimte is. Voor een voorgestelde aanvullende training: intensief conditiewerk niet binnen 3 dagen voor een wedstrijd, kracht niet binnen 2 (coachingsregels, geen herstelgrenzen). Dit geldt niet voor je geplande trainingen, zoals kracht na de zaal op donderdag.</p>
+    <details class="up-deel"><summary>Binnen het plan (achtergrond)</summary><div>
+      <p><b>Uitgevoerd tegenover verwacht:</b> ${B.verwacht ? `${B.uitgevoerdVergelijkbaar} tegenover ${B.verwachtBereik[0]}–${B.verwachtBereik[1]} Garmin-punten (midden ${B.verwacht})` : "verwachte belasting onbekend"}.
+        <span class="u-klein">Alleen dezelfde sessies: ${B.gedekt} van ${B.geplandMetRegistratie} uitgevoerde sessies uit je plan${B.vervangingen ? ` (inclusief ${B.vervangingen} bevestigde vervanging${B.vervangingen === 1 ? "" : "en"})` : ""} hebben een vooraf vastgelegde verwachting${B.bovenPlan === null ? "; te weinig voor een conclusie (minstens 3 sessies en 60%)" : B.bovenPlan ? "; boven het hele verwachte bereik" : "; binnen of onder het verwachte bereik"}. Dit zegt alleen of de belasting hoger was dan verwacht, niet of de prikkel passend was of of je hem verwerkt hebt.</span></p>
+      ${B.vergelijkbaar.length ? `<ul class="u-lijst u-lijst--tekst">${B.vergelijkbaar.map(x => `<li>${kortDatum(x.d)} ${x.titel.toLowerCase()}: ${x.punten}, verwacht ${x.bereik[0]}–${x.bereik[1]}</li>`).join("")}</ul>` : ""}
+      ${plan.length ? `<ul class="u-lijst u-lijst--tekst">${plan.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
+      <p class="u-klein">Ter informatie. Een extra training levert geen bonus op, een vervanging geen straf.</p></div></details>
+    <p class="u-klein">Hoe het oordeel tot stand komt [modelkeuzes, geen universele grenzen]: groen alleen met een geleverde prikkel én herstel dat op je gegevens zonder afwijking is; binnen de verwachting van je plan blijven is daarvoor niet genoeg. Is je herstel onbekend, dan grijs: nog niet te beoordelen, zonder extra intensief werk. Oranje bij herstel dat om aandacht vraagt, of bij belasting duidelijk boven je gewone week én boven je plan, samen met 3 zware dagen op rij, een wedstrijd binnen 2 dagen of mindere prestatie. Blauw alleen met een geldige check-in (geen klachten ingevuld is niet hetzelfde als klachtenvrij) en als er nog ruimte is. Voor een voorgestelde aanvullende training: intensief conditiewerk niet binnen 3 dagen voor een wedstrijd, kracht niet binnen 2 (coachingsregels, geen herstelgrenzen). Dit geldt niet voor je geplande trainingen, zoals kracht na de zaal op donderdag.</p>
     ${a.ma === maandagVan(vandaagIso()) ? (() => { const f = ((leerLees()[vandaagIso()] || {}).adviesFeedback || {}).gevolgd;
       const r = (leerLees()[vandaagIso()] || {}).advies;
       return `<div class="hb-fb"><div class="hb-fb-rij"><span>Heb je het advies van vandaag opgevolgd?</span><span class="hb-fb-keus">${["ja", "deels", "nee"].map(o =>
@@ -15292,8 +15319,10 @@ WEEKTERUGBLIK
 De vraag is: heeft hij een zinvolle prikkel gehad, en is extra training nu verstandig? Niet: hoeveel
 vinkjes. Gebruik "trainingsadvies" en "route" uit de data (hetzelfde advies als in zijn dashboard) en
 zoek waar nodig trainingen op met je gereedschap. Statussen met vaste betekenis, nooit omwisselen:
-blauw = aanvullende prikkel zinvol, groen = prikkel passend (geen extra nodig), oranje = belasting
-begrenzen, rood = training aanpassen (geen diagnose overtraining), grijs = nog niet te beoordelen.
+blauw = aanvullende prikkel zinvol, groen = prikkel passend (geen extra nodig; alleen met een geleverde
+prikkel én herstel dat op gegevens goed is), oranje = belasting begrenzen, rood = training aanpassen
+(geen diagnose overtraining), grijs = nog niet te beoordelen (bv. herstel onbekend; dan geen extra
+intensief werk toevoegen). Binnen de verwachting van het plan blijven is context, geen reden voor groen.
 Een extra training levert geen bonus op, een vervanging geen straf; buitenintervallen vervangen geen
 techniek of wedstrijdsituaties. Geef:
 - conditie: welke prikkels (rustig, langer intensief, kort intensief), of die bij zijn doelen passen,
