@@ -267,7 +267,7 @@
     zet({[V]: {gevoel: 3, lijf: {ziek: 1}}}); const rood = herstelStatus(V).niveau;
     zet({[V]: {gevoel: 4, lijf: {achilles: 2}}}); const pees = herstelStatus(V);
     zet(c0); renderVermoeidheid();
-    const kaart = document.querySelector("#hsVermoeid .hs-kaart") && document.querySelectorAll("#hsVermoeid .hs-i").length === 5 && document.querySelectorAll("#hsVermoeid .hs-dag").length === 7;
+    const kaart = document.querySelector("#hsVermoeid .hb-balk") && document.querySelectorAll("#hsVermoeid .hb-balk button").length === 2 && !document.querySelector("#hsVermoeid .hs-i, #hsVermoeid .hs-dag");
     const ok = grijs.niveau === "grijs" && /onbekend/.test(grijs.oorzaak) && ["groen", "blauw"].includes(normaal)
       && oranje.niveau === "oranje" && oranje.actie.length > 0 && !/rust tot|HRV normaal/i.test(oranje.actie) && rood === "rood" && pees.niveau === "rood" && pees.klachten.length === 1 && kaart;
     return {ok, detail: `grijs "${grijs.oorzaak}"; gevoel normaal ${normaal}; ${oranje.niveau} "${oranje.actie}"; ziek ${rood}; pees ${pees.niveau}; kaart ${!!kaart}`};

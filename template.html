@@ -432,7 +432,22 @@
 .hs-dag--grijs i { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ink-2) 55%, transparent) 0 3px, transparent 3px 6px); border: 1px solid var(--hair-strong); }
 .hs-voet { display: flex; align-items: center; justify-content: space-between; gap: var(--sp2); flex-wrap: wrap; margin-top: var(--sp2); }
 .hs-knoppen { display: inline-flex; align-items: center; gap: var(--sp3); }
-#hsVermoeid { margin-bottom: var(--sp4); }
+#hsVermoeid { margin: var(--sp3) 0 var(--sp4); }
+.hb-balk { display: flex; align-items: center; justify-content: space-between; gap: var(--sp3); padding: 17px 18px;
+  border-radius: var(--r-md); background: var(--bg2); border: 1px solid var(--hair); cursor: pointer; }
+.hb-balk:focus-visible, .hb-balk .u-knop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hb-balk-tekst { display: grid; gap: 2px; min-width: 0; }
+.hb-balk-status { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--w-nadruk); color: var(--ink); }
+.hb-balk-status .ic { width: 16px; height: 16px; color: var(--hb-k, var(--ink-2)); }
+.hb-balk-regel { color: var(--ink-2); font-size: var(--t-label); }
+.hb-balk-acties { display: flex; gap: var(--sp2); flex: none; }
+.hb-balk-acties .u-knop { min-height: var(--klik); }
+.hb-balk--groen { --hb-k: var(--good); } .hb-balk--blauw { --hb-k: var(--accent); } .hb-balk--oranje { --hb-k: var(--serious); }
+.hb-balk--rood { --hb-k: var(--critical); } .hb-balk--grijs { --hb-k: var(--ink-2); }
+@media (max-width: 640px) { .hb-balk { flex-direction: column; align-items: stretch; } .hb-balk-acties .u-knop { flex: 1; justify-content: center; } }
+.hb-kop { display: grid; gap: var(--sp2); }
+.hb-kop p { margin: 0; }
+.hb-deel summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--sp2); align-items: center; }
 .hs-balken { display: flex; gap: 6px; align-items: flex-end; height: 140px; margin: var(--sp2) 0 var(--sp3); }
 .hs-balk { flex: 1; height: 100%; display: grid; grid-template-rows: 1fr auto auto; justify-items: center; gap: 2px; font-size: 11px; color: var(--ink-2); }
 .hs-balk i { align-self: end; width: 70%; border-radius: 4px 4px 0 0; background: var(--accent); }
@@ -2504,9 +2519,9 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
 <section class="panel" id="tab-herstel">
   <h1 class="pg-vraag">Wat zegt mijn herstel en welke informatie ontbreekt?</h1>
-  <div id="hsVermoeid"></div>
   <div id="hsSamen"></div>
   <div class="dials" id="herstelTriple"></div>
+  <div id="hsVermoeid"></div>
   <div class="opbouw" id="herstelOpbouw"></div>
 
   <div class="sectie-kop"><h3>Trends</h3><span class="u-klein">28 dagen · tik voor de grafiek</span></div>
@@ -10364,32 +10379,54 @@ function herstelBewaar(h) {
   bewaardSchrijf(HB_LOG_KEY, log);
 }
 
+/* Eén compacte balk onder de drie getallen: status, één regel, één actie,
+   Details. Alle verdieping zit in het detailpaneel. */
+const HB_IC = {groen: "goed", blauw: "info", oranje: "letop", rood: "letop", grijs: "neutraal"};
+const HB_KORT_TITEL = {...Object.fromEntries(Object.entries(HB_NIVEAU).map(([k, v]) => [k, v.titel])), grijs: "Beeld onvolledig"};
+function hbCheckIngevuld(d) {
+  const c = checkLees()[d] || {};
+  return c.gevoel != null || Object.values(c.lijf || {}).some(x => x != null);
+}
+function hbKorteRegel(h) {
+  const {gevoel, prestatie, slaap, hart} = h.ind;
+  const hartWoord = hart.niveau === "grijs" ? "hartmetingen onvolledig" : hart.niveau === "groen" ? "hartmetingen normaal" : hart.ongunstig ? "hartmetingen wijken af" : "hartmetingen licht afwijkend";
+  if (h.niveau === "grijs") {
+    const delen = [hoofdletter(hartWoord)];
+    if (slaap.niveau === "oranje") delen.push("slaap korter dan je patroon");
+    delen.push(gevoel.dekking ? "check-in verlopen" : "check-in ontbreekt");
+    return delen.join(" · ");
+  }
+  /* bij oranje en rood is de trainingsactie belangrijker dan de uitleg */
+  if (h.niveau === "rood" || h.niveau === "oranje") return h.actie;
+  if (h.niveau === "blauw") {
+    const af = Object.values(h.ind).filter(x => ["blauw", "oranje"].includes(x.niveau));
+    const eerste = af[0];
+    return eerste ? `${HS_TAAK[eerste.k]}: ${eerste.reden}${af.length > 1 ? ` · nog ${af.length - 1} kleine afwijking${af.length > 2 ? "en" : ""}` : ""}`
+      : h.klachten.map(k => `${k.naam} ${k.tekst}`).join(" · ");
+  }
+  return `Geen afwijking in gevoel, slaap en hartmetingen${prestatie.niveau === "grijs" ? " · prestatie niet vergeleken" : ""}`;
+}
 function renderVermoeidheid() {
   const host = document.getElementById("hsVermoeid");
   if (!host) return;
   const h = herstelStatus();
   const v = vandaagIso();
   try { herstelBewaar(h); } catch (e) {}
-  const ingevuld = !!checkLees()[v];
-  const strook = [6, 5, 4, 3, 2, 1, 0].map(n => { const d = isoPlus(v, -n); return {d, n: herstelKern(d).niveau}; });
-  const dek = h.ind;
-  host.innerHTML = `<div class="hs-kaart hs-kaart--${h.niveau}">
-      <span class="hs-label">${hsChip(h.titel, h.niveau)}</span>
-      <b class="hs-oorzaak">${h.oorzaak}</b>
-      ${h.actie ? `<span class="hs-actie">${h.actie}</span>` : ""}
-      <span class="u-klein hs-dek">Gegevens 7 dagen: gevoel ${dek.gevoel.dekking}/7 · slaap ${dek.slaap.dekking}/7 · hart ${dek.hart.dekking}/7 · ${dek.prestatie.dekking} prestatievergelijking${dek.prestatie.dekking === 1 ? "" : "en"}</span>
-      <div class="hs-ind">${Object.values(h.ind).map(x => `<button class="hs-i" data-hsi="${x.k}">
-        <span class="hs-i-kop"><i class="hs-stip hs-stip--${x.niveau}"></i>${HS_TAAK[x.k]}</span>
-        <span class="hs-i-reden">${hoofdletter(x.reden)}</span></button>`).join("")}</div>
-      ${h.klachten.length ? `<div class="hs-klacht">${h.klachten.map(k => hsChip(`${k.naam}: ${k.tekst}`, k.niveau)).join("")}</div>` : ""}
-      <div class="hs-strook" aria-label="Herstel afgelopen zeven dagen">${strook.map(x => `<span class="hs-dag hs-dag--${x.n}" title="${kortDatum(x.d)}: ${HB_NIVEAU[x.n].titel.toLowerCase()}"><i></i>${kortDagNaam(x.d)}</span>`).join("")}</div>
-      <div class="hs-voet">
-        <span class="u-klein">Belasting 7 dagen ${h.bel.nu}${h.bel.normaal != null ? ` · gewoonlijk ${h.bel.normaal}` : ""}${h.bel.zwareReeks >= 2 ? ` · ${h.bel.zwareReeks} zware dagen op rij` : ""} (context)</span>
-        <span class="hs-knoppen"><button class="u-knop u-knop--stil u-knop--klein" data-checkin>${ingevuld ? "Check-in wijzigen" : "Check-in invullen"}</button>
-        <button class="u-link" data-hsdetail>Details</button></span></div></div>`;
-  host.querySelectorAll("[data-hsi]").forEach(b => b.onclick = () => herstelIndicatorPaneel(b.dataset.hsi));
-  host.querySelector("[data-checkin]").onclick = checkInPaneel;
-  host.querySelector("[data-hsdetail]").onclick = herstelDetailPaneel;
+  const ingevuld = hbCheckIngevuld(v);
+  host.innerHTML = `<div class="hb-balk hb-balk--${h.niveau}" role="button" tabindex="0" aria-label="Herstel: ${HB_KORT_TITEL[h.niveau]}. Details openen">
+      <div class="hb-balk-tekst">
+        <span class="hb-balk-status">${ic(HB_IC[h.niveau])}${HB_KORT_TITEL[h.niveau]}</span>
+        <span class="hb-balk-regel">${hbKorteRegel(h)}</span>
+      </div>
+      <div class="hb-balk-acties">
+        <button class="u-knop u-knop--klein${ingevuld ? " u-knop--stil" : ""}" data-checkin>${ingevuld ? "Check-in wijzigen" : "Check-in invullen"}</button>
+        <button class="u-knop u-knop--stil u-knop--klein" data-hsdetail>Details ${ic("volgende")}</button>
+      </div></div>`;
+  const balk = host.querySelector(".hb-balk");
+  host.querySelector("[data-checkin]").onclick = e => { e.stopPropagation(); checkInPaneel(); };
+  host.querySelector("[data-hsdetail]").onclick = e => { e.stopPropagation(); herstelDetailPaneel(); };
+  balk.onclick = () => herstelDetailPaneel();
+  balk.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target === balk) { e.preventDefault(); herstelDetailPaneel(); } };
 }
 
 /* Grafiek per meetwaarde: referentiezone, waarden per dag, gearceerd waar
@@ -10422,6 +10459,10 @@ function hbMetingRij(naam, m, fmt, eenheid) {
     · afwijking ${m.afwijking >= 0 ? "+" : "−"}${fmt(Math.abs(m.afwijking))}${eenheid}${m.relatief != null ? ` (${m.relatief >= 0 ? "+" : "−"}${Math.round(Math.abs(m.relatief) * 100)}%)` : ""}${m.duur ? ` · ${m.duur} ${m.duur === 1 ? "dag" : "dagen"} op rij ${m.stand} de band` : ""}` : " · geen referentie"} · ${m.dekking}/7 dagen gemeten</span></dd>`;
 }
 function herstelIndicatorPaneel(k) {
+  const x = herstelKern(vandaagIso()).ind[k];
+  uiPaneel(HS_TAAK[k], `<p>${hsChip(hoofdletter(x.reden), x.niveau)}</p>${hbIndicatorInhoud(k)}`);
+}
+function hbIndicatorInhoud(k) {
   const v = vandaagIso(), h = herstelStatus(v), x = h.ind[k];
   const dagen = [6, 5, 4, 3, 2, 1, 0].map(n => isoPlus(v, -n));
   const f1 = n => komma(hbRond(n, 1)), f0 = n => String(Math.round(n));
@@ -10464,19 +10505,38 @@ function herstelIndicatorPaneel(k) {
       + (x.beperkt.length ? `<p class="u-klein">Niet vergeleken: ${x.beperkt.slice(-4).join("; ")}.</p>` : "")
       + `<p class="u-klein">Alleen gelijke taken: rustige duurlopen buiten op hetzelfde toestel bij ±5% tempo (minimaal 3 eerdere), krachtoefeningen met hetzelfde gewicht, aantal sets, plek en gelogde RIR, en de zwaarte per sport op dezelfde weekdag (minimaal 4 eerdere). Oranje bij twee slechtere van de laatste drie [modelkeuze]. Eén mindere training zegt weinig; een geschat 1RM is geen maximale test.</p>`;
   }
-  uiPaneel(HS_TAAK[k], `<p>${hsChip(hoofdletter(x.reden), x.niveau)}</p>${inhoud}`);
+  return inhoud;
 }
 function herstelDetailPaneel() {
-  const h = herstelStatus();
-  uiPaneel("Hoe de herstelstatus werkt", `<p><b>Vandaag:</b> ${h.regel}. Model ${h.versie}.</p>
-    ${h.ontbreekt.length ? `<p class="u-klein">Ontbreekt: ${h.ontbreekt.join("; ")}. Ontbrekend is onbekend, niet normaal.</p>` : ""}
-    <dl class="u-dl">
-      <dt>${hsChip("Groen", "groen")}</dt><dd>Geen afwijking gevonden in de beschikbare gegevens; gevoel bekend. Dat is niet hetzelfde als bewezen hersteld.</dd>
-      <dt>${hsChip("Blauw", "blauw")}</dt><dd>Een losse afwijking of lichte vermoeidheid zonder ongunstig verloop. Geen opdracht om extra te trainen.</dd>
-      <dt>${hsChip("Oranje", "oranje")}</dt><dd>Slechter ervaren herstel op meerdere dagen, herhaald slechtere prestatie bij een gelijke taak, of aanhoudend afwijkende hartmetingen samen met slaap of gevoel.</dd>
-      <dt>${hsChip("Rood", "rood")}</dt><dd>Ziek, een pijnlijke pees of rug, of prestatie en gevoel die achterblijven zonder hogere belasting. Geen diagnose "overtraind".</dd>
-      <dt>${hsChip("Grijs", "grijs")}</dt><dd>Geen geldige check-in. Wat wel bekend is staat erbij.</dd></dl>
-    <p class="u-klein">Deze indeling is een voorlopige regel van dit dashboard, geen gevalideerd meetinstrument. Gevoel en prestatie wegen het zwaarst; HRV en rusthartslag tellen samen als één bron; huidtemperatuur en ademhaling alleen als aanvulling. Body Battery, Training Readiness, stress en slaapscore zijn Garmin-samenstellingen van deels dezelfde metingen en tellen niet nog eens mee. Vorm en belasting zijn modeluitkomsten en staan alleen als context.</p>`);
+  const h = herstelStatus(), v = vandaagIso(), d = h.ind;
+  const strook = [6, 5, 4, 3, 2, 1, 0].map(n => { const x = isoPlus(v, -n); return {d: x, n: herstelKern(x).niveau}; });
+  const sectie = k => `<details class="up-deel hb-deel"><summary><span class="hs-i-kop"><i class="hs-stip hs-stip--${d[k].niveau}"></i>${HS_TAAK[k]}</span><span class="u-klein">${hoofdletter(d[k].reden)}</span></summary><div>${hbIndicatorInhoud(k)}</div></details>`;
+  uiPaneel("Herstel", `<div class="hb-kop">
+      ${hsChip(HB_KORT_TITEL[h.niveau], h.niveau)}
+      <p>${h.oorzaak}</p>
+      ${h.actie ? `<p><b>${h.actie}</b></p>` : ""}
+      ${h.klachten.length ? `<div class="hs-klacht">${h.klachten.map(k => hsChip(`${k.naam}: ${k.tekst}`, k.niveau)).join("")}</div>` : ""}</div>
+    <h4 class="ws-sub">Afgelopen 7 dagen</h4>
+    <div class="hs-strook" aria-label="Herstel afgelopen zeven dagen">${strook.map(x => `<span class="hs-dag hs-dag--${x.n}" title="${kortDatum(x.d)}: ${HB_KORT_TITEL[x.n].toLowerCase()}"><i></i>${kortDagNaam(x.d)}</span>`).join("")}</div>
+    <p class="u-klein">Gearceerd: onvoldoende gegevens voor die dag.</p>
+    <h4 class="ws-sub">Per onderdeel</h4>
+    ${["gevoel", "prestatie", "slaap", "hart", "overig"].map(sectie).join("")}
+    <h4 class="ws-sub">Belasting (context)</h4>
+    <dl class="u-dl"><dt>Garmin-belasting 7 dagen</dt><dd>${h.bel.nu}${h.bel.normaal != null ? ` <span class="u-klein">gewoonlijk ${h.bel.normaal} (mediaan van ${h.bel.weken} eerdere weken)</span>` : ` <span class="u-klein">gewoonlijk: onvoldoende historie</span>`}</dd>
+      ${h.bel.srpe ? `<dt>Duur × zwaarte 7 dagen</dt><dd>${h.bel.srpe} <span class="u-klein">alleen ingevulde sessies; andere eenheid, niet opgeteld bij Garmin</span></dd>` : ""}
+      <dt>Zware dagen op rij</dt><dd>${h.bel.zwaarGrens ? h.bel.zwareReeks : "onbekend"}</dd></dl>
+    <p class="u-klein">Een zware week is niet automatisch een slecht herstelde week.</p>
+    <h4 class="ws-sub">Gegevensdekking</h4>
+    <p class="u-klein">Gevoel ${d.gevoel.dekking}/7 dagen · slaap ${d.slaap.dekking}/7 · hart ${d.hart.dekking}/7 · overig ${d.overig.dekking}/7 · ${d.prestatie.dekking} prestatievergelijking${d.prestatie.dekking === 1 ? "" : "en"}.${h.ontbreekt.length ? ` Ontbreekt: ${h.ontbreekt.join("; ")}. Ontbrekend is onbekend, niet normaal.` : ""}</p>
+    <details class="up-deel"><summary>Onderbouwing</summary><div>
+      <p><b>Vandaag:</b> ${h.regel}. Model ${h.versie}.</p>
+      <dl class="u-dl">
+        <dt>${hsChip("Groen", "groen")}</dt><dd>Geen afwijking gevonden in de beschikbare gegevens; gevoel bekend. Niet hetzelfde als bewezen hersteld.</dd>
+        <dt>${hsChip("Blauw", "blauw")}</dt><dd>Een losse afwijking of lichte vermoeidheid zonder ongunstig verloop. Geen opdracht om extra te trainen.</dd>
+        <dt>${hsChip("Oranje", "oranje")}</dt><dd>Slechter ervaren herstel op meerdere dagen, herhaald slechtere prestatie bij een gelijke taak, of aanhoudend afwijkende hartmetingen samen met slaap of gevoel.</dd>
+        <dt>${hsChip("Rood", "rood")}</dt><dd>Ziek, een pijnlijke pees of rug, of prestatie en gevoel die achterblijven zonder hogere belasting. Geen diagnose "overtraind".</dd>
+        <dt>${hsChip("Grijs", "grijs")}</dt><dd>Geen geldige check-in. Normale hartmetingen maken het beeld niet groen.</dd></dl>
+      <p class="u-klein">Een voorlopige regel van dit dashboard, geen gevalideerd meetinstrument. Gevoel en prestatie wegen het zwaarst; HRV en rusthartslag tellen samen als één bron; huidtemperatuur en ademhaling alleen als aanvulling. Body Battery, Training Readiness, stress en slaapscore tellen niet nog eens mee. Vorm en belasting zijn modeluitkomsten. Volledige onderbouwing: onderbouwing-herstel.md.</p></div></details>`);
 }
 
 /* Welk doel hoort bij welke sessie. Handbal telt ook als conditieprikkel,
