@@ -81,7 +81,7 @@
 
   test("Test zonder vooruitgang bij duidelijke vermoeidheid", () => {
     const b = testBesluit({soort: "yoyo", datum: "2027-02-01", afstand: 600, vergelijkbaar: true},
-                          {soort: "yoyo", datum: "2026-12-07", afstand: 620}, {groepen: [{k: "autonoom"}, {k: "subjectief"}]});
+                          {soort: "yoyo", datum: "2026-12-07", afstand: 620}, {niveau: "oranje", groepen: [{k: "gevoel"}]});
     return {ok: b.k === "herstel", detail: b.tekst};
   });
 

@@ -463,6 +463,30 @@ def extract_daily(cache: dict[str, Any], days: list[str]) -> dict[str, dict[str,
         row["hrv_baseline_low"] = _num((summary.get("baseline") or {}).get("lowUpper"))
         row["hrv_baseline_high"] = _num((summary.get("baseline") or {}).get("balancedUpper"))
         row["hrv_status"] = summary.get("status")
+        # Garmins HRV-status vergelijkt het 7-daagse gemiddelde met de
+        # persoonlijke band balancedLow-balancedUpper. lowUpper hierboven is
+        # de bovengrens van "laag", niet de onderkant van de band.
+        row["hrv_week"] = _num(summary.get("weeklyAvg"))
+        row["hrv_band_laag"] = _num((summary.get("baseline") or {}).get("balancedLow"))
+        row["hrv_band_hoog"] = _num((summary.get("baseline") or {}).get("balancedUpper"))
+
+        # --- overige nachtmetingen (Garmin, ruwe waarden; geen eigen oordeel) ---
+        row["slaap_hr"] = _num(dto.get("avgHeartRate"))            # gemiddelde hartslag tijdens slaap
+        row["dutje_h"] = round(_num(dto.get("napTimeSeconds")) / 3600, 2) if _num(dto.get("napTimeSeconds")) else (0 if dto.get("napTimeSeconds") == 0 else None)
+        row["huidtemp_afw"] = _num(sleep.get("avgSkinTempDeviationC"))   # afwijking huidtemperatuur, geen lichaamstemperatuur
+        row["huidtemp_kalibratie"] = _num(sleep.get("skinTempCalibrationDays"))
+        need = dto.get("sleepNeed") or {}
+        row["slaapbehoefte_garmin_min"] = _num(need.get("baseline"))     # Garmin-schatting, geen gemeten behoefte
+        row["slaap_bevestigd"] = dto.get("sleepWindowConfirmed")
+        summ0 = raw.get("summary") or {}
+        row["spo2_gem"] = _num(summ0.get("averageSpo2"))
+        row["spo2_laag"] = _num(summ0.get("lowestSpo2"))
+        rd0 = raw.get("readiness")
+        rd0 = rd0[0] if isinstance(rd0, list) and rd0 else rd0 if isinstance(rd0, dict) else {}
+        row["hersteltijd_min"] = _num(rd0.get("recoveryTime"))
+        # Toestel alleen vastleggen bij een echte nachtmeting; Garmin rekent een
+        # slaapbehoefte ook uit op dagen zonder gedragen horloge.
+        row["toestel"] = rd0.get("deviceId") or (need.get("deviceId") if secs else None)
 
         # --- rusthartslag ---
         rhr = raw.get("rhr") or {}
@@ -597,6 +621,8 @@ def prepare_activities(cache: dict[str, Any], rest_hr: float, max_hr: float,
 
         acts.append({
             "id": str(raw.get("activityId")),
+            "toestel": raw.get("deviceId"),
+            "binnen": (raw.get("activityType") or {}).get("typeKey") in ("treadmill_running", "indoor_running", "indoor_cycling", "indoor_cardio"),
             "date": dt.date().isoformat(),
             "datetime": dt.isoformat(timespec="minutes"),
             "name": raw.get("activityName") or "",

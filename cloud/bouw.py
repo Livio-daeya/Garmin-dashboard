@@ -177,7 +177,9 @@ def main() -> None:
 
     fetcher = F.Fetcher(client)
     F.probe(fetcher)
-    cache = F.fetch_all(fetcher, weken, cache, activity_weeks=weken + D.RAMP_WEEKS)
+    # Dagwaarden over de langere historie voor de persoonlijke referenties;
+    # al gecachte dagen worden niet opnieuw opgehaald.
+    cache = F.fetch_all(fetcher, max(weken, D.HISTORIE_WEKEN), cache, activity_weeks=weken + D.RAMP_WEEKS)
 
     print("Berekenen...")
     payload = D.build_payload(cache, weken)

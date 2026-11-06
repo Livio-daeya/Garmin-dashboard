@@ -44,6 +44,13 @@ TEMPLATE = HERE / "template.html"
 MAX_HR = 187          # hoogste gemeten hartslag (shuttlerun-test, 17-8-2026)
 REST_HR_FALLBACK = 50  # alleen gebruikt als Garmin geen rusthartslag levert
 WEEKS_DEFAULT = 12
+# Langere historie alleen voor persoonlijke referenties bij Herstel. De
+# grafieken blijven op WEEKS_DEFAULT; dit is een modelinstelling, geen meting.
+HISTORIE_WEKEN = 26
+HISTORIE_VELDEN = ("date", "toestel", "hrv", "hrv_week", "hrv_band_laag", "hrv_band_hoog", "hrv_status",
+                   "rhr", "slaap_hr", "sleep_h", "sleep_score", "sleep_start", "sleep_end", "sleep_awakenings",
+                   "dutje_h", "slaap_bevestigd", "slaapbehoefte_garmin_min", "huidtemp_afw", "huidtemp_kalibratie",
+                   "resp_sleep", "spo2_gem", "spo2_laag", "stress_avg", "bb_wake", "readiness", "hersteltijd_min")
 RAMP_WEEKS = 8      # extra aanlooptijd voor CTL/ATL (niet getoond)
 
 # Waar de versleutelde kopie voor GitHub heen gaat. Dit is de map die
@@ -131,6 +138,10 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
                  for i in range((today - calc_start).days + 1)]
 
     daily = A.extract_daily(cache, days)
+    hist_start = today - timedelta(weeks=max(weeks, HISTORIE_WEKEN))
+    hist_days = [(hist_start + timedelta(days=i)).isoformat() for i in range((today - hist_start).days + 1)]
+    hist = A.extract_daily(cache, hist_days)
+    historie = [{k: hist[d].get(k) for k in HISTORIE_VELDEN} for d in hist_days]
 
     rhr_vals = [daily[d].get("rhr") for d in days if daily[d].get("rhr")]
     rest_hr = (sum(rhr_vals) / len(rhr_vals)) if rhr_vals else REST_HR_FALLBACK
@@ -772,6 +783,10 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         "rest_hr": round(rest_hr),
         "days": days,
         "daily": [daily[d] for d in days],
+        "historie": historie,
+        "historie_acts": [{k: a.get(k) for k in ("id", "date", "datetime", "sport", "type_key", "toestel", "binnen",
+                                                  "duration_s", "moving_s", "distance_m", "avg_hr", "pace_s_per_km",
+                                                  "hard_frac", "load", "elev_gain")} for a in acts_all],
         "fitness": fitness,
         "acwr": acwr_series,
         "weekly": weekly,
