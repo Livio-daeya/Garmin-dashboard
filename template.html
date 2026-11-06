@@ -474,7 +474,7 @@
 .ws-titel { font-size: 17px; color: var(--ink); }
 .ws-sam { color: var(--ink-2); }
 .ws-balken { display: grid; gap: 6px; margin-top: var(--sp2); }
-.ws-balk { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: var(--sp2); font-size: var(--t-label); color: var(--ink-2); }
+.ws-balk { display: grid; grid-template-columns: 94px 1fr auto; align-items: center; gap: var(--sp2); font-size: var(--t-label); color: var(--ink-2); }
 .ws-spoor { height: 6px; border-radius: 3px; background: var(--bg1); overflow: hidden; }
 .ws-spoor i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .ws-tal { text-align: right; font-variant-numeric: tabular-nums; }
@@ -677,6 +677,13 @@ body.up-open { overflow: hidden; }
 /* ---- Coach ---- */
 .coach-context { margin: var(--sp3) 0; padding: var(--sp2) var(--sp3); border: 1px solid var(--hair-strong); border-radius: var(--r-md); }
 .coach-kern p { margin: 0 0 6px; display: flex; gap: 6px; align-items: flex-start; }
+.ws-naam { display: inline-flex; align-items: center; gap: 6px; }
+.ws-stip { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; align-items: center; justify-content: center; flex: none; }
+.ws-stip .ic { width: 11px; height: 11px; }
+.ws-stip--groen { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+.ws-stip--oranje { background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--warning); }
+.ws-stip--rood { background: color-mix(in srgb, var(--critical, #e5484d) 22%, transparent); color: var(--critical, #e5484d); }
+.ws-stip--grijs { background: var(--grid); color: var(--ink-2); }
 .te-blok { display: flex; flex-direction: column; gap: 8px; margin: var(--sp2) 0; }
 .te-rij { display: grid; grid-template-columns: 72px 1fr 34px minmax(0, 120px); gap: 8px; align-items: center; font-size: var(--t-klein); }
 .te-spoor { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
@@ -5567,7 +5574,10 @@ async function syncRonde(opnieuwTekenen = true) {
     }
     if (tussendoor) syncStraks();
     SYNC.laatst = nu();
-    if (veranderdLokaal && opnieuwTekenen) allesHertekenen();
+    /* Kwam er iets van elders binnen (ander apparaat, de coach), dan altijd
+       opnieuw tekenen; anders blijft een kaart een oud getal tonen. Ben je
+       net iets aan het typen, dan pas als je het veld verlaat. */
+    if (veranderdLokaal) syncHerteken(opnieuwTekenen);
     return veranderdLokaal;
   } catch (e) {
     SYNC.fout = e.message || String(e);
@@ -5577,6 +5587,15 @@ async function syncRonde(opnieuwTekenen = true) {
   }
 }
 
+let SYNC_HERTEKEN_WACHT = false;
+function syncHerteken(direct) {
+  const el = document.activeElement;
+  const typt = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  if (direct || !typt) { try { allesHertekenen(); } catch (e) { console.error(e); } return; }
+  if (SYNC_HERTEKEN_WACHT) return;
+  SYNC_HERTEKEN_WACHT = true;
+  el.addEventListener("blur", () => { SYNC_HERTEKEN_WACHT = false; setTimeout(() => { try { allesHertekenen(); } catch (e) { console.error(e); } }, 50); }, {once: true});
+}
 /* Na elke wijziging wachten we even: typ je drie RPE's achter elkaar, dan is
    dat één ronde in plaats van drie. */
 let SYNC_TIMER = null;
@@ -11513,17 +11532,42 @@ function weekDoelen(w) {
       if (w.herstelZwaar) tekst = `Je herstel vroeg deze week om aandacht; minder doen kan dan de goede keuze zijn. ` + tekst;
       if (vorige && vorige.perDoel[k] && vorige.perDoel[k].gemist + vorige.perDoel[k].verwijderd > 0) tekst += ` Vorige week viel er bij ${WS_DOELEN[k].naam.toLowerCase()} ook iets weg.`;
     }
-    return {k, ...WS_DOELEN[k], t, woord, tekst, wat: t.wat};
+    /* Stoplicht per doel. Groen: plan gevolgd, en wat je extra deed past
+       binnen je eigen gewone belasting en je herstel. Oranje: iets gemist,
+       of extra terwijl je week al zwaarder is dan je afgelopen 8 weken of
+       je herstel om aandacht vroeg. Rood: extra op een dag dat je herstel
+       rood was (ziek, pijn of duidelijk achteruit). [modelkeuze] */
+    let kleur, oordeel;
+    const ex = t.extra || 0, exDagen = t.extraDagen || [];
+    const exNiveaus = exDagen.map(d => herstelKern(d).niveau);
+    const zwaarder = w.loadMax8 != null && w.load > w.loadMax8;
+    if (!t.gepland && !t.verwijderd && !ex) { kleur = null; oordeel = ""; }
+    else {
+      if (mis) { kleur = "oranje"; oordeel = `${mis} gemist`; }
+      else if (t.onbekend) { kleur = "grijs"; oordeel = `${t.onbekend} nog zonder registratie`; }
+      else { kleur = "groen"; oordeel = t.gepland ? "plan gevolgd" : "niets gepland"; }
+      if (ex) {
+        const extraWoord = `${ex} extra`;
+        if (exNiveaus.includes("rood")) { kleur = "rood"; oordeel += ` · ${extraWoord} op een dag dat je herstel rood was`; }
+        else if (zwaarder) { if (kleur === "groen") kleur = "oranje"; oordeel += ` · ${extraWoord}; je week is al zwaarder dan je zwaarste van de afgelopen 8 weken`; }
+        else if (exNiveaus.includes("oranje")) { if (kleur === "groen") kleur = "oranje"; oordeel += ` · ${extraWoord} terwijl je herstel om aandacht vroeg`; }
+        else oordeel += ` · ${extraWoord}, past binnen je gewone belasting${exNiveaus.every(n => n === "grijs") ? " (herstel onbekend)" : ""}`;
+      }
+    }
+    return {k, ...WS_DOELEN[k], t, woord, tekst, wat: t.wat, kleur, oordeel};
   });
 }
+const WS_ICOON = {groen: "goed", oranje: "letop", rood: "letop", grijs: "info"};
+const wsStip = d => d.kleur ? `<span class="ws-stip ws-stip--${d.kleur}" title="${d.oordeel}">${ic(WS_ICOON[d.kleur])}</span>` : "";
 function wsBalken(w) {
-  return `<div class="ws-balken">${weekDoelen(w).filter(d => d.t.gepland).map(d => `<div class="ws-balk">
-      <span>${d.naam}</span><span class="ws-spoor"><i style="width:${Math.round((d.t.gedaan + 0.5 * d.t.deels) / d.t.gepland * 100)}%"></i></span>
+  return `<div class="ws-balken">${weekDoelen(w).filter(d => d.t.gepland || d.t.extra).map(d => `<div class="ws-balk">
+      <span class="ws-naam">${wsStip(d)}${d.naam}</span><span class="ws-spoor"><i style="width:${d.t.gepland ? Math.round((d.t.gedaan + 0.5 * d.t.deels) / d.t.gepland * 100) : 100}%"></i></span>
       <span class="ws-tal">${d.t.gedaan + d.t.deels}/${d.t.gepland}${d.t.extra ? ` +${d.t.extra}` : ""}</span></div>`).join("")}</div>`;
 }
 function weekDoelenHtml(w) {
-  return `<div class="ws-doelen">${weekDoelen(w).filter(d => d.t.gepland || d.t.verwijderd).map(d => `<div class="ws-doel">
-      <div class="ws-doel-kop"><b>${d.naam}</b><span class="u-klein">${d.woord}</span></div>
+  return `<div class="ws-doelen">${weekDoelen(w).filter(d => d.t.gepland || d.t.verwijderd || d.t.extra).map(d => `<div class="ws-doel">
+      <div class="ws-doel-kop"><b>${d.naam}</b>${d.kleur ? hsChip(hoofdletter(d.oordeel.split(" · ")[0]), d.kleur) : `<span class="u-klein">${d.woord}</span>`}</div>
+      ${d.oordeel.includes(" · ") ? `<span class="u-klein">${hoofdletter(d.oordeel.split(" · ").slice(1).join(" · "))}.</span>` : ""}
       ${d.wat.length ? `<span class="u-klein">${hoofdletter(zinLijst(d.wat))}.</span>` : ""}
       ${d.tekst ? `<p>${d.tekst}</p>` : ""}</div>`).join("")}</div>`;
 }
@@ -11601,7 +11645,8 @@ function weekScore(ma, opties = {}) {
     if (g && g.gemist > 0) { g.gemist--; tel.overgeslagen--; g.gedaan++; tel.gedaan++; tel.vervangen++; g.wat.push(`${kort} (niet gepland) vervangt een gemiste sessie`); return; }
     tel.extra++;
     if (x.doel) { perDoel[x.doel] = perDoel[x.doel] || {gepland: 0, gedaan: 0, deels: 0, gemist: 0, onbekend: 0, verwijderd: 0, wat: []};
-      perDoel[x.doel].extra = (perDoel[x.doel].extra || 0) + 1; perDoel[x.doel].wat.push(`${kort} extra`); }
+      perDoel[x.doel].extra = (perDoel[x.doel].extra || 0) + 1; perDoel[x.doel].wat.push(/extra$/i.test(kort) ? kort : `${kort} extra`);
+      (perDoel[x.doel].extraDagen = perDoel[x.doel].extraDagen || []).push(x.d); }
   });
   if (tel.onbekend === 0) eersteOnbekend = null;
 
@@ -11617,6 +11662,11 @@ function weekScore(ma, opties = {}) {
   const eerder = [1, 2, 3, 4].map(w => { const m = isoPlus(ma, -7 * w), e = isoPlus(m, dagen.length - 1);
     return (DATA.activities || []).filter(a => a.date >= m && a.date <= e).reduce((t, a) => t + (a.load || 0), 0); }).filter(x => x > 0);
   const loadNormaal = eerder.length ? Math.round(eerder.reduce((t, x) => t + x, 0) / eerder.length) : null;
+  /* je zwaarste van de afgelopen 8 weken, tot dezelfde weekdag: eigen
+     referentie voor "meer dan je gewend bent", geen algemene grens */
+  const acht = [1, 2, 3, 4, 5, 6, 7, 8].map(w => { const m = isoPlus(ma, -7 * w), e = isoPlus(m, dagen.length - 1);
+    return (DATA.activities || []).filter(a => a.date >= m && a.date <= e).reduce((t, a) => t + (a.load || 0), 0); }).filter(x => x > 0);
+  const loadMax8 = acht.length >= 4 ? Math.round(Math.max(...acht)) : null;
 
   /* Herstel per dag, uit de herstelstatus: alleen als context bij de score. */
   const aandacht = dagen.filter(d => ["oranje", "rood"].includes(herstelKern(d).niveau));
@@ -11635,7 +11685,7 @@ function weekScore(ma, opties = {}) {
   if (loadNormaal) redenen.push(`Garmin-belasting ${load}, je gewone week tot dezelfde dag ${loadNormaal}. Context, telt niet mee in de score.`);
   const onzeker = [];
   if (tel.onbekend) onzeker.push(`${tel.onbekend} ${tel.onbekend === 1 ? "sessie" : "sessies"} zonder registratie, telt nog niet mee`);
-  return {ma, zo, lopend, score, kop, soort: score == null ? "mis" : "open", oordeel: score, redenen, onzeker, tel, gemist, gemRpe, load, loadNormaal, eersteOnbekend, perDoel, herstelZwaar, aandacht, dagenSignaal};
+  return {ma, zo, lopend, score, kop, soort: score == null ? "mis" : "open", oordeel: score, redenen, onzeker, tel, gemist, gemRpe, load, loadNormaal, loadMax8, eersteOnbekend, perDoel, herstelZwaar, aandacht, dagenSignaal};
 }
 function weekScoreKort(w) {
   const d = weekDoelen(w).filter(x => x.t.gepland || x.t.verwijderd);
@@ -14858,7 +14908,7 @@ function coachActiesHtml(acties) {
   const vast = acties.filter(a => a.gereedschap.startsWith("bewaar_") && a.opgeslagen).map(coachActieTekst);
   const mis = acties.filter(a => a.fout).length;
   return `<div class="coach-acties">${bekeken.length ? `<span>Bekeken: ${bekeken.map(veiligeTekst).join(" · ")}</span>` : ""}
-    ${vast.length ? `<span class="coach-vast">${ic("vink")}Vastgelegd in je dashboard: ${vast.map(veiligeTekst).join(" · ")}</span>` : ""}
+    ${vast.length ? `<span class="coach-vast">${ic("goed")}Vastgelegd in je dashboard: ${vast.map(veiligeTekst).join(" · ")}</span>` : ""}
     ${mis ? `<span>${mis} opzoeking${mis === 1 ? "" : "en"} lukte niet</span>` : ""}</div>`;
 }
 

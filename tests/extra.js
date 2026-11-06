@@ -89,6 +89,20 @@
     const a = routeAdvies();
     return {ok: !/^Volg vandaag je plan/.test(a.kop) && /extra|niet gepland|trainde/.test(a.kop + a.label + a.zin), detail: `${a.label} | ${a.kop} | ${a.zin}`};
   });
+  await test("Stoplicht per doel: extra die binnen je gewone belasting past is groen", () => {
+    DATA.activities = [...echt, {id: 9990021, date: vrij, datetime: `${vrij}T07:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop extra", duration_s: 1800, load: 1}];
+    HB_CACHE.clear();
+    const w = weekScore(ma), d = weekDoelen(w).find(x => x.k === "conditie");
+    const html = weekDoelenHtml(w) + wsBalken(w);
+    return {ok: !!d.kleur && /hs-chip/.test(html) && /ws-stip/.test(html) && (w.loadMax8 == null || w.load <= w.loadMax8 ? (d.t.extra ? /past binnen/.test(d.oordeel) : true) : true),
+      detail: `conditie ${d.kleur}: ${d.oordeel} (week ${w.load}, max 8 wk ${w.loadMax8})`};
+  });
+  await test("Extra terwijl je week zwaarder is dan je afgelopen 8 weken wordt oranje", () => {
+    DATA.activities = [...echt, {id: 9990022, date: vrij, datetime: `${vrij}T07:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop extra zwaar", duration_s: 5400, load: 5000}];
+    HB_CACHE.clear();
+    const w = weekScore(ma), d = weekDoelen(w).find(x => x.k === "conditie");
+    return {ok: w.loadMax8 == null || (d.kleur === "oranje" || d.kleur === "rood") && /zwaarder/.test(d.oordeel), detail: `${d.kleur}: ${d.oordeel}`};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }

@@ -62,6 +62,16 @@
     const r = checkLees()["2026-11-05"];
     return {ok: r.gevoel === 2 && (r._conflicten || []).some(x => x.gevoel === 4 && x._bron === "telefoon-ab12"), detail: JSON.stringify(r)};
   });
+  await test("Een wijziging van elders tekent de weekkaart meteen opnieuw", async () => {
+    const c = nepClient(); aan(c);
+    let getekend = 0; const orig = window.allesHertekenen; window.allesHertekenen = () => { getekend++; };
+    try {
+      c.db.records.push({vak: "check", sleutel: "2026-11-05", data: {gevoel: 2, _t: 999, _bron: "telefoon-ab12"}});
+      document.activeElement && document.activeElement.blur && document.activeElement.blur();
+      await syncRonde(false);
+    } finally { window.allesHertekenen = orig; }
+    return {ok: getekend >= 1, detail: `${getekend}× opnieuw getekend`};
+  });
   await test("Notities en workoutaanpassingen synchroniseren mee", async () => {
     const c = nepClient([{vak: "notitie", sleutel: "2026-11-05-a", data: {datum: "2026-11-05", tekst: "Na dinsdag geen extra beenwerk", _t: 5, _bron: "coach-chat"}}]);
     aan(c); localStorage.removeItem(NOTITIE_KEY);
