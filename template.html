@@ -570,6 +570,12 @@ body.up-open { overflow: hidden; }
 .verdieping[open] > summary::after { content: "–"; }
 .card--rij { padding-top: var(--sp3); padding-bottom: var(--sp3); }
 
+/* ---- Weekscore ---- */
+.ws .u-advies { margin-bottom: var(--sp2); }
+.ws-redenen { margin: var(--sp2) 0; }
+.ws-meer { min-height: var(--klik); }
+#belFocus .ws { margin-top: var(--sp2); }
+
 /* ---- Coach ---- */
 .coach-context { margin: var(--sp3) 0; padding: var(--sp2) var(--sp3); border: 1px solid var(--hair-strong); border-radius: var(--r-md); }
 .coach-kern p { margin: 0 0 6px; display: flex; gap: 6px; align-items: flex-start; }
@@ -7697,6 +7703,8 @@ function renderBelFocus() {
       balk: uiBalk({gedaan: K.hbGedaan + K.anaGedaan, verwacht: nogTeDoen.length, doel: kortGepland, eenheid: "sessies", doelWoord: "gepland"}),
       sub: K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : null, status: status(kSt)})}
   </div>`;
+  host.insertAdjacentHTML("beforeend", `${weekScoreHtml(weekScore(m.ma), {kort: true})}<button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>`);
+  host.querySelector("[data-weekscore]").onclick = weekScorePaneel;
   host.hidden = false;
   host.querySelectorAll("[data-meet]").forEach(b => b.onclick = () => belDetailOpen(b.dataset.meet));
 
@@ -9078,7 +9086,7 @@ function trainingKaart(iso, i, opties = {}) {
   const kop = `<div class="tk-kop">
       <span class="tk-sport" style="--cat:${kleur}">${ic(SOORT_IC[i.soort] || "puls")}</span>
       <div class="tk-titel"><b>${i.titel}</b><span class="tk-meta">${sessieStatusLabel(iso, s)}<span>${korteDatum(iso)}${i.plek ? ` · ${PLEK_KORT[i.plek] || i.plek}` : ""}</span></span></div>
-      ${iso <= vandaagIso() ? `<div class="tk-menuwrap"><button class="u-icoonknop" data-menu="${sl}" aria-haspopup="menu" aria-expanded="false" aria-label="Status en acties">${ic("meer")}</button></div>` : ""}
+      <div class="tk-menuwrap"><button class="u-icoonknop" data-menu="${sl}" aria-haspopup="menu" aria-expanded="false" aria-label="Status en acties">${ic("meer")}</button></div>
     </div>`;
   if (opties.compact && s.k === "gedaan") {
     /* uitgevoerd op Vandaag: één regel kerncijfers en de vervolgstap */
@@ -9226,6 +9234,11 @@ function allesNaInvoer() {
 /* Status kiezen: Gedaan, Deels gedaan, Overgeslagen, of terug naar wat
    Garmin zegt. Altijd terug te draaien met de knop in de melding. */
 function statusMenu(knop, iso, i) {
+  if (iso > vandaagIso()) {
+    /* een dag die nog moet komen: alleen bespreken of verwijderen */
+    return uiMenuOpen(knop, [{tekst: "Uit de planning halen", doe: () => sessieVerwijderen(iso, i)},
+      {tekst: "Bespreek met coach", doe: () => coachOver(iso, i)}]);
+  }
   const eigen = (instelLees().planstatus || {})[`${iso}|${i.id}`];
   const zet = (w, tekst) => () => {
     const vorig = eigen || null;
@@ -9242,6 +9255,7 @@ function statusMenu(knop, iso, i) {
   if (eigen) items.push({tekst: "Automatisch uit Garmin", doe: zet(null, "Status volgt Garmin")});
   items.push("-", {tekst: "Feedback geven", doe: () => sessieFeedback(iso, i)},
     {tekst: "Bespreek met coach", doe: () => coachOver(iso, i)});
+  if (iso >= vandaagIso() && itemStatus(iso, i).k !== "gedaan") items.push({tekst: "Uit de planning halen", doe: () => sessieVerwijderen(iso, i)});
   if (i.soort === "kracht" && i.plek === "hal" && iso === vandaagIso())
     items.push({tekst: halZwaar(iso) ? "Toch volledig doen" : "Zaaltraining was zwaar: verkorten", doe: () => {
       const I = bewaardLees(INSTEL_KEY, {});
@@ -9888,6 +9902,145 @@ function renderControle() {
    augustus als tijdlijn, en wijzigingen. De maandkalender en de
    wedstrijdscenario's zijn een tik verder.
    ----------------------------------------------------------------------- */
+/* -----------------------------------------------------------------------
+   Een sessie uit de planning halen
+   Wordt een wijziging zoals de andere ("eigen keuze"), zodat Vandaag,
+   Training, Belasting en Plan hem allemaal meenemen: de sessie telt niet
+   meer als gepland en verschijnt bij Wijzigingen met Terugdraaien.
+   ----------------------------------------------------------------------- */
+function planVerwijder(iso, i) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  const rest = (I.wijzigingen || []).filter(w => !(w.datum === iso && w.item === i.id));
+  const w = {datum: iso, item: i.id, regel: "eigen", wat: `${i.titel} uit de planning gehaald`,
+    waarom: "Door jou verwijderd.", data: ["jouw keuze"], evaluatie: "geen; telt niet meer als gepland",
+    nieuw: {soort: "rust", titel: "Verwijderd", voorschrift: "Door jou uit de planning gehaald."}, sinds: new Date().toISOString()};
+  return instelZet({...I, wijzigingen: [...rest, w].slice(-200)});
+}
+function planVerwijderTerug(iso, id) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  return instelZet({...I, wijzigingen: (I.wijzigingen || []).filter(w => !(w.datum === iso && w.item === id && w.regel === "eigen"))});
+}
+function sessieVerwijderen(iso, i) {
+  uiPaneel("Uit de planning halen?", `<p><b>${i.titel}</b> op ${dagNaam(iso)} ${kortDatum(iso)}.</p>
+    <p class="u-klein">De sessie telt daarna niet meer als gepland, ook niet in Belasting en je weekscore. Er komt geen inhaaltraining voor in de plaats. Je kunt het terugdraaien bij Wijzigingen.</p>
+    <div class="u-knoppen"><button class="u-knop" data-ja>Verwijderen</button><button class="u-knop u-knop--stil" data-nee>Annuleren</button></div>`,
+    box => {
+      box.querySelector("[data-nee]").onclick = () => uiPaneelSluit();
+      box.querySelector("[data-ja]").onclick = () => {
+        if (planVerwijder(iso, i) === false) { uiMelding("Opslaan mislukt", "fout"); return; }
+        uiPaneelSluit();
+        allesNaInvoer(); renderRoute();
+        uiMeldingTerug(`${i.titel} verwijderd`, () => { planVerwijderTerug(iso, i.id); allesNaInvoer(); renderRoute(); });
+      };
+    });
+}
+
+/* -----------------------------------------------------------------------
+   Weekscore: goed, te licht of te zwaar
+   Een beoordeling van dit dashboard, met de regels zichtbaar:
+     te zwaar   herstelsignalen op twee of meer dagen (of ziek, of klachten
+                aan pees of rug) terwijl je alles of meer dan gepland deed
+     te licht   twee of meer geplande sessies niet gedaan, zonder dat je
+                herstel of een aanpassing daar een reden voor gaf
+     goed       volgens plan met stabiel herstel, of minder gedaan terwijl
+                je herstel daarom vroeg: minder doen was dan de goede keuze
+   Geen percentages of minutenquota; onbekende dagen tellen niet als goed.
+   ----------------------------------------------------------------------- */
+const MINDER_REGELS = ["ziek", "herstel", "achilles", "rug", "fysio", "benen"];
+function weekScore(ma) {
+  const v = vandaagIso(), zo = isoPlus(ma, 6), tot = zo < v ? zo : v;
+  const lopend = zo >= v;
+  const dagen = [];
+  for (let d = ma; d <= tot; d = isoPlus(d, 1)) dagen.push(d);
+  const tel = {gepland: 0, gedaan: 0, deels: 0, overgeslagen: 0, onbekend: 0, extra: 0, aangepast: 0, verwijderd: 0};
+  const gekoppeld = new Set();
+  const gemist = [];
+  let eersteOnbekend = null;
+  dagen.forEach(d => {
+    const r = dagRoute(d, {alleenLezen: true});
+    r.wijzigingen.forEach(w => { if (MINDER_REGELS.includes(w.regel)) tel.aangepast++; if (w.regel === "eigen") tel.verwijderd++; });
+    r.items.filter(i => i.soort !== "rust" && !i.optioneel && !i.wacht).forEach(i => {
+      const s = itemStatus(d, i);
+      (s.acts || []).forEach(a => gekoppeld.add(String(a.id)));
+      if (d === v && ["vandaag", "gepland"].includes(s.k)) return;    // vandaag nog open: niet meetellen
+      tel.gepland++;
+      if (s.k === "gedaan") { s.deels ? tel.deels++ : tel.gedaan++; }
+      else if (s.k === "overgeslagen") { tel.overgeslagen++; gemist.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.titel.split(" · ")[0].toLowerCase()}`); }
+      else if (s.k === "onbekend") { tel.onbekend++; eersteOnbekend = eersteOnbekend || d; gemist.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.titel.split(" · ")[0].toLowerCase()} (geen registratie)`); }
+    });
+  });
+  const acts = (DATA.activities || []).filter(a => a.date >= ma && a.date <= tot);
+  tel.extra = acts.filter(a => !gekoppeld.has(String(a.id)) && (a.duration_s || 0) >= 20 * 60 && a.sport !== "Overig").length;
+
+  /* herstel over de week */
+  const sigDagen = dagen.map(d => ({d, s: herstelSignalen(d)}));
+  const dagenSignaal = sigDagen.filter(x => x.s.groepen.length).map(x => x.d);
+  const ziek = sigDagen.some(x => x.s.los.ziek === 1);
+  const klacht = sigDagen.some(x => (x.s.los.achilles || 0) >= 1 || (x.s.los.rug || 0) >= 1);
+  const checkDagen = dagen.filter(d => (checkLees()[d] || {}).gevoel != null || ((checkLees()[d] || {}).lijf && Object.keys(checkLees()[d].lijf).length)).length;
+  const rpes = dagen.flatMap(d => ((checkLees()[d] || {}).sessies || []).map(x => x.rpe).filter(x => x != null));
+  const gemRpe = rpes.length ? Math.round(rpes.reduce((t, x) => t + x, 0) / rpes.length * 10) / 10 : null;
+  const load = Math.round(acts.reduce((t, a) => t + (a.load || 0), 0));
+  const eerder = [1, 2, 3, 4].map(w => { const m = isoPlus(ma, -7 * w), e = isoPlus(m, dagen.length - 1);
+    return (DATA.activities || []).filter(a => a.date >= m && a.date <= e).reduce((t, a) => t + (a.load || 0), 0); }).filter(x => x > 0);
+  const loadNormaal = eerder.length ? Math.round(eerder.reduce((t, x) => t + x, 0) / eerder.length) : null;
+
+  const herstelZwaar = dagenSignaal.length >= 2 || ziek || klacht;
+  const gedaanAlles = tel.gedaan + tel.deels + tel.extra >= tel.gepland;
+  /* Zonder registratie is onbekend, niet overgeslagen: dat telt niet als
+     te licht. Ontbreken er twee of meer, dan eerst vragen wat het was. */
+  const nietGedaan = tel.overgeslagen;
+  let oordeel, soort, kop;
+  if (!tel.gepland && !acts.length) { oordeel = null; kop = lopend ? "Nog niets te beoordelen" : "Geen training en geen planning"; soort = "mis"; }
+  else if (tel.onbekend >= 2 && !(herstelZwaar && gedaanAlles)) { oordeel = null; soort = "mis"; kop = "Nog onzeker"; }
+  else if (herstelZwaar && gedaanAlles && (tel.extra > 0 || tel.gedaan >= tel.gepland)) {
+    oordeel = "teveel"; soort = "fout"; kop = "Te zwaar";
+  } else if (nietGedaan >= 2 && !herstelZwaar && !tel.aangepast) {
+    oordeel = "teweinig"; soort = "let"; kop = "Te licht";
+  } else if ((nietGedaan || tel.aangepast || tel.verwijderd) && herstelZwaar) {
+    oordeel = "goed"; soort = "ok"; kop = "Goed, met minder";
+  } else { oordeel = "goed"; soort = "ok"; kop = "Goed"; }
+  const redenen = [];
+  redenen.push(`Uitvoering: ${tel.gedaan} gedaan${tel.deels ? `, ${tel.deels} deels` : ""}${tel.overgeslagen ? `, ${tel.overgeslagen} overgeslagen` : ""}${tel.onbekend ? `, ${tel.onbekend} zonder registratie` : ""} van ${tel.gepland} gepland${tel.extra ? `; ${tel.extra} extra` : ""}${lopend ? " (tot nu toe)" : ""}.`);
+  if (tel.aangepast) redenen.push(`${tel.aangepast} ${tel.aangepast === 1 ? "sessie" : "sessies"} aangepast door een herstel- of klachtenregel.`);
+  if (tel.verwijderd) redenen.push(`${tel.verwijderd} door jou uit de planning gehaald.`);
+  redenen.push(dagenSignaal.length ? `Herstelsignalen op ${dagenSignaal.length} ${dagenSignaal.length === 1 ? "dag" : "dagen"} (${dagenSignaal.map(d => WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)).join(", ")}).` : "Geen herstelsignalen uit HRV, rusthartslag, slaap of je check-in.");
+  if (ziek) redenen.push("Ziek of koorts ingevuld.");
+  if (klacht) redenen.push("Klachten aan achillespees of rug ingevuld.");
+  if (gemRpe != null) redenen.push(`Gemiddelde zwaarte ${komma(gemRpe)}/10 over ${rpes.length} ${rpes.length === 1 ? "sessie" : "sessies"}.`);
+  if (loadNormaal) redenen.push(`Garmin-belasting ${load}, je gewone week tot dezelfde dag ${loadNormaal}. Ter vergelijking, geen doel.`);
+  const uitleg = oordeel === "teveel" ? "Je deed alles of meer, terwijl je herstel signalen gaf. Minder doen was beter geweest."
+    : oordeel === "teweinig" ? "Er vielen geplande sessies weg terwijl je herstel daar geen reden voor gaf."
+    : kop === "Goed, met minder" ? "Je deed minder dan gepland, en je herstel vroeg daarom. Dat was de goede keuze."
+    : oordeel === "goed" ? "Uitgevoerd zoals gepland, met stabiel herstel."
+    : kop === "Nog onzeker" ? `Geen registratie van ${zinLijst(gemist.filter(g => /registratie/.test(g)).map(g => g.replace(" (geen registratie)", "")))}. Zet ze op gedaan of overgeslagen.` : "";
+  const onzeker = [];
+  if (checkDagen < Math.ceil(dagen.length / 2)) onzeker.push(`check-in op ${checkDagen} van ${dagen.length} dagen; zware benen of klachten kunnen ontbreken`);
+  if (tel.onbekend) onzeker.push(`${tel.onbekend} ${tel.onbekend === 1 ? "sessie" : "sessies"} zonder registratie`);
+  return {ma, zo, lopend, oordeel, soort, kop, uitleg, redenen, onzeker, tel, gemist, dagenSignaal, gemRpe, load, loadNormaal, eersteOnbekend};
+}
+function weekScoreHtml(w, opties = {}) {
+  return `<div class="ws">${uiAdvies({label: `Week ${kortDatum(w.ma)} – ${kortDatum(w.zo)}${w.lopend ? " · tot nu toe" : ""}`,
+      actie: w.kop, reden: w.uitleg, soort: w.soort,
+      knop: w.kop === "Nog onzeker" && w.eersteOnbekend ? `<button class="u-knop u-knop--stil u-knop--klein" data-wsdag="${w.eersteOnbekend}">${hoofdletter(dagNaam(w.eersteOnbekend))} invullen</button>` : ""})}
+    ${opties.kort ? "" : `<ul class="u-lijst u-lijst--tekst ws-redenen">${w.redenen.map(r => `<li>${r}</li>`).join("")}</ul>
+      ${w.onzeker.length ? `<p class="u-klein">Onzeker: ${w.onzeker.join("; ")}.</p>` : ""}
+      <p class="u-klein">Beoordeling van dit dashboard. Te zwaar: herstelsignalen op twee of meer dagen (of ziek, of klachten) terwijl je alles of meer deed. Te licht: twee of meer geplande sessies overgeslagen zonder reden uit je herstel. Zonder registratie telt als onbekend. Anders goed.</p>`}</div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-wsdag]"); if (!b) return;
+  if (PANEEL.open) uiPaneelSluit();
+  ROUTE_DAG = b.dataset.wsdag; naarTab("training");
+});
+function weekScorePaneel() {
+  const ma = maandagVan(vandaagIso());
+  /* alleen weken waarin je plan al liep; daarvoor is er niets om tegen af te zetten */
+  const start = status().planStart || ma;
+  const weken = [0, 1, 2, 3].map(n => isoPlus(ma, -7 * n)).filter(m => isoPlus(m, 6) >= start).map(weekScore);
+  uiPaneel("Weekscore", weken.map((w, n) => n === 0 ? weekScoreHtml(w)
+    : `<details class="up-deel"><summary>${kortDatum(w.ma)} – ${kortDatum(w.zo)} · ${w.kop}</summary><div>${weekScoreHtml(w)}</div></details>`).join(""));
+}
+
 const DOEL_MAAND = "augustus 2027";
 function renderPlanNieuw() {
   const v = vandaagIso();
@@ -9914,7 +10067,9 @@ function renderPlanNieuw() {
     week.querySelectorAll("[data-weergave]").forEach(b => b.onclick = () => { PLAN_WEERGAVE = b.dataset.weergave; renderPlanNieuw(); });
     week.querySelectorAll("[data-psessie]").forEach(b => b.onclick = () => {
       const [d, i] = sessieZoek(b.dataset.psessie);
-      if (i) uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, trainingKaart(d, i));
+      if (i) uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, trainingKaart(d, i) +
+        (d >= v && itemStatus(d, i).k !== "gedaan" ? `<button class="u-knop u-knop--stil u-knop--vol" data-verwijder>${ic("sluit")}Uit de planning halen</button>` : ""),
+        box => { const k = box.querySelector("[data-verwijder]"); if (k) k.onclick = () => { uiPaneelSluit(); setTimeout(() => sessieVerwijderen(d, i), 280); }; });
     });
     /* maandweergave: de bestaande planner, verhuisd in plaats van gekopieerd */
     const mh = document.getElementById("plMaand"), pk = document.getElementById("plannerKaart");
@@ -9940,12 +10095,15 @@ function renderPlanNieuw() {
   if (wv) {
     const m = weekMinuten();
     wv.innerHTML = `<div class="sectie-kop"><h3>Deze week</h3><button class="u-link" data-naar="belasting">Belasting</button></div>
+      ${weekScoreHtml(weekScore(maandagVan(v)), {kort: true})}
+      <button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>
       <div class="pl-cijfers">
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.laag}">${ic("golf")}</span><b>${(r => r.acts.length ? Math.round(r.z1 + r.z2) : "–")(rustWeek(m))}</b><span>rustig · min</span></div>
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.hoog}">${ic("klok")}</span><b>${m.hoog.gedaan}</b><span>intervallen · werkmin</span></div>
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.ana}">${ic("bliksem")}</span><b>${m.kort.hbGedaan + m.kort.anaGedaan}</b><span>kort intensief · sessies</span></div>
       </div>`;
     wv.querySelector("[data-naar]").onclick = () => naarTab("belasting");
+    wv.querySelector("[data-weekscore]").onclick = weekScorePaneel;
   }
 
   /* eerstvolgende meetmoment, prominent; de rest achter een knop */
@@ -10000,7 +10158,8 @@ function renderPlanNieuw() {
     wz.querySelectorAll("[data-terug]").forEach(k => k.onclick = () => {
       const [d, it] = k.dataset.terug.split("|");
       const I = bewaardLees(INSTEL_KEY, {});
-      instelZet({...I, wijzigingen: (I.wijzigingen || []).map(w => w.datum === d && w.item === it ? {...w, teruggedraaid: true} : w)});
+      instelZet({...I, wijzigingen: (I.wijzigingen || []).filter(w => !(w.datum === d && w.item === it && w.regel === "eigen"))
+        .map(w => w.datum === d && w.item === it ? {...w, teruggedraaid: true} : w)});
       uiMelding("Teruggedraaid naar het oorspronkelijke plan"); renderRoute(); allesNaInvoer(); renderPlanNieuw();
     });
     wz.querySelector("[data-scenario]").onclick = () => {

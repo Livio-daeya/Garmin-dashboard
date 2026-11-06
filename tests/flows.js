@@ -223,6 +223,32 @@
     return {ok: titels.every(t => t === titels[0]), detail: titels.join(" | ")};
   });
 
+  await test("Weekscore: onzeker, goed, te licht, goed met minder, te zwaar", async () => {
+    const ma = maandagVan(V), di = "2026-11-03";
+    const it = dagRoute(di, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
+    const k = () => weekScore(ma).kop;
+    it.forEach(i => planStatusZet(di, i.id, null));
+    const nu = k();
+    it.forEach(i => planStatusZet(di, i.id, "gedaan")); const goed = k();
+    it.forEach(i => planStatusZet(di, i.id, "overgeslagen")); const licht = k();
+    const c = checkLees(); ["2026-11-03", "2026-11-04"].forEach(d => { c[d] = {...(c[d] || {}), gevoel: 2, lijf: {benen: 2}}; }); checkZet(c);
+    const minder = k();
+    it.forEach(i => planStatusZet(di, i.id, "gedaan")); const zwaar = k();
+    return {ok: nu === "Nog onzeker" && goed === "Goed" && licht === "Te licht" && minder === "Goed, met minder" && zwaar === "Te zwaar",
+      detail: [nu, goed, licht, minder, zwaar].join(" → ")};
+  });
+
+  await test("Sessie uit de planning halen telt overal mee en is terug te draaien", async () => {
+    const d = "2026-11-06", i = dagRoute(d, {alleenLezen: true}).items.find(x => x.soort === "handbal");
+    const voor = weekScore(maandagVan(V)).tel.gepland;
+    planVerwijder(d, i); allesNaInvoer();
+    const weg = dagRoute(d, {alleenLezen: true}).items.every(x => x.soort === "rust");
+    const inWijz = wijzigingenLees().some(w => w.datum === d && w.regel === "eigen");
+    planVerwijderTerug(d, i.id); allesNaInvoer();
+    const terugOk = dagRoute(d, {alleenLezen: true}).items.some(x => x.soort === "handbal");
+    return {ok: weg && inWijz && terugOk, detail: `verwijderd ${weg}, bij wijzigingen ${inWijz}, terug ${terugOk} (gepland tot nu ${voor})`};
+  });
+
   terug();
   DATA.planbasis.vandaag = V; ROUTE_DAG = null; belastingHerberekenen(); allesNaInvoer();
   return uit;
