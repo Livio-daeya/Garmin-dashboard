@@ -14756,6 +14756,11 @@ function coachContext() {
         hart: {oordeel: i.hart.reden, hrv_week: i.hart.hrv.week ?? null, hrv_band: i.hart.hrv.weekRef ? {bron: i.hart.hrv.weekRef.bron, laag: Math.round(i.hart.hrv.weekRef.laag), hoog: Math.round(i.hart.hrv.weekRef.hoog)} : null, rusthartslag: i.hart.rhr.actueel},
         overig: i.overig.reden, klachten: h.klachten.map(k => `${k.naam}: ${k.tekst}`), belasting_context: h.bel}; })(),
     laatste_krachtwaarden: kracht,
+    /* dezelfde weekscore en stoplichten als in het dashboard */
+    week: (() => { try { const w = weekScore(maandagVan(vandaagIso()));
+      return {score: w.score, kop: w.kop, belasting: w.load, gewone_week_tot_vandaag: w.loadNormaal, zwaarste_van_8_weken_tot_vandaag: w.loadMax8,
+        per_doel: weekDoelen(w).filter(d => d.kleur).map(d => ({doel: d.naam, gepland: d.t.gepland, gedaan: d.t.gedaan, gemist: d.t.gemist, extra: d.t.extra || 0,
+          stoplicht: d.kleur, oordeel: d.oordeel, wat: d.wat})), redenen: w.redenen}; } catch (e) { return null; } })(),
     /* Ontbrekende krachtlogs zijn onbekend, geen nulbelasting. Zo staat het
        er ook voor de coach, anders rekent die een lege week als een rustweek. */
     route: (() => {
@@ -14765,7 +14770,9 @@ function coachContext() {
           voorschrift: x.oefeningen || x.voorschrift || null, verkort: x.verkort || false})),
         status: status(),
         komende_7_dagen: [0, 1, 2, 3, 4, 5, 6].map(i => { const d = isoPlus(v, i);
-          return {datum: d, items: dagRoute(d, {alleenLezen: true}).items.map(x => x.titel)}; }),
+          return {datum: d, items: dagRoute(d, {alleenLezen: true}).items.map(x => ({titel: x.titel, soort: x.soort, plek: x.plek || null,
+            voorschrift: x.voorschrift || null, oefeningen: x.oefeningen ? (Array.isArray(x.oefeningen) ? x.oefeningen : Object.keys(x.oefeningen)) : null,
+            status: d <= v ? (itemStatus(d, x).k) : "gepland"}))}; }),
         testen: testUitslagen(), wijzigingen: wijzigingenLees().slice(-10)};
     })(),
     kracht_laatste_7_dagen: (() => {
@@ -14848,6 +14855,26 @@ kracht Jeff Nippard en de studies die hij bespreekt (Pelland 2026, Robinson 2024
 2020, Rønnestad 2011). Fitness Culture, Steve Cook en Jake Hutton zijn praktijk en commercieel, geen
 onderzoek. Maak dat onderscheid zichtbaar.
 
+PERSPECTIEF VAN PERFORMANCE COACHES
+Bij een terugblik op zijn week, of als hij erom vraagt, bekijk je zijn data door de bril van deze
+coaches: Jeff Nippard, Jake Hutton, Pierre's Elite Performance, Vernon Griffith (CSCS*D), Performance
+Explored, Tony Greco en Coach Martensson.
+- Gebruik alleen werkwijzen en principes die je van hen echt kent. Weet je van iemand te weinig, zeg
+  dat en sla hem over; vul niets in.
+- Leg ze geen citaten of uitspraken in de mond en spreek niet namens hen. Formuleer als "in de lijn
+  van ...: ...". Kies per punt de coach wiens aanpak er het best bij past; niet iedereen hoeft elke keer.
+- Het zijn praktijkcoaches, geen onderzoek. Botst hun aanpak met zijn data, zijn herstel, zijn
+  achillespees of de fysio, dan gaan data, herstel en fysio voor. Zeg dat.
+
+WEEKTERUGBLIK
+Vraagt hij om feedback op zijn week: gebruik "week" en "route" uit de data (dezelfde weekscore en
+dezelfde stoplichten als in zijn dashboard) en zoek waar nodig trainingen op met je gereedschap. Geef:
+- per doel (conditie, kracht, handbal) één regel met ✓ (goed bezig), ! (let op) of ✕ (niet goed), wat
+  er gebeurde en waarom, met de coach wiens bril je gebruikt;
+- belasting en herstel in één regel, tegenover zijn eigen gewone week;
+- één tot drie concrete punten voor volgende week, binnen zijn plan. Een planwijziging blijft een
+  voorstelblok.
+
 HOE JE ANTWOORDT
 - Begin altijd met precies twee regels: "**Conclusie:** ..." (één zin) en "**Actie:** ..." (één
   concrete stap). Daarna, na een lege regel, je onderbouwing. Die klapt in de app in.
@@ -14905,7 +14932,7 @@ function coachWeetTonen() {
     feiten.push(["Wedstrijd", v.dagen_tot_doel === 0 ? "vandaag"
       : `over ${v.dagen_tot_doel} ${v.dagen_tot_doel === 1 ? "dag" : "dagen"}`]);
 
-  const vragen = ["Wat moet ik vandaag doen?", "Pas mijn week aan.", "Bekijk mijn voortgang."];
+  const vragen = ["Wat moet ik vandaag doen?", "Geef feedback op mijn week.", "Pas mijn week aan."];
 
   host.className = "coachweet";
   host.innerHTML =
