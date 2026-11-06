@@ -8134,7 +8134,7 @@ function renderBelFocus() {
   };
   host.innerHTML = `<div class="u-meetrij">
     ${uiMeet({sleutel: "laag", icoon: "golf", kleur: SOORT_KLEUR.laag, titel: "Rustige inspanning",
-      waarde: rustActs.length ? `${Math.round(z1 + z2)}` : null, eenheid: "min", sub: rustActs.length ? "zone 1–2 geregistreerd" : "Geen registratie",
+      waarde: rustActs.length ? `${Math.round(z1 + z2)}` : null, eenheid: "min", sub: rustActs.length ? "zone 1–2 opgeteld, niet per se aaneengesloten duurtraining" : "Geen registratie",
       status: status(lSt)})}
     ${uiMeet({sleutel: "hoog", icoon: "klok", kleur: SOORT_KLEUR.hoog, titel: "Langere intervallen",
       waarde: `${H.gedaan}`, eenheid: "werkmin",
@@ -8143,7 +8143,8 @@ function renderBelFocus() {
     ${uiMeet({sleutel: "kort", icoon: "bliksem", kleur: SOORT_KLEUR.ana, titel: "Korte intensieve prikkels",
       waarde: `${K.hbGedaan + K.anaGedaan}`, eenheid: K.hbGedaan + K.anaGedaan === 1 ? "sessie" : "sessies",
       balk: uiBalk({gedaan: K.hbGedaan + K.anaGedaan, verwacht: nogTeDoen.length, doel: kortGepland, eenheid: "sessies", doelWoord: "gepland"}),
-      sub: [K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : "", K.anaInhoudOnbekend ? `${K.anaInhoudOnbekend} uitgevoerd, inhoud niet bevestigd` : ""].filter(Boolean).join(" · ") || null, status: status(kSt)})}
+      sub: [`${K.hbGedaan} handbal, ${K.anaGedaan} korte intervaltraining${K.anaGedaan === 1 ? "" : "en"} bevestigd`, K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : "", K.anaInhoudOnbekend ? `${K.anaInhoudOnbekend} uitgevoerd, inhoud niet bevestigd` : "",
+        "korte acties binnen handbal worden niet apart gemeten"].filter(Boolean).join(" · "), status: status(kSt)})}
   </div>`;
   host.insertAdjacentHTML("beforeend", `${adviesHtml(trainingsAdvies(m.ma), {kort: true})}<button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>`);
   host.querySelector("[data-weekscore]").onclick = adviesPaneel;
