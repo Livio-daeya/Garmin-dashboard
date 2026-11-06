@@ -103,6 +103,30 @@
     const w = weekScore(ma), d = weekDoelen(w).find(x => x.k === "conditie");
     return {ok: w.loadMax8 == null || (d.kleur === "oranje" || d.kleur === "rood") && /zwaarder/.test(d.oordeel), detail: `${d.kleur}: ${d.oordeel}`};
   });
+  await test("Een workout verwijderen haalt plan én registratie weg, en is terug te zetten", async () => {
+    const d = dagen.find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort !== "rust" && (itemStatus(x, i).acts || []).length));
+    if (!d) return {ok: true, detail: "geen geplande sessie met registratie deze week"};
+    const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort !== "rust" && (itemStatus(d, i).acts || []).length);
+    const act = itemStatus(d, it).acts[0];
+    const scoreVoor = weekScore(ma).score;
+    workoutVerwijderen(d, it);
+    document.querySelector("[data-ja]").click();
+    const wegPlan = !dagRoute(d, {alleenLezen: true}).items.some(i => i.id === it.id && i.soort !== "rust");
+    const wegAct = !DATA.activities.some(a => String(a.id) === String(act.id)) && !ongeplandOp(d).some(x => x.act && String(x.act.id) === String(act.id));
+    ROUTE_DAG = d; renderTrainingRoute();
+    const terugKnop = document.querySelector(`#wkVandaag [data-terugact="${act.id}"]`);
+    const scoreNa = weekScore(ma).score;
+    planVerwijderTerug(d, it.id); actVerbergen(act.id, false); allesHertekenen(); ROUTE_DAG = null;
+    const terug = DATA.activities.some(a => String(a.id) === String(act.id)) && dagRoute(d, {alleenLezen: true}).items.some(i => i.id === it.id && i.soort !== "rust");
+    return {ok: wegPlan && wegAct && !!terugKnop && terug, detail: `${d} ${it.titel}: plan weg ${wegPlan}, registratie weg ${wegAct}, terugzetknop ${!!terugKnop}, terug ${terug}; score ${scoreVoor} → ${scoreNa}`};
+  });
+  await test("Een ongeplande registratie verwijderen vanuit de activiteit", () => {
+    DATA.activities = [...echt, kracht(vrij, 40, 9990041)]; HB_CACHE.clear();
+    if (!DATA._alleActs || DATA._gefilterd === false) { DATA._alleActs = DATA.activities; }
+    let html = ""; const orig = uiPaneel; window.uiPaneel = (t, h, f) => { html = h; };
+    try { activiteitPaneel(9990041); } finally { window.uiPaneel = orig; }
+    return {ok: /data-as="verwijder"/.test(html), detail: "knop aanwezig"};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }

@@ -33,6 +33,11 @@ await test("Activiteiten van een dag worden gevonden, met zones en Training Effe
   const a = r.activiteiten[0];
   return {ok: r.aantal === 1 && a.zone_minuten_1_5.join(",") === "10,15,10,12,3" && a.aeroob_te === 3.6, detail: JSON.stringify(a)};
 });
+await test("Een in het dashboard verwijderde registratie ziet de coach niet", async () => {
+  const db = nepDb({garmin_activiteit: [act], records: [{vak: "instel", sleutel: "_", data: {verborgenActs: [String(act.id)]}}]});
+  const a = await voerUit(db, "lees_activiteiten", {van: "2026-11-05", tot: "2026-11-05"}), b = await voerUit(db, "lees_activiteit", {id: String(act.id)});
+  return {ok: a.aantal === 0 && !!b.fout, detail: `${a.aantal} activiteiten; ${b.fout}`};
+});
 await test("Een sessie-RPE wordt een nieuwe versie met herkomst coach-chat", async () => {
   const db = nepDb({records: [{vak: "check", sleutel: "2026-11-05", data: {gevoel: 4, sessies: [], _t: 100, _bron: "telefoon-ab12"}}]});
   await voerUit(db, "bewaar_sessie", {datum: "2026-11-05", sport: "Kracht", rpe: 8, minuten: 45}, 500);

@@ -4009,7 +4009,30 @@ function planOverlay() {
 /* Eén plek die alles opnieuw tekent nadat er iets aan je invoer verandert.
    De volgorde is niet vrij: eerst de belasting opnieuw doorrekenen, dan pas
    de dingen die daarvan afhangen. */
+/* Registraties die je verwijderde (een dubbele, of een die niet klopt) worden
+   overal weggelaten: Vandaag, Training, Plan, weekscore, belasting en coach.
+   Bij Garmin blijven ze staan; terugzetten kan altijd. Gesynchroniseerd via
+   je instellingen. */
+const verborgenActs = () => new Set((instelLees().verborgenActs || []).map(String));
+function actsFilteren() {
+  const verb = verborgenActs();
+  if (!verb.size && !DATA._gefilterd) return;
+  if (!DATA._alleActs) { DATA._alleActs = DATA.activities || []; DATA._alleHist = DATA.historie_acts; }
+  DATA.activities = DATA._alleActs.filter(a => !verb.has(String(a.id)));
+  if (Array.isArray(DATA._alleHist)) DATA.historie_acts = DATA._alleHist.filter(a => !verb.has(String(a.id)));
+  DATA._gefilterd = verb.size > 0;
+}
+function actVerbergen(id, aan) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  const lijst = new Set((I.verborgenActs || []).map(String));
+  if (aan) lijst.add(String(id)); else lijst.delete(String(id));
+  const ok = instelZet({...I, verborgenActs: [...lijst]});
+  if (!DATA._alleActs) { DATA._alleActs = DATA.activities || []; DATA._alleHist = DATA.historie_acts; }
+  DATA._gefilterd = true; actsFilteren(); HB_CACHE.clear();
+  return ok;
+}
 function allesHertekenen() {
+  actsFilteren();
   belastingHerberekenen();
   planOverlay();
   renderVandaag(); renderCheckRegel(); renderGedaan(); renderBelDials(); renderBelTegels();
@@ -6017,6 +6040,9 @@ function gecorrigeerdeBelasting() {
   const bb = DATA.belastingbasis;
   if (!bb) return null;
   const loads = {...bb.daily_load};
+  /* verwijderde registraties tellen niet mee in je belasting */
+  if (DATA._alleActs) { const verb = verborgenActs();
+    DATA._alleActs.filter(a => verb.has(String(a.id))).forEach(a => { if (loads[a.date] != null) loads[a.date] = Math.max(0, loads[a.date] - (a.load || 0)); }); }
   const f = srpeFactor().factor;
 
   /* Wat Garmin inmiddels zelf gemeten heeft, op datum en sport. Voeg je vlak
@@ -7214,6 +7240,7 @@ function activiteitPaneel(id) {
       if (b.dataset.as === "feedback" && plan) sessieFeedback(a.date, plan);
       if (b.dataset.as === "coach") coachOver(a.date, plan || {titel: a.name || a.sport, soort: a.sport === "Handbal" ? "handbal" : a.sport === "Kracht" ? "kracht" : "eigen", id: "act-" + a.id});
       if (b.dataset.as === "status" && plan) statusMenu(b, a.date, plan);
+      if (b.dataset.as === "verwijder") { uiPaneelSluit(); setTimeout(() => workoutVerwijderen(a.date, plan, a), 280); }
     });
   }, {breed: true, bijSluiten: () => { if (ACT_GRAFIEK) { ACT_GRAFIEK.destroy(); ACT_GRAFIEK = null; } }});
 }
@@ -7329,6 +7356,7 @@ function activiteitDetails(a, plan) {
       ${plan ? `<button class="u-knop u-knop--klein" data-as="feedback">${fb.rpe != null ? "Feedback wijzigen" : "Feedback"}</button>` : ""}
       <button class="u-knop u-knop--stil u-knop--klein" data-as="coach">Bespreek met coach</button>
       ${plan ? `<div class="tk-menuwrap"><button class="u-knop u-knop--stil u-knop--klein" data-as="status" aria-haspopup="menu">Status wijzigen</button></div>` : ""}
+      <button class="u-knop u-knop--stil u-knop--klein" data-as="verwijder">${ic("sluit")}Verwijderen</button>
     </div>`;
 }
 
@@ -7361,9 +7389,9 @@ function renderVandaagNieuw() {
       (plan.length ? `<div class="sectie-kop${acts.length ? "" : " sectie-kop--eerst"}"><h3>${plan.every(i => ["gedaan", "overgeslagen"].includes(itemStatus(v, i).k)) ? "Gepland" : "Nog gepland"}</h3></div>
         <div class="tk-lijst">${plan.map(i => trainingKaart(v, i, {compact: true})).join("")}</div>` : "") ||
       (items.length ? "" : `<p class="u-leeg">${ic("bed")}Geen training vandaag.</p>`);
-    tr.innerHTML += overgeslagenRegel(v, items);
+    tr.innerHTML += overgeslagenRegel(v, items) + verborgenRegel(v);
     tr.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
-    overgeslagenKoppel(tr);
+    overgeslagenKoppel(tr); verborgenKoppel(tr);
   }
 
   /* peilmoment van de drie bollen: ze komen niet allemaal van hetzelfde moment */
@@ -9611,7 +9639,7 @@ function allesNaInvoer() {
 function statusMenu(knop, iso, i) {
   if (iso > vandaagIso()) {
     /* een dag die nog moet komen: alleen bespreken of verwijderen */
-    return uiMenuOpen(knop, [{tekst: "Uit de planning halen", doe: () => sessieVerwijderen(iso, i)},
+    return uiMenuOpen(knop, [{tekst: "Verwijderen", doe: () => workoutVerwijderen(iso, i)},
       {tekst: "Bespreek met coach", doe: () => coachOver(iso, i)}]);
   }
   const eigen = (instelLees().planstatus || {})[`${iso}|${i.id}`];
@@ -9630,7 +9658,7 @@ function statusMenu(knop, iso, i) {
   if (eigen) items.push({tekst: "Automatisch uit Garmin", doe: zet(null, "Status volgt Garmin")});
   items.push("-", {tekst: "Feedback geven", doe: () => sessieFeedback(iso, i)},
     {tekst: "Bespreek met coach", doe: () => coachOver(iso, i)});
-  if (iso >= vandaagIso() && itemStatus(iso, i).k !== "gedaan") items.push({tekst: "Uit de planning halen", doe: () => sessieVerwijderen(iso, i)});
+  items.push({tekst: "Verwijderen", doe: () => workoutVerwijderen(iso, i)});
   if (i.soort === "kracht" && i.plek === "hal" && iso === vandaagIso())
     items.push({tekst: halZwaar(iso) ? "Toch volledig doen" : "Zaaltraining was zwaar: verkorten", doe: () => {
       const I = bewaardLees(INSTEL_KEY, {});
@@ -9771,7 +9799,7 @@ function renderTrainingRoute() {
     ${uiWeekstrook(weekDagen(ma, iso), iso)}
     <div class="tk-lijst">${items.length ? items.map(i => trainingKaart(iso, i)).join("")
       : `<p class="u-leeg">${ic("bed")}${alleItems.length ? `Niets meer open op ${dagNaam(iso)}.` : `Geen training gepland op ${dagNaam(iso)}.`}</p>`}</div>
-    ${overgeslagenRegel(iso, alleItems)}
+    ${overgeslagenRegel(iso, alleItems)}${verborgenRegel(iso)}
     ${iso <= vandaagIso() ? ongeplandHtml(iso) : ""}
     ${iso <= vandaagIso() ? `<button class="u-knop u-knop--stil u-knop--rand" data-toevoegen="${iso}">${ic("plus")}Training toevoegen</button>` : ""}`;
   host.querySelectorAll("[data-dag]").forEach(b => b.onclick = () => { ROUTE_DAG = b.dataset.dag; renderTrainingRoute(); renderTrainingMeet(); });
@@ -9780,7 +9808,7 @@ function renderTrainingRoute() {
   const tv = host.querySelector("[data-toevoegen]");
   if (tv) tv.onclick = () => trainingToevoegen(tv.dataset.toevoegen);
   host.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
-  overgeslagenKoppel(host);
+  overgeslagenKoppel(host); verborgenKoppel(host);
   renderTrainingMeet();
 }
 
@@ -10302,6 +10330,37 @@ function planVerwijder(iso, i) {
 function planVerwijderTerug(iso, id) {
   const I = bewaardLees(INSTEL_KEY, {});
   return instelZet({...I, wijzigingen: (I.wijzigingen || []).filter(w => !(w.datum === iso && w.item === id && w.regel === "eigen"))});
+}
+/* Een workout helemaal weghalen: de geplande sessie uit je planning en de
+   bijbehorende registratie uit Vandaag, Training en Plan. */
+function workoutVerwijderen(iso, i, act) {
+  const acts = act ? [act] : i ? (itemStatus(iso, i).acts || []) : [];
+  const titel = i ? i.titel : (act.name || act.sport);
+  uiPaneel("Workout verwijderen?", `<p><b>${titel}</b> op ${dagNaam(iso)} ${kortDatum(iso)}.</p>
+    <p class="u-klein">${i ? "Hij gaat uit je planning en telt niet meer als gepland in je weekscore. " : ""}${acts.length ? `De registratie${acts.length > 1 ? "s" : ""} uit Garmin verdwijn${acts.length > 1 ? "en" : "t"} uit Vandaag, Training, Plan, je belasting en de coach; bij Garmin zelf blijft hij staan. ` : ""}Terugzetten kan meteen hieronder of later op de dag zelf.</p>
+    <div class="u-knoppen"><button class="u-knop" data-ja>Verwijderen</button><button class="u-knop u-knop--stil" data-nee>Annuleren</button></div>`,
+    box => {
+      box.querySelector("[data-nee]").onclick = () => uiPaneelSluit();
+      box.querySelector("[data-ja]").onclick = () => {
+        if (i && planVerwijder(iso, i) === false) { uiMelding("Opslaan mislukt", "fout"); return; }
+        acts.forEach(a => actVerbergen(a.id, true));
+        uiPaneelSluit(); allesHertekenen(); try { renderRoute(); } catch (e) { /* niet zichtbaar */ }
+        uiMeldingTerug(`${titel} verwijderd`, () => {
+          if (i) planVerwijderTerug(iso, i.id);
+          acts.forEach(a => actVerbergen(a.id, false));
+          allesHertekenen(); try { renderRoute(); } catch (e) { /* niet zichtbaar */ }
+        });
+      };
+    });
+}
+/* verwijderde registraties van een dag: één regel om ze terug te zetten */
+function verborgenRegel(d) {
+  const verb = verborgenActs();
+  const weg = (DATA._alleActs || []).filter(a => a.date === d && verb.has(String(a.id)));
+  return weg.length ? `<p class="u-klein tk-weg">${weg.map(a => `<button class="u-link" data-terugact="${a.id}">${a.name || a.sport} verwijderd · terugzetten</button>`).join(" ")}</p>` : "";
+}
+function verborgenKoppel(host) {
+  host.querySelectorAll("[data-terugact]").forEach(b => b.onclick = () => { actVerbergen(b.dataset.terugact, false); uiMelding("Teruggezet"); allesHertekenen(); });
 }
 function sessieVerwijderen(iso, i) {
   uiPaneel("Uit de planning halen?", `<p><b>${i.titel}</b> op ${dagNaam(iso)} ${kortDatum(iso)}.</p>
@@ -11761,16 +11820,16 @@ function renderPlanNieuw() {
             <span class="u-rij-tekst"><b>${i.titel}</b><span class="u-klein">${i.plek ? PLEK_KORT[i.plek] + " · " : ""}${i.voorschrift ? i.voorschrift.split(".")[0] : ""}</span></span>
             ${sessieStatusLabel(dag, s)}</button>`;
         }).join("") : ongeplandOp(dag).length ? "" : `<p class="u-leeg">${ic("bed")}Rust.</p>`}
-        ${overgeslagenRegel(dag, alleItems)}${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
+        ${overgeslagenRegel(dag, alleItems)}${verborgenRegel(dag)}${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
     week.querySelectorAll("[data-pdag]").forEach(b => b.onclick = () => { PLAN_DAG = b.dataset.pdag; renderPlanNieuw(); });
     week.querySelectorAll("[data-weergave]").forEach(b => b.onclick = () => { PLAN_WEERGAVE = b.dataset.weergave; renderPlanNieuw(); });
     week.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
-    overgeslagenKoppel(week);
+    overgeslagenKoppel(week); verborgenKoppel(week);
     week.querySelectorAll("[data-psessie]").forEach(b => b.onclick = () => {
       const [d, i] = sessieZoek(b.dataset.psessie);
       if (i) uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, trainingKaart(d, i) +
-        (d >= v && itemStatus(d, i).k !== "gedaan" ? `<button class="u-knop u-knop--stil u-knop--vol" data-verwijder>${ic("sluit")}Uit de planning halen</button>` : ""),
-        box => { const k = box.querySelector("[data-verwijder]"); if (k) k.onclick = () => { uiPaneelSluit(); setTimeout(() => sessieVerwijderen(d, i), 280); }; });
+        `<button class="u-knop u-knop--stil u-knop--vol" data-verwijder>${ic("sluit")}Verwijderen</button>`,
+        box => { const k = box.querySelector("[data-verwijder]"); if (k) k.onclick = () => { uiPaneelSluit(); setTimeout(() => workoutVerwijderen(d, i), 280); }; });
     });
     /* maandweergave: de bestaande planner, verhuisd in plaats van gekopieerd */
     const mh = document.getElementById("plMaand"), pk = document.getElementById("plannerKaart");
@@ -13922,6 +13981,7 @@ function themaIcoon() {
 }
 
 function boot() {
+  actsFilteren();
   applyDefaults();
   syncInit();
   iconenPlaatsen();

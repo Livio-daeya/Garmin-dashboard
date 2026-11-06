@@ -110,17 +110,23 @@ export function nieuweVersie(oud, data, nu = Date.now()) {
   return uit;
 }
 
+/* registraties die hij in het dashboard verwijderde, laat de coach weg */
+async function verborgen(db) {
+  try { const [r] = await db.lees("records", "select=data&vak=eq.instel&sleutel=eq._");
+    return new Set(((r && r.data && r.data.verborgenActs) || []).map(String)); } catch (e) { return new Set(); }
+}
 export async function voerUit(db, naam, invoer, nu = Date.now()) {
   if (naam === "lees_activiteiten") {
     if (!isDatum(invoer.van) || !isDatum(invoer.tot)) return {fout: "van en tot als YYYY-MM-DD"};
     const rijen = await db.lees("garmin_activiteit", `select=id,datum,data&datum=gte.${invoer.van}&datum=lte.${invoer.tot}&order=datum.asc`);
-    const lijst = rijen.map(kortAct).filter(a => !invoer.sport || String(a.sport || "").toLowerCase() === invoer.sport.toLowerCase());
+    const weg = await verborgen(db);
+    const lijst = rijen.filter(a => !weg.has(String(a.id))).map(kortAct).filter(a => !invoer.sport || String(a.sport || "").toLowerCase() === invoer.sport.toLowerCase());
     return {aantal: lijst.length, activiteiten: lijst};
   }
   if (naam === "lees_activiteit") {
     if (!/^\d+$/.test(String(invoer.id))) return {fout: "onbekend id"};
     const [a] = await db.lees("garmin_activiteit", `select=id,datum,data&id=eq.${invoer.id}`);
-    if (!a) return {fout: "activiteit niet gevonden"};
+    if (!a || (await verborgen(db)).has(String(a.id))) return {fout: "activiteit niet gevonden of door hem verwijderd"};
     return {...kortAct(a), details: a.data};
   }
   if (naam === "lees_dagen") {
