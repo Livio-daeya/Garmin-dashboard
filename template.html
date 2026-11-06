@@ -446,6 +446,17 @@
 .hb-balk--rood { --hb-k: var(--critical); } .hb-balk--grijs { --hb-k: var(--ink-2); }
 @media (max-width: 640px) { .hb-balk { flex-direction: column; align-items: stretch; } .hb-balk-acties .u-knop { flex: 1; justify-content: center; } }
 .hb-kop { display: grid; gap: var(--sp2); }
+.hb-oud { color: var(--warning); }
+.hb-fb { display: grid; gap: var(--sp2); }
+.hb-fb-rij { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp2); }
+.hb-fb-keus { display: inline-flex; gap: 6px; }
+.hb-fb-keus .u-keuze { min-height: 40px; }
+.hb-fb-tekst { flex: 1 1 200px; min-height: 40px; background: var(--bg1); color: var(--ink); border: 1px solid var(--hair-strong); border-radius: var(--r-md); padding: 0 10px; font: inherit; }
+.hb-pat { display: grid; gap: var(--sp2); }
+.hb-pat-rij { display: grid; gap: 2px; padding: var(--sp2) 0; border-bottom: 1px solid var(--hair); }
+.hb-pat-kop { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--sp2); align-items: center; }
+.u-dl.hb-stapel { display: block; } .hb-stapel dt { margin-top: var(--sp2); } .hb-stapel dd { margin: 0; text-align: left; }
+.hb-vs { display: grid; gap: var(--sp2); padding: var(--sp3); border: 1px solid var(--hair); border-radius: var(--r-md); margin-bottom: var(--sp2); }
 .hb-kop p { margin: 0; }
 .hb-deel summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--sp2); align-items: center; }
 .hs-balken { display: flex; gap: 6px; align-items: flex-end; height: 140px; margin: var(--sp2) 0 var(--sp3); }
@@ -5331,6 +5342,9 @@ const SYNC_VAKKEN = {
   explos: {sleutel: () => EXPLOS_KEY, vorm: "lijst"},
   zesmin: {sleutel: () => ZESMIN_KEY, vorm: "lijst"},
   instel: {sleutel: () => INSTEL_KEY, vorm: "blok"},
+  /* de leerlus: per dag de beoordeling, verwachtingen, uitkomst en jouw
+     terugkoppeling; zo leert de app op telefoon en browser hetzelfde */
+  leer:   {sleutel: () => LEER_KEY,   vorm: "kaart"},
 };
 
 const SYNC = {
@@ -5407,6 +5421,25 @@ function voegSamen(lokaal, ver) {
   return uit;
 }
 
+/* Check-ins per dag: wint niet het hele dagrecord, maar per onderdeel. Wat
+   alleen aan één kant is ingevuld (een RPE op de telefoon, je gevoel in de
+   browser) blijft bewaard; bij een echt conflict wint het nieuwste. */
+function voegSamenCheck(lokaal, ver) {
+  const uit = voegSamen(lokaal, ver);
+  Object.keys(lokaal).forEach(id => {
+    const a = lokaal[id], b = ver[id];
+    if (!a || !b || a._weg || b._weg) return;
+    const [nieuw, oud] = (a._t || 0) >= (b._t || 0) ? [a, b] : [b, a];
+    const sessies = [...(nieuw.sessies || [])];
+    (oud.sessies || []).forEach(s => { if (!sessies.some(x => x.sport === s.sport && x.naam === s.naam)) sessies.push(s); });
+    const samen = {...oud, ...nieuw, lijf: {...(oud.lijf || {}), ...(nieuw.lijf || {})}, sessies};
+    if (samen.gevoel == null && oud.gevoel != null) samen.gevoel = oud.gevoel;
+    if (!Object.keys(samen.lijf).length) delete samen.lijf;
+    uit[id] = samen;
+  });
+  return uit;
+}
+
 /* ---- de gist ---- */
 
 async function gistHaal() {
@@ -5447,12 +5480,13 @@ async function syncRonde(opnieuwTekenen = true) {
   SYNC.bezig = true; SYNC.fout = null; syncStatus();
   try {
     const ver = await gistHaal();
-    const doc = {v: 1};
+    /* onderdelen die deze versie niet kent, blijven in de gist staan */
+    const doc = {...(ver || {}), v: 1};
     let veranderdVer = false, veranderdLokaal = false;
     for (const naam of Object.keys(SYNC_VAKKEN)) {
       const lokaal = lokaalVak(naam);
       const hun = (ver && ver[naam]) || {};
-      const samen = voegSamen(lokaal, hun);
+      const samen = naam === "check" ? voegSamenCheck(lokaal, hun) : voegSamen(lokaal, hun);
       doc[naam] = samen;
       if (JSON.stringify(samen) !== JSON.stringify(hun)) veranderdVer = true;
       if (JSON.stringify(samen) !== JSON.stringify(lokaal)) {
@@ -9751,8 +9785,11 @@ function workoutAfronden() {
     if (!Object.keys(oefeningen).length) { uiMelding("Nog geen afgeronde sets; rond minstens één set af", "fout"); return; }
     const log = logLees();
     const idx = log.findIndex(x => x.type === W.wk && x.datum === W.iso);
-    const item = {type: W.wk, datum: W.iso, oefeningen, plek: W.plek || null};
-    if (idx >= 0) log[idx] = {...log[idx], ...item}; else log.push(item);
+    /* vaste id per sessie: niet de positie in de lijst, want die verschilt
+       per apparaat en zou bij synchroniseren een andere sessie overschrijven */
+    const item = {type: W.wk, datum: W.iso, oefeningen, plek: W.plek || null, _t: Date.now()};
+    if (idx >= 0) log[idx] = {...log[idx], ...item};
+    else log.push({...item, _id: `${W.iso}-${W.wk}-${Math.random().toString(36).slice(2, 8)}`});
     ok = logZet(log) !== false;
   } else {
     const s = W.oef[0].sets.filter(x => x.klaar);
@@ -10021,16 +10058,29 @@ function sessieVerwijderen(iso, i) {
      [modelkeuze] voorlopige technische keuze van dit dashboard
    De volledige onderbouwing staat in onderbouwing-herstel.md.
    ----------------------------------------------------------------------- */
-const HB_VERSIE = "HB-2 (2026-11)";
-const HB = {
+const HB_VERSIE_BASIS = "HB-3";
+const HB_BASIS = {
   refVan: 90, refTot: 8,      // [modelkeuze] referentie: dag-90 t/m dag-8, zodat de laatste week zichzelf niet opneemt
   refMinN: 14,                // [modelkeuze] minimaal 14 geldige metingen
   bandK: 1.5,                 // [modelkeuze] band = mediaan ± 1,5 × robuuste SD (MAD × 1,4826)
   aanhoudend: 3,              // [modelkeuze] afwijking telt als aanhoudend bij 3 van de laatste 7 dagen
   checkGeldig: 1,             // [modelkeuze] een check-in geldt voor vandaag en morgen
   loopTempoMarge: 0.05,       // [modelkeuze] lopen vergelijkbaar bij ±5% tempo
-  loopMinVergelijk: 3,        // [modelkeuze] minimaal 3 eerdere vergelijkbare lopen
+  loopMinVergelijk: 3,        // [modelkeuze] minimaal 3 eerdere vergelijkbare segmenten
+  ziekteMarge: 2,             // [modelkeuze] dagen na een ingevulde ziektedag die ook uit de referentie gaan
+  gevoelEerste: 7,            // [modelkeuze] vanaf 7 check-ins een eerste referentie, nog in opbouw
+  gevoelStabiel: 28,          // [modelkeuze] stabiel pas bij 28 check-ins, 5+ weekdagen en een gelijk eerste en tweede deel
 };
+/* Actieve parameters: de basis plus wat je zelf hebt goedgekeurd. De app
+   past deze nooit zelf aan; een wijziging komt alleen via een voorstel dat
+   jij goedkeurt, met versiegeschiedenis en terugdraaien. */
+function hbModel() {
+  const m = instelLees().hbModel || {};
+  return {versie: m.versie || HB_VERSIE_BASIS, params: {...HB_BASIS, ...(m.params || {})}, geschiedenis: m.geschiedenis || []};
+}
+let HB = {...HB_BASIS};
+let HB_OVERRIDE = null;     // alleen voor schaduwberekening van een voorstel
+let HB_VERSIE = HB_VERSIE_BASIS;
 const HB_HERKOMST = {
   refVan: "modelkeuze", refTot: "modelkeuze", refMinN: "modelkeuze", bandK: "modelkeuze",
   aanhoudend: "modelkeuze", checkGeldig: "modelkeuze", loopTempoMarge: "modelkeuze", loopMinVergelijk: "modelkeuze",
@@ -10056,16 +10106,26 @@ const hbRond = (x, n = 0) => x == null ? null : Math.round(x * 10 ** n) / 10 ** 
 /* Persoonlijke referentie uit je eigen historie. Alleen metingen van
    hetzelfde toestel als de laatste meting; ander toestel wordt uitgesloten
    en gemeld. Log-schaal voor HRV (scheef verdeeld). */
+function hbZiekteDagen() {
+  const c = checkLees(), uit = new Set();
+  Object.keys(c).filter(d => ((c[d] || {}).lijf || {}).ziek === 1).forEach(d => { for (let i = 0; i <= HB.ziekteMarge; i++) uit.add(isoPlus(d, i)); });
+  return uit;
+}
 function hbReferentie(veld, dag, opties = {}) {
   const van = isoPlus(dag, -HB.refVan), tot = isoPlus(dag, -HB.refTot);
-  const alle = hbRijen().filter(r => r.date >= van && r.date <= tot && r[veld] != null);
+  /* ingevulde ziektedagen (plus een marge) tellen niet mee: een bekende
+     slechte periode mag je normaal niet verschuiven; ze worden wel genoemd */
+  const ziek = hbZiekteDagen();
+  const ruw = hbRijen().filter(r => r.date >= van && r.date <= tot && r[veld] != null);
+  const alle = ruw.filter(r => !ziek.has(r.date));
+  const uitgeslotenZiek = ruw.length - alle.length;
   const laatsteToestel = (hbRijen().filter(r => r.date <= dag && r[veld] != null && r.toestel).pop() || {}).toestel;
   /* metingen zonder bekend toestel (vóór je huidige horloge) tellen niet mee
      zodra het huidige toestel bekend is: een toestelwissel is geen afwijking */
   const zelfde = laatsteToestel ? alle.filter(r => r.toestel === laatsteToestel) : alle;
   const uitgesloten = alle.length - zelfde.length;
   const n = zelfde.length;
-  const basis = {bron: "eigen data", veld, van, tot, n, nodig: HB.refMinN, uitgesloten, toestel: laatsteToestel || null};
+  const basis = {bron: "eigen data", veld, van, tot, n, nodig: HB.refMinN, uitgesloten, uitgeslotenZiek, toestel: laatsteToestel || null};
   if (n < HB.refMinN) return {...basis, genoeg: false};
   const t = opties.log ? x => Math.log(x) : x => x, terug = opties.log ? x => Math.exp(x) : x => x;
   const xs = zelfde.map(r => t(r[veld]));
@@ -10101,6 +10161,10 @@ function hbMeting(veld, dag, ref, opties = {}) {
   let duur = 0;
   for (const r of met.slice().reverse()) { if (kant(r[veld]) === uit.stand && uit.stand !== "binnen") duur++; else break; }
   uit.duur = duur;
+  /* recente trend naast de lange referentie: mediaan van 7 en 28 dagen */
+  const r28 = hbRijen().filter(r => r.date > isoPlus(dag, -28) && r.date <= dag && r[veld] != null).map(r => r[veld]);
+  uit.mediaan7 = met.length >= 4 ? hbMed(met.map(r => r[veld])) : null;
+  uit.mediaan28 = r28.length >= 14 ? hbMed(r28) : null;
   return uit;
 }
 
@@ -10109,8 +10173,17 @@ function hbGevoel(dag) {
   const telt = d => { const c = checks[d] || {}, l = c.lijf || {};
     return c.gevoel != null || ["benen", "energie", "herstel", "ziek"].some(k => l[k] != null); };
   const dagen = Object.keys(checks).filter(d => d > isoPlus(dag, -7) && d <= dag && telt(d)).sort();
-  const basis = gevoelBasislijn();
-  const normaal = basis.genoeg ? basis.mediaan : null;
+  /* je eigen normaal uit check-ins vóór deze dag (geen toekomst), met
+     opbouwstatus: aantal, spreiding over weekdagen en stabiliteit */
+  const eerder = Object.keys(checks).filter(d => d < dag && d >= isoPlus(dag, -120) && checks[d].gevoel != null).sort();
+  const waarden = eerder.map(d => checks[d].gevoel);
+  const weekdagen = new Set(eerder.map(d => isoNaarPy(d))).size;
+  const helft = Math.floor(waarden.length / 2);
+  const stabiel = waarden.length >= HB.gevoelStabiel && weekdagen >= 5 && Math.abs(hbMed(waarden.slice(0, helft)) - hbMed(waarden.slice(helft))) <= 0.5;
+  const opbouw = {n: waarden.length, weekdagen, mediaan: waarden.length ? hbMed(waarden) : null,
+    status: stabiel ? "stabiel" : waarden.length >= HB.gevoelEerste ? "eerste referentie" : "in opbouw"};
+  const normaal = waarden.length >= HB.gevoelEerste ? opbouw.mediaan : null;
+  const basis = {n: waarden.length};
   const ongunstig = d => { const c = checks[d] || {}, l = c.lijf || {}, r = [];
     if (c.gevoel != null && (normaal != null ? c.gevoel <= normaal - 1 : c.gevoel <= 2)) r.push(normaal != null ? "vermoeider dan je eigen normaal" : "vermoeid (2/5 of lager)");
     if (l.benen === 2) r.push("duidelijk zware benen of spierpijn");
@@ -10128,7 +10201,7 @@ function hbGevoel(dag) {
   else if (slecht.length >= 2 && slecht.some(x => x.d >= isoPlus(dag, -HB.checkGeldig))) { niveau = "oranje"; reden = `${slecht.length} dagen ${slecht[slecht.length - 1].r[0]}`; }
   else if (slecht.length && slecht[slecht.length - 1].d >= isoPlus(dag, -HB.checkGeldig)) { niveau = "blauw"; reden = slecht[slecht.length - 1].r[0]; }
   else { niveau = "groen"; reden = normaal != null ? "zoals je eigen normaal" : "geen vermoeidheid ingevuld"; }
-  return {k: "gevoel", niveau, reden, rijen, normaal, normaalN: basis.n, dekking: dagen.length, stress,
+  return {k: "gevoel", niveau, reden, rijen, normaal, normaalN: basis.n, opbouw, dekking: dagen.length, stress,
     ongunstig: niveau === "oranje" || niveau === "rood"};
 }
 
@@ -10137,25 +10210,53 @@ function hbGevoel(dag) {
    hetzelfde toestel, buiten, zonder intervallen. Garmin levert geen stabiel
    segment per loop; de vergelijking gebruikt het gemiddelde van rustige
    duurlopen en staat daarom als beperkt gemarkeerd. */
+/* Stabiel segment uit de ronden van een loop: na de eerste 10 minuten
+   (warming-up), de langste reeks opeenvolgende ronden waarvan het snelste en
+   traagste tempo minder dan 10% verschillen, minstens 10 minuten. Zonder
+   ronden geen segment: dan geen vergelijking. [modelkeuze] */
+function hbSegment(a) {
+  const r = (a.rondes || []).filter(x => x.duur > 0 && x.afstand > 0 && x.hr && x.start >= 600);
+  let beste = null;
+  for (let i = 0; i < r.length; i++) for (let j = i; j < r.length; j++) {
+    const deel = r.slice(i, j + 1), tempo = deel.map(x => x.duur / x.afstand);
+    if (Math.max(...tempo) / Math.min(...tempo) > 1.10) break;
+    const duur = deel.reduce((t, x) => t + x.duur, 0);
+    if (duur >= 600 && (!beste || duur > beste.duur)) {
+      const afstand = deel.reduce((t, x) => t + x.afstand, 0);
+      beste = {duur, afstand, pace: duur / afstand * 1000, hr: deel.reduce((t, x) => t + x.hr * x.duur, 0) / duur, start: deel[0].start};
+    }
+  }
+  return beste;
+}
+/* Prestatie: alleen gelijke taken. Een hogere hartslag bij sneller lopen is
+   geen signaal: vergeleken wordt een stabiel segment bij vergelijkbaar tempo,
+   op hetzelfde toestel, buiten, met vergelijkbare helling. Een lagere
+   hartslag terwijl dezelfde taak zwaarder voelt is een mogelijk signaal
+   (aandacht), geen bewezen slechtere prestatie. */
 function hbPrestatie(dag) {
   const van = isoPlus(dag, -13), punten = [], beperkt = [];
   const checks = checkLees();
   const rpeVan = a => { const s = ((checks[a.date] || {}).sessies || []).find(x => x.sport === "Hardlopen" && x.rpe); return s ? s.rpe : null; };
-  const runs = hbActs().filter(a => a.sport === "Hardlopen" && a.avg_hr && a.pace_s_per_km && !a.binnen
-    && (a.duration_s || 0) >= 20 * 60 && a.hard_frac != null && a.hard_frac < 0.15 && a.date <= dag);
+  const helling = a => a.elev_gain != null && a.distance_m ? a.elev_gain / (a.distance_m / 1000) : null;
+  const runs = (DATA.activities || []).filter(a => a.sport === "Hardlopen" && !a.binnen && a.date <= dag)
+    .map(a => ({...a, seg: hbSegment(a)}));
   runs.filter(a => a.date >= van).forEach(a => {
-    const ref = runs.filter(b => b.date < a.date && b.date >= isoPlus(a.date, -HB.refVan) && b.toestel === a.toestel
-      && Math.abs(b.pace_s_per_km / a.pace_s_per_km - 1) <= HB.loopTempoMarge);
-    if (ref.length < HB.loopMinVergelijk) { beperkt.push(`rustige loop ${kortDagNaam(a.date)}: ${ref.length} vergelijkbare eerdere lopen (tempo ±5%, zelfde toestel), minimaal ${HB.loopMinVergelijk} nodig`); return; }
-    const hrs = ref.map(b => b.avg_hr), m = hbMed(hrs), s = Math.max(hbRsd(hrs), 1);
-    const dHr = a.avg_hr - m, rpe = rpeVan(a), rpeRef = hbMed(ref.map(rpeVan).filter(x => x != null));
+    if (!a.seg) { beperkt.push(`loop ${kortDagNaam(a.date)}: geen stabiel segment van 10 minuten na de warming-up`); return; }
+    const ref = runs.filter(b => b.date < a.date && b.date >= isoPlus(a.date, -HB.refVan) && b.seg && b.toestel === a.toestel
+      && Math.abs(b.seg.pace / a.seg.pace - 1) <= HB.loopTempoMarge
+      && (helling(a) == null || helling(b) == null || Math.abs(helling(a) - helling(b)) <= 5));
+    if (ref.length < HB.loopMinVergelijk) { beperkt.push(`loop ${kortDagNaam(a.date)}: ${ref.length} vergelijkbare eerdere segmenten (tempo ±5%, zelfde toestel, vergelijkbare helling), minimaal ${HB.loopMinVergelijk} nodig`); return; }
+    const hrs = ref.map(b => b.seg.hr), m = hbMed(hrs), s = Math.max(hbRsd(hrs), 1);
+    const dHr = a.seg.hr - m, rpe = rpeVan(a), rpeRef = hbMed(ref.map(rpeVan).filter(x => x != null));
     const hoger = dHr > HB.bandK * s;
     const lagerMaarZwaar = dHr < -HB.bandK * s && rpe != null && rpeRef != null && rpe >= rpeRef + 2;
-    punten.push({d: a.date, soort: "lopen", slechter: hoger || lagerMaarZwaar,
-      tekst: `rustige loop ${kortDagNaam(a.date)}: ${Math.round(a.avg_hr)} slagen bij vergelijkbaar tempo, normaal ${Math.round(m)} (${ref.length} lopen)${lagerMaarZwaar ? "; lagere hartslag maar zwaarder ervaren" : ""}`,
-      noot: "gemiddelde over de hele loop; geen stabiel segment beschikbaar"});
+    const onbekend = [helling(a) == null ? "helling" : null, "weer"].filter(Boolean);
+    punten.push({d: a.date, soort: "lopen", slechter: hoger, aandacht: lagerMaarZwaar, gewicht: onbekend.length > 1 ? 0.5 : 1,
+      tekst: `loop ${kortDagNaam(a.date)}: ${Math.round(a.seg.hr)} slagen in een stabiel segment van ${Math.round(a.seg.duur / 60)} min, normaal ${Math.round(m)} (${ref.length} segmenten)${lagerMaarZwaar ? "; lagere hartslag maar zwaarder ervaren: mogelijk signaal" : ""}`,
+      noot: `niet bekend: ${onbekend.join(", ")}`});
   });
   const log = logLees().filter(x => x.oefeningen).sort((a, b) => a.datum.localeCompare(b.datum));
+  const positie = (x, k) => Object.keys(x.oefeningen).indexOf(k);
   log.filter(x => x.datum >= van && x.datum <= dag).forEach(x => {
     Object.entries(x.oefeningen).forEach(([k, o]) => {
       if (o.kg == null || !o.reps) return;
@@ -10163,10 +10264,13 @@ function hbPrestatie(dag) {
         && y.oefeningen[k].sets === o.sets && (y.plek || null) === (x.plek || null)).pop();
       if (!eerder) return;
       const e = eerder.oefeningen[k], naam = (OEF[k] || {}).naam || k;
-      if (o.rir == null || e.rir == null) { beperkt.push(`${naam} ${kortDagNaam(x.datum)}: RIR niet bij beide sessies gelogd, niet vergeleken`); return; }
-      if (Math.abs(o.rir - e.rir) > 1) return;
-      punten.push({d: x.datum, soort: "kracht", slechter: o.reps < e.reps,
-        tekst: `${naam} ${komma(o.kg)} kg × ${o.sets} sets ${kortDagNaam(x.datum)}: ${o.reps} herh. bij RIR ${o.rir}, vorige keer ${e.reps} bij RIR ${e.rir}`});
+      if (Math.abs(positie(x, k) - positie(eerder, k)) > 1) { beperkt.push(`${naam} ${kortDagNaam(x.datum)}: andere plek in de training, niet vergeleken`); return; }
+      const rirBeide = o.rir != null && e.rir != null;
+      if (rirBeide && Math.abs(o.rir - e.rir) > 1) return;
+      /* ontbrekende RIR verlaagt de zekerheid; de vergelijking blijft staan */
+      punten.push({d: x.datum, soort: "kracht", slechter: o.reps < e.reps, gewicht: rirBeide ? 1 : 0.5,
+        tekst: `${naam} ${komma(o.kg)} kg × ${o.sets} sets ${kortDagNaam(x.datum)}: ${o.reps} herh.${o.rir != null ? ` bij RIR ${o.rir}` : ""}, vorige keer ${e.reps}${e.rir != null ? ` bij RIR ${e.rir}` : ""}`,
+        noot: rirBeide ? null : "RIR niet bij beide gelogd: lagere zekerheid"});
     });
   });
   const alle = Object.keys(checks).sort().flatMap(d => (checks[d].sessies || []).filter(s => s.rpe).map(s => ({d, sport: s.sport, rpe: s.rpe, wd: isoNaarPy(d)})));
@@ -10174,14 +10278,15 @@ function hbPrestatie(dag) {
     const ref = alle.filter(x => x.sport === s.sport && x.wd === s.wd && x.d < s.d).map(x => x.rpe);
     if (ref.length < 4) { if (ref.length) beperkt.push(`${(s.sport || "sessie").toLowerCase()} ${kortDagNaam(s.d)}: ${ref.length} eerdere zwaartes op deze weekdag, minimaal 4 nodig`); return; }
     const m = hbMed(ref);
-    punten.push({d: s.d, soort: "zwaarte", slechter: s.rpe >= m + 2, tekst: `${(s.sport || "sessie").toLowerCase()} ${kortDagNaam(s.d)}: zwaarte ${s.rpe}, op deze weekdag gewoonlijk ${komma(m)}`});
+    punten.push({d: s.d, soort: "zwaarte", slechter: s.rpe >= m + 2, gewicht: 0.5, noot: "inhoud van de sessie kan verschillen: lagere zekerheid",
+      tekst: `${(s.sport || "sessie").toLowerCase()} ${kortDagNaam(s.d)}: zwaarte ${s.rpe}, op deze weekdag gewoonlijk ${komma(m)}`});
   });
   punten.sort((a, b) => a.d.localeCompare(b.d));
-  const laatste3 = punten.slice(-3), slechter = laatste3.filter(p => p.slechter).length;
+  const laatste3 = punten.slice(-3), score = laatste3.reduce((t, p) => t + (p.slechter ? p.gewicht : 0), 0);
   let niveau, reden;
   if (!punten.length) { niveau = "grijs"; reden = "geen vergelijkbare trainingen"; }
-  else if (slechter >= 2) { niveau = "oranje"; reden = `${slechter} van de laatste ${laatste3.length} vergelijkingen slechter`; }
-  else if (laatste3[laatste3.length - 1].slechter) { niveau = "blauw"; reden = "laatste vergelijking slechter; één keer zegt weinig"; }
+  else if (score >= 2) { niveau = "oranje"; reden = `herhaald slechter bij de laatste ${laatste3.length} vergelijkingen`; }
+  else if (laatste3[laatste3.length - 1].slechter || laatste3.some(p => p.aandacht)) { niveau = "blauw"; reden = laatste3.some(p => p.aandacht) ? "lagere hartslag maar zwaarder ervaren: mogelijk signaal" : "laatste vergelijking slechter; één keer zegt weinig"; }
   else { niveau = "groen"; reden = `geen achteruitgang in ${punten.length} ${punten.length === 1 ? "vergelijking" : "vergelijkingen"}`; }
   return {k: "prestatie", niveau, reden, punten, beperkt, dekking: punten.length, ongunstig: niveau === "oranje"};
 }
@@ -10297,8 +10402,17 @@ function hbBelasting(dag) {
    gevoel; overige metingen alleen als aanvulling; klachten en ziekte apart. */
 const HB_CACHE = new Map();
 function herstelKern(iso) {
+  if (HB_OVERRIDE) {
+    const vorig = HB, vorigeVersie = HB_VERSIE;
+    HB = {...HB_BASIS, ...HB_OVERRIDE}; HB_VERSIE = HB_OVERRIDE._versie || "voorstel";
+    try { return herstelKernRuw(iso); } finally { HB = vorig; HB_VERSIE = vorigeVersie; }
+  }
+  const m = hbModel(); HB = m.params; HB_VERSIE = m.versie;
+  return herstelKernRuw(iso);
+}
+function herstelKernRuw(iso) {
   const dag = iso || vandaagIso();
-  let sleutel = dag;
+  let sleutel = dag + "|" + HB_VERSIE + "|" + JSON.stringify(HB);
   try { sleutel += "|" + (localStorage.getItem(CHECK_KEY) || "").length + "|" + (localStorage.getItem(LOG_KEY) || "").length + "|" + (localStorage.getItem(INSTEL_KEY) || "").length; } catch (e) {}
   sleutel += "|" + (DATA.generated || "") + "|" + (DATA.planbasis || {}).vandaag;
   if (HB_CACHE.has(sleutel)) return HB_CACHE.get(sleutel);
@@ -10355,10 +10469,15 @@ function herstelStatus(iso) {
   /* één hoofdactie, uit wat er vandaag nog gepland staat */
   const open = dagRoute(dag, {alleenLezen: true}).items.filter(i => i.soort !== "rust" && !i.optioneel && ["vandaag", "gepland"].includes(itemStatus(dag, i).k));
   const eerste = open[0], naam = eerste ? eerste.titel.split(" · ")[0].toLowerCase() : null;
-  let actie;
+  let actie = "";
+  const alleenBenen = gevoel.ongunstig && gevoel.rijen.filter(x => x.r.length).every(x => x.r.every(t => /benen/.test(t)));
+  const beenwerk = i => (i.oefeningen || []).some(o => /squat|trap|dead|lunge|step|rdl|been|split/i.test(typeof o === "string" ? o : o.k || ""));
   if (k.niveau === "rood" && gevoel.niveau === "rood") actie = "Vandaag niet trainen. Houden klachten aan of word je zieker, neem contact op met je huisarts.";
   else if (k.niveau === "rood" && k.klachten.some(x => x.niveau === "rood")) actie = `Geen looptraining, sprongen of sprints; bespreek de ${k.klachten.filter(x => x.niveau === "rood").map(x => x.naam.toLowerCase()).join(" en ")} met je fysio.`;
   else if (k.niveau === "rood") actie = eerste ? `${hoofdletter(naam)} uitstellen en het patroon opnieuw beoordelen na een paar dagen lagere belasting.` : "Opnieuw beoordelen na een paar dagen lagere belasting, met check-in.";
+  /* een waarschuwing voor je benen laat een bovenlichaamtraining staan */
+  else if (k.niveau === "oranje" && eerste && eerste.soort === "kracht" && alleenBenen && k.regel === "aanhoudend slechter ervaren herstel" && !beenwerk(eerste))
+    actie = "Bovenlichaamtraining kan volgens plan; geen extra beenwerk erbij.";
   else if (k.niveau === "oranje") actie = !eerste ? "Morgen opnieuw beoordelen, met check-in." : eerste.soort === "kracht" ? "Kracht inkorten: alleen de hoofdoefeningen, accessoires overslaan."
     : ["hoog", "ana", "test"].includes(eerste.soort) ? "Intensief werk vervangen door het rustige alternatief uit je plan." : ["handbal", "wedstrijd"].includes(eerste.soort) ? "Zaaltraining zonder extra's; geen aanvullende sessie erna." : `${hoofdletter(naam)} rustig houden.`;
   else if (k.niveau === "grijs") actie = "Eerst je check-in invullen.";
@@ -10369,20 +10488,351 @@ function herstelStatus(iso) {
 }
 function vermoeidheid(iso) { return herstelStatus(iso); }
 
-/* Beoordeling bewaren: gebruikte gegevens, referenties, versie en wat
-   ontbrak. Een eerdere dag wordt niet overschreven. */
-const HB_LOG_KEY = "sportdashboard.herstellog.v1";
+/* -----------------------------------------------------------------------
+   Persoonlijke leerlus
+   registratie → verwachting → werkelijke uitkomst → vergelijking →
+   voorstel → controle. Per dag bewaard (gesynchroniseerd via de gist):
+   wat er op dat moment bekend was, de referenties, het oordeel, het advies,
+   controleerbare verwachtingen met een evaluatiedatum, de modelversie en
+   wat ontbrak. Uitkomsten komen uit latere metingen en jouw invoer;
+   ontbrekend blijft "onbekend", nooit "bevestigd". Een gevolgd advies wordt
+   als context bewaard, niet als bewijs dat het nodig was.
+   De app wijzigt zijn eigen regels nooit zelf: structurele wijzigingen
+   worden een voorstel dat jij goedkeurt, afwijst of van feedback voorziet.
+   ----------------------------------------------------------------------- */
+const LEER_KEY = "sportdashboard.leer.v1";
+const leerLees = () => bewaardLees(LEER_KEY, {}) || {};
+const leerZet = o => { const ok = bewaardSchrijf(LEER_KEY, o); try { syncStraks(); } catch (e) {} return ok; };
+const echteDatum = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`; };
+const hbParamsVerschil = p => Object.fromEntries(Object.entries(p).filter(([k, v]) => k in HB_BASIS && HB_BASIS[k] !== v));
+
+/* één ongunstige check-in, alleen met wat vóór die dag bekend was */
+function hbCheckOngunstig(d) {
+  const c = checkLees()[d]; if (!c) return null;
+  const l = c.lijf || {};
+  const heeft = c.gevoel != null || ["benen", "herstel", "energie"].some(k => l[k] != null);
+  if (!heeft) return null;
+  const ref = Object.keys(checkLees()).filter(x => x < d && x >= isoPlus(d, -120)).map(x => checkLees()[x].gevoel).filter(x => x != null);
+  const normaal = ref.length >= HB.gevoelEerste ? hbMed(ref) : null;
+  return (c.gevoel != null && (normaal != null ? c.gevoel <= normaal - 1 : c.gevoel <= 2)) || l.benen === 2 || l.herstel === 2 || l.energie === 2;
+}
+
+/* Verwachtingen: alleen wat later echt te controleren is. Geen kansen. */
+function hbVerwachtingen(h) {
+  const v = [], d = h.dag;
+  if (h.ind.gevoel.ongunstig) v.push({k: "gevoel_terug", tekst: "Je ervaren herstel is binnen 3 dagen weer zoals je eigen normaal", eval: isoPlus(d, 3)});
+  if (h.ind.hart.niveau === "oranje") v.push({k: "hart_houdt_aan", tekst: "De afwijking in je hartmetingen is over 2 nachten nog zichtbaar", eval: isoPlus(d, 2)});
+  else if (h.ind.hart.niveau === "blauw") v.push({k: "hart_trekt_bij", tekst: "Je hartmetingen liggen over 2 nachten weer binnen je band", eval: isoPlus(d, 2)});
+  if (["groen", "blauw"].includes(h.niveau)) {
+    const kandidaat = [d, isoPlus(d, 1)].flatMap(x => dagRoute(x, {alleenLezen: true}).items
+      .filter(i => i.soort !== "rust" && !i.optioneel && ["vandaag", "gepland"].includes(itemStatus(x, i).k)).map(i => ({x, i})))[0];
+    if (kandidaat) v.push({k: "sessie_passend", tekst: `${kandidaat.i.titel.split(" · ")[0]} wordt uitgevoerd zonder duidelijk hogere zwaarte dan je gewoonlijk voor die sport`,
+      sessie: {datum: kandidaat.x, id: kandidaat.i.id, soort: kandidaat.i.soort, titel: kandidaat.i.titel}, eval: isoPlus(kandidaat.x, 1)});
+  }
+  return v.map(x => ({...x, uitkomst: null}));
+}
+/* Uitkomst van één verwachting, uitsluitend uit gegevens ná het oordeel. */
+function hbEvalueer(rec, w) {
+  const d = rec.datum;
+  if (w.k === "gevoel_terug") {
+    const dagen = [1, 2, 3].map(n => isoPlus(d, n)).map(hbCheckOngunstig).filter(x => x !== null);
+    if (!dagen.length) return {uitkomst: "onbekend", bron: "geen check-in in de 3 dagen erna"};
+    return dagen.some(x => !x) ? {uitkomst: "bevestigd", bron: `${dagen.length} check-in(s) erna`} : {uitkomst: "niet bevestigd", bron: `${dagen.length} check-in(s) erna, alle ongunstig`};
+  }
+  if (w.k === "hart_houdt_aan" || w.k === "hart_trekt_bij") {
+    const n = hbHart(w.eval).niveau;
+    if (n === "grijs") return {uitkomst: "onbekend", bron: "geen bruikbare hartmeting"};
+    const binnen = n === "groen", afwijkend = n === "oranje";
+    if (w.k === "hart_trekt_bij") return {uitkomst: binnen ? "bevestigd" : "niet bevestigd", bron: `hartmetingen ${w.eval}: ${n}`};
+    return {uitkomst: afwijkend ? "bevestigd" : binnen ? "niet bevestigd" : "onbekend", bron: `hartmetingen ${w.eval}: ${n}`};
+  }
+  if (w.k === "sessie_passend") {
+    const item = dagRoute(w.sessie.datum, {alleenLezen: true}).items.find(i => i.id === w.sessie.id);
+    const st = item ? itemStatus(w.sessie.datum, item).k : "onbekend";
+    if (st === "overgeslagen") return {uitkomst: "niet bevestigd", bron: "sessie overgeslagen"};
+    if (st !== "gedaan") return {uitkomst: "onbekend", bron: `status: ${STATUS_WOORD[st] || st}`};
+    const sport = ["handbal", "wedstrijd"].includes(w.sessie.soort) ? "Handbal" : w.sessie.soort === "kracht" ? "Kracht" : "Hardlopen";
+    const c = checkLees();
+    const rpe = ((c[w.sessie.datum] || {}).sessies || []).find(s => s.sport === sport && s.rpe);
+    const ref = Object.keys(c).filter(x => x < w.sessie.datum).flatMap(x => (c[x].sessies || []).filter(s => s.sport === sport && s.rpe).map(s => s.rpe));
+    if (!rpe) return {uitkomst: "onbekend", bron: "geen zwaarte ingevuld"};
+    if (ref.length < 4) return {uitkomst: "onbekend", bron: `${ref.length} eerdere zwaartes voor deze sport, minimaal 4 nodig`};
+    const m = hbMed(ref);
+    return rpe.rpe <= m + 1 ? {uitkomst: "bevestigd", bron: `zwaarte ${rpe.rpe}, gewoonlijk ${komma(m)}`} : {uitkomst: "niet bevestigd", bron: `zwaarte ${rpe.rpe}, gewoonlijk ${komma(m)}`};
+  }
+  return {uitkomst: "onbekend", bron: "onbekende verwachting"};
+}
+
+/* Bewaren en bijwerken. Een eerdere dag wordt niet opnieuw beoordeeld: alleen
+   uitkomsten en terugkoppeling komen erbij. */
 function herstelBewaar(h) {
-  const log = bewaardLees(HB_LOG_KEY, {});
-  if (log[h.dag] && h.dag < vandaagIso()) return;
-  const ref = r => r && r.genoeg ? {bron: r.bron, laag: hbRond(r.laag, 1), hoog: hbRond(r.hoog, 1), n: r.n, van: r.van, tot: r.tot} : null;
-  log[h.dag] = {versie: h.versie, t: new Date().toISOString(), niveau: h.niveau, regel: h.regel, reden: h.oorzaak, actie: h.actie, ontbreekt: h.ontbreekt,
-    meting: {hrvWeek: h.ind.hart.hrv.week ?? null, hrvRef: ref(h.ind.hart.hrv.weekRef), rhr: h.ind.hart.rhr.actueel, rhrRef: ref(h.ind.hart.rhr.ref),
-      slaap: h.ind.slaap.m ? h.ind.slaap.m.actueel : null, slaapRef: ref(h.ind.slaap.ref), huidtemp: h.ind.overig.temp.actueel, adem: h.ind.overig.adem.actueel,
-      gevoel: h.ind.gevoel.niveau, prestatie: h.ind.prestatie.punten.slice(-3).map(p => p.tekst), belasting7: h.bel.nu, belastingNormaal: h.bel.normaal}};
-  const sleutels = Object.keys(log).sort();
-  sleutels.slice(0, Math.max(0, sleutels.length - 120)).forEach(s => delete log[s]);
-  bewaardSchrijf(HB_LOG_KEY, log);
+  const log = leerLees(), vandaag = vandaagIso();
+  let veranderd = false;
+  const ref = r => r && r.genoeg ? {bron: r.bron, laag: hbRond(r.laag, 2), hoog: hbRond(r.hoog, 2), n: r.n, van: r.van, tot: r.tot} : r && r.bron === "garmin" ? {bron: "garmin", laag: r.laag, hoog: r.hoog} : null;
+  const bestaand = log[h.dag];
+  if (h.dag === vandaag && (!bestaand || bestaand.niveau !== h.niveau || bestaand.regel !== h.regel || bestaand.versie !== h.versie)) {
+    const m = hbModel();
+    log[h.dag] = {datum: h.dag, versie: h.versie, params: hbParamsVerschil(m.params), berekend: new Date().toISOString(), garmin: DATA.generated || null,
+      niveau: h.niveau, regel: h.regel, reden: h.oorzaak, actie: h.actie, ontbreekt: h.ontbreekt,
+      beschikbaar: Object.fromEntries(Object.values(h.ind).map(x => [x.k, {niveau: x.niveau, dekking: x.dekking}])),
+      refs: {hrv: ref(h.ind.hart.hrv.weekRef), rhr: ref(h.ind.hart.rhr.ref), slaap: ref(h.ind.slaap.ref), huidtemp: ref(h.ind.overig.temp.ref), adem: ref(h.ind.overig.adem.ref)},
+      waarden: {hrvWeek: h.ind.hart.hrv.week ?? null, rhr: h.ind.hart.rhr.actueel ?? null, slaap: h.ind.slaap.m ? h.ind.slaap.m.actueel : null, huidtemp: h.ind.overig.temp.actueel ?? null, adem: h.ind.overig.adem.actueel ?? null, belasting7: h.bel.nu, belastingNormaal: h.bel.normaal},
+      interventie: {advies: h.actie, wijzigingen: dagRoute(h.dag, {alleenLezen: true}).wijzigingen.filter(w => w.regel !== "eigen").map(w => ({regel: w.regel, wat: w.wat}))},
+      verwachtingen: hbVerwachtingen(h), eerder: bestaand ? [...(bestaand.eerder || []), {niveau: bestaand.niveau, regel: bestaand.regel, berekend: bestaand.berekend}].slice(-5) : [],
+      feedback: bestaand ? bestaand.feedback || null : null, _t: Date.now()};
+    veranderd = true;
+  }
+  Object.values(log).forEach(rec => (rec.verwachtingen || []).forEach(w => {
+    if (w.uitkomst || w.eval > vandaag) return;
+    const e = hbEvalueer(rec, w); w.uitkomst = e.uitkomst; w.bron = e.bron; w.geevalueerd = vandaag; rec._t = Date.now(); veranderd = true;
+  }));
+  if (veranderd) {
+    const sleutels = Object.keys(log).sort();
+    sleutels.slice(0, Math.max(0, sleutels.length - 365)).forEach(s => delete log[s]);
+    leerZet(log);
+  }
+}
+function leerFeedback(datum, veld, waarde) {
+  const log = leerLees(); const rec = log[datum]; if (!rec) return false;
+  rec.feedback = {...(rec.feedback || {}), [veld]: waarde, t: new Date().toISOString()}; rec._t = Date.now();
+  return leerZet(log);
+}
+
+/* ---- historische controle: alleen wat op dat moment bekend was ---- */
+/* Voorspeller: de sensordomeinen (hart, slaap). Uitkomst: je eigen
+   check-in op de twee dagen erna. Zo beoordeelt de controle niet dezelfde
+   invoer als de voorspelling. Ontbrekende check-ins: niet beoordeelbaar. */
+function hbControle(params, dagen, opties = {}) {
+  const vorig = HB_OVERRIDE; HB_OVERRIDE = params;
+  const t = {n: 0, waarsch: 0, bevestigd: 0, gemist: 0, zonderBevestiging: 0, rustigKlopt: 0, nietBeoordeelbaar: 0, wissels: 0};
+  let vorigNiveau = null;
+  try {
+    dagen.forEach(d => {
+      const k = herstelKern(d);
+      if (vorigNiveau && k.niveau !== vorigNiveau) t.wissels++;
+      vorigNiveau = k.niveau;
+      const domeinen = opties.zonder ? ["hart", "slaap"].filter(x => x !== opties.zonder) : ["hart", "slaap"];
+      const beoordeelbaar = domeinen.some(x => k.ind[x].niveau !== "grijs");
+      const uit = [isoPlus(d, 1), isoPlus(d, 2)].map(hbCheckOngunstig).filter(x => x !== null);
+      if (!beoordeelbaar || !uit.length) { t.nietBeoordeelbaar++; return; }
+      t.n++;
+      const w = opties.nooit ? false : domeinen.some(x => k.ind[x].ongunstig);
+      const slecht = uit.some(x => x);
+      if (w) t.waarsch++;
+      if (w && slecht) t.bevestigd++; else if (!w && slecht) t.gemist++; else if (w && !slecht) t.zonderBevestiging++; else t.rustigKlopt++;
+    });
+  } finally { HB_OVERRIDE = vorig; }
+  const pos = t.bevestigd + t.gemist, neg = t.zonderBevestiging + t.rustigKlopt;
+  t.positief = pos;
+  t.ba = pos && neg ? Math.round(((t.bevestigd / pos) + (t.rustigKlopt / neg)) / 2 * 100) / 100 : null;
+  t.stabiliteit = dagen.length > 1 ? Math.round((1 - t.wissels / (dagen.length - 1)) * 100) / 100 : null;
+  return t;
+}
+const HB_MIN_TEST = 20, HB_MIN_POS = 5, HB_MIN_WINST = 0.10, HB_NIEUW_NA_AFWIJZING = 10;   // [modelkeuze]
+function hbKandidaten(p) {
+  return [1.0, 2.0].filter(k => k !== p.bandK).map(k => ({...p, bandK: k, _wat: `bandbreedte ${komma(k)} × robuuste SD in plaats van ${komma(p.bandK)}`}));
+}
+/* Een voorstel ontstaat alleen bij genoeg beoordeelbare dagen met een
+   uitkomst. Kiezen gebeurt op het eerste 2/3 deel, beoordelen op het laatste
+   1/3 deel; zo worden de drempels niet gekozen op dezelfde dagen waarop ze
+   worden beoordeeld. */
+function hbVoorstelZoeken() {
+  const m = hbModel(), v = vandaagIso();
+  const dagen = hbRijen().map(r => r.date).filter(d => d <= isoPlus(v, -2));
+  const split = Math.floor(dagen.length * 2 / 3), keus = dagen.slice(0, split), toets = dagen.slice(split);
+  const huidigToets = hbControle(m.params, toets);
+  const status = {huidig: huidigToets, dagen: dagen.length, nodig: HB_MIN_TEST, positiefNodig: HB_MIN_POS};
+  if (huidigToets.n < HB_MIN_TEST || huidigToets.positief < HB_MIN_POS) return {...status, voorstel: null, reden: `te weinig beoordeelbare dagen met een uitkomst: ${huidigToets.n} van ${HB_MIN_TEST}, waarvan ${huidigToets.positief} met ongunstig ervaren herstel (minimaal ${HB_MIN_POS})`};
+  const beste = hbKandidaten(m.params).map(c => ({c, keus: hbControle(c, keus)})).filter(x => x.keus.ba != null).sort((a, b) => b.keus.ba - a.keus.ba)[0];
+  if (!beste) return {...status, voorstel: null, reden: "geen kandidaat met een bruikbare score"};
+  const toetsC = hbControle(beste.c, toets);
+  if (toetsC.ba == null || huidigToets.ba == null || toetsC.ba < huidigToets.ba + HB_MIN_WINST) return {...status, voorstel: null, reden: "geen kandidaat duidelijk beter dan het huidige model op de toetsdagen"};
+  const voorstellen = instelLees().hbVoorstellen || [];
+  const params = hbParamsVerschil(beste.c);
+  const sleutel = JSON.stringify(params);
+  const eerder = voorstellen.find(x => JSON.stringify(x.params) === sleutel && x.status === "afgewezen");
+  if (eerder && toetsC.n < (eerder.nBijBesluit || 0) + HB_NIEUW_NA_AFWIJZING) return {...status, voorstel: null, reden: `zelfde voorstel eerder afgewezen; opnieuw pas na ${HB_NIEUW_NA_AFWIJZING} nieuwe beoordeelbare dagen`};
+  return {...status, voorstel: {id: `v${Date.now().toString(36)}`, params, wat: beste.c._wat, gemaakt: v, status: "open",
+    toets: toetsC, huidig: huidigToets, zonderSlaap: hbControle(m.params, toets, {zonder: "slaap"}), nooit: hbControle(m.params, toets, {nooit: true}),
+    nBijMaken: toetsC.n}};
+}
+function hbVoorstelBewaar(vs) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  const lijst = (I.hbVoorstellen || []).filter(x => !(x.status === "open" && JSON.stringify(x.params) === JSON.stringify(vs.params)));
+  return instelZet({...I, hbVoorstellen: [...lijst, vs].slice(-20)});
+}
+function hbVoorstelBesluit(id, besluit, tekst) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  const lijst = (I.hbVoorstellen || []).map(x => x.id !== id ? x : besluit === "feedback"
+    ? {...x, feedback: [...(x.feedback || []), {t: new Date().toISOString(), tekst}]}
+    : {...x, status: besluit, besluitDatum: vandaagIso(), nBijBesluit: (x.toets || {}).n || 0});
+  let model = I.hbModel || {};
+  const vs = lijst.find(x => x.id === id);
+  if (besluit === "goedgekeurd" && vs) {
+    const huidig = hbModel();
+    const nr = (model.geschiedenis || []).length + 1;
+    model = {versie: `${HB_VERSIE_BASIS}.${nr}`, params: {...(model.params || {}), ...vs.params},
+      geschiedenis: [...(model.geschiedenis || []), {versie: huidig.versie, params: hbParamsVerschil(huidig.params), tot: vandaagIso(), reden: `voorstel ${id} goedgekeurd`}]};
+  }
+  const ok = instelZet({...I, hbVoorstellen: lijst, hbModel: model});
+  HB_CACHE.clear();
+  return ok;
+}
+function hbTerugdraaien(versie) {
+  const I = bewaardLees(INSTEL_KEY, {});
+  const huidig = hbModel(), doel = (huidig.geschiedenis || []).find(g => g.versie === versie);
+  if (!doel) return false;
+  const model = {versie: doel.versie, params: doel.params,
+    geschiedenis: [...huidig.geschiedenis.filter(g => g.versie !== versie), {versie: huidig.versie, params: hbParamsVerschil(huidig.params), tot: vandaagIso(), reden: `teruggedraaid naar ${versie}`}]};
+  const ok = instelZet({...I, hbModel: model}); HB_CACHE.clear(); return ok;
+}
+/* Schaduwberekening: wat een open voorstel vandaag zou zeggen. Het actieve
+   advies verandert niet. */
+function hbSchaduw(vs, d) {
+  const vorig = HB_OVERRIDE; HB_OVERRIDE = {...HB_BASIS, ...hbModel().params, ...vs.params, _versie: `voorstel ${vs.id}`};
+  try { return herstelKern(d || vandaagIso()); } finally { HB_OVERRIDE = vorig; }
+}
+
+/* ---- dekking over je hele historie ---- */
+function hbDekking() {
+  const v = vandaagIso();
+  const dagen = hbRijen().map(r => r.date).filter(d => d <= v);
+  const velden = {hrv: "HRV", rhr: "Rusthartslag", sleep_h: "Slaapduur", huidtemp_afw: "Huidtemperatuur", resp_sleep: "Ademhaling", spo2_gem: "Pulse Ox"};
+  const meet = Object.fromEntries(Object.entries(velden).map(([k, n]) => [k, {naam: n, dagen: hbRijen().filter(r => r.date <= v && r[k] != null).length}]));
+  const dom = {gevoel: {}, prestatie: {}, slaap: {}, hart: {}, overig: {}};
+  let volledig = 0, gedeeltelijk = 0, geen = 0, grijs = 0, aangepast = 0;
+  dagen.forEach(d => {
+    const k = herstelKern(d);
+    Object.keys(dom).forEach(x => { const n = k.ind[x].niveau; dom[x][n] = (dom[x][n] || 0) + 1; });
+    const kern = ["gevoel", "slaap", "hart"].filter(x => k.ind[x].niveau !== "grijs").length;
+    if (kern === 3) volledig++; else if (kern) gedeeltelijk++; else geen++;
+    if (k.niveau === "grijs") grijs++;
+    if ((wijzigingenLees() || []).some(w => w.datum === d && !w.teruggedraaid && MINDER_REGELS.includes(w.regel))) aangepast++;
+  });
+  return {kalenderdagen: dagen.length, van: dagen[0], tot: dagen[dagen.length - 1], meet, dom, volledig, gedeeltelijk, geen, grijs, aangepast};
+}
+
+/* ---- wat de app over je leert ---- */
+function hbPatronen() {
+  const v = vandaagIso(), k = herstelKern(v), uit = [];
+  const g = k.ind.gevoel;
+  uit.push({naam: "Je gewone gevoel (check-in)", status: g.opbouw.status, n: g.opbouw.n,
+    tekst: g.opbouw.status === "stabiel" ? `Normaal ${komma(g.opbouw.mediaan)}/5 uit ${g.opbouw.n} check-ins op ${g.opbouw.weekdagen} weekdagen.`
+      : `Persoonlijke referentie in opbouw: ${g.opbouw.n} check-ins op ${g.opbouw.weekdagen} weekdagen${g.opbouw.mediaan != null ? `, voorlopig ${komma(g.opbouw.mediaan)}/5` : ""}. Stabiel vanaf ${HB.gevoelStabiel} check-ins, 5 weekdagen en een gelijk eerste en tweede deel.`});
+  const refRij = (naam, r, m, fmt) => uit.push({naam, status: r && r.genoeg ? (r.verschoven ? "onderzocht" : "voldoende gegevens") : "in opbouw", n: r ? r.n : 0,
+    tekst: r && r.genoeg ? `Band ${fmt(r.laag)}–${fmt(r.hoog)} uit ${r.n} metingen (${kortDatum(r.van)} t/m ${kortDatum(r.tot)}).${m && m.mediaan7 != null ? ` Laatste 7 dagen mediaan ${fmt(m.mediaan7)}${m.mediaan28 != null ? `, 28 dagen ${fmt(m.mediaan28)}` : ""}.` : ""}${r.verschoven ? " Referentie verschoven in 4 weken; wordt gevolgd." : ""}`
+      : `Onvoldoende historie: ${r ? r.n : 0} van ${HB.refMinN} metingen.`});
+  const hw = k.ind.hart.hrv.weekRef;
+  uit.push({naam: "HRV-band", status: hw ? (hw.bron === "garmin" ? "van Garmin" : "voldoende gegevens") : "in opbouw", n: null, tekst: hw ? `${hw.bron === "garmin" ? "Garmins eigen band" : "Eigen band"} ${Math.round(hw.laag)}–${Math.round(hw.hoog)} ms; weekgemiddelde ${Math.round(k.ind.hart.hrv.week)} ms.` : "(haal dit uit de Garmin-data)"});
+  refRij("Rusthartslag", k.ind.hart.rhr.ref, k.ind.hart.rhr, x => String(Math.round(x)));
+  refRij("Slaapduur (gebruikelijk, geen behoefte)", k.ind.slaap.ref, k.ind.slaap.m, x => uurMin(x));
+  refRij("Huidtemperatuur (afwijking)", k.ind.overig.temp.ref, k.ind.overig.temp, x => `${komma(hbRond(x, 1))} °C`);
+  refRij("Ademhaling tijdens slaap", k.ind.overig.adem.ref, k.ind.overig.adem, x => komma(hbRond(x, 1)));
+  /* herstelreactie na een wedstrijd: verband, geen oorzaak */
+  const wedstrijden = hbActs().filter(a => a.sport === "Handbal" && (a.duration_s || 0) >= 90 * 60 && [5, 6].includes(isoNaarPy(a.date)) && a.date < v);
+  const afw = wedstrijden.map(a => { const n = hbRijen().find(r => r.date === isoPlus(a.date, 1)); const r = hbReferentie("rhr", isoPlus(a.date, 1));
+    return n && n.rhr != null && r.genoeg ? n.rhr - r.centraal : null; }).filter(x => x != null);
+  uit.push({naam: "Rusthartslag de ochtend na een wedstrijd", status: afw.length >= 8 ? "voldoende gegevens" : "onderzocht", n: afw.length,
+    tekst: afw.length ? `Gemiddeld ${afw.length >= 8 ? "" : "voorlopig "}${hbMed(afw) >= 0 ? "+" : "−"}${komma(hbRond(Math.abs(hbMed(afw)), 1))} t.o.v. je referentie, over ${afw.length} wedstrijden. Een verband, geen oorzaak.${afw.length < 8 ? " Minimaal 8 nodig." : ""}` : "Nog geen wedstrijden met een meting de ochtend erna."});
+  const p = k.ind.prestatie;
+  uit.push({naam: "Prestatie bij gelijke taak", status: p.punten.length >= 6 ? "onderzocht" : "in opbouw", n: p.punten.length,
+    tekst: `${p.punten.length} vergelijkingen in de laatste 2 weken${p.beperkt.length ? `; ${p.beperkt.length} niet of beperkt vergelijkbaar` : ""}.`});
+  return uit;
+}
+function hbLeerStats() {
+  const log = Object.values(leerLees());
+  const w = log.flatMap(r => r.verwachtingen || []);
+  const tel = x => w.filter(y => y.uitkomst === x).length;
+  const fb = log.map(r => r.feedback).filter(Boolean);
+  const telF = (veld, waarde) => fb.filter(f => f[veld] === waarde).length;
+  return {beoordelingen: log.length, verwachtingen: w.length, open: w.filter(x => !x.uitkomst).length, bevestigd: tel("bevestigd"), niet: tel("niet bevestigd"), onbekend: tel("onbekend"),
+    herkenbaar: {ja: telF("klopte", "ja"), deels: telF("klopte", "deels"), nee: telF("klopte", "nee")},
+    bruikbaar: {ja: telF("bruikbaar", "ja"), nee: telF("bruikbaar", "nee")},
+    gevolgd: {ja: telF("gevolgd", "ja"), deels: telF("gevolgd", "deels"), nee: telF("gevolgd", "nee")}};
+}
+
+function hbLeerPaneel() {
+  const v = vandaagIso(), m = hbModel(), st = hbLeerStats(), pat = hbPatronen();
+  let zoek; try { zoek = hbVoorstelZoeken(); } catch (e) { zoek = {voorstel: null, reden: "controle mislukt: " + e.message, huidig: {}}; }
+  if (zoek.voorstel) hbVoorstelBewaar(zoek.voorstel);
+  const voorstellen = (instelLees().hbVoorstellen || []).slice().reverse();
+  const dek = hbDekking();
+  const STATUS = {"voldoende gegevens": "groen", "van Garmin": "groen", onderzocht: "blauw", "in opbouw": "grijs", stabiel: "groen", "eerste referentie": "blauw"};
+  const vsHtml = vs => { const sch = vs.status === "open" ? hbSchaduw(vs, v) : null;
+    return `<div class="hb-vs"><b>${hoofdletter(vs.wat || "wijziging")}</b> ${hsChip(vs.status, vs.status === "open" ? "blauw" : vs.status === "goedgekeurd" ? "groen" : "grijs")}
+      <dl class="u-dl hb-stapel"><dt>Op basis van</dt><dd>${vs.toets.n} beoordeelbare toetsdagen, ${vs.toets.positief} met ongunstig ervaren herstel</dd>
+        <dt>Historische controle</dt><dd>huidig ${vs.huidig.ba ?? "–"} · voorstel ${vs.toets.ba ?? "–"} · zonder slaap ${vs.zonderSlaap.ba ?? "–"} · nooit waarschuwen ${vs.nooit.ba ?? "–"} <span class="u-klein">(gebalanceerde juistheid, alleen toetsdagen)</span></dd>
+        <dt>Gemist / zonder latere bevestiging</dt><dd>huidig ${vs.huidig.gemist}/${vs.huidig.zonderBevestiging} · voorstel ${vs.toets.gemist}/${vs.toets.zonderBevestiging}</dd>
+        <dt>Blijft onzeker</dt><dd>Een waarschuwing zonder slechte uitkomst is niet automatisch vals: aangepast trainen kan de uitkomst veranderd hebben. Eén persoon, weinig gevallen.</dd>
+        ${sch ? `<dt>Effect vandaag (schaduw)</dt><dd>${HB_KORT_TITEL[sch.niveau]}; je actieve advies blijft ${HB_KORT_TITEL[herstelKern(v).niveau].toLowerCase()} tot je goedkeurt</dd>` : ""}
+        <dt>Evaluatie</dt><dd>Na goedkeuring opnieuw na ${HB_NIEUW_NA_AFWIJZING} nieuwe beoordeelbare dagen; terugdraaien kan altijd.</dd></dl>
+      ${vs.status === "open" ? `<div class="u-knoppen"><button class="u-knop u-knop--klein" data-vs="${vs.id}|goedgekeurd">Goedkeuren</button>
+        <button class="u-knop u-knop--stil u-knop--klein" data-vs="${vs.id}|afgewezen">Afwijzen</button>
+        <button class="u-knop u-knop--stil u-knop--klein" data-vs="${vs.id}|feedback">Feedback</button></div>` : ""}
+      ${(vs.feedback || []).map(f => `<p class="u-klein">Feedback ${f.t.slice(0, 10)}: ${f.tekst}</p>`).join("")}</div>`; };
+  uiPaneel("Wat leert de app over mij?", `
+    <p class="u-klein">Gecontroleerd op ${kortDatum(v)} om ${new Date().toTimeString().slice(0, 5)}. Model ${m.versie}. Verbanden, geen oorzaken; een stijgend herstelgetal zegt niets over je conditie.</p>
+    <h4 class="ws-sub">Persoonlijke patronen</h4>
+    <div class="hb-pat">${pat.map(p => `<div class="hb-pat-rij"><div class="hb-pat-kop"><b>${p.naam}</b>${hsChip(p.status, STATUS[p.status] || "grijs")}</div><span class="u-klein">${p.tekst}</span></div>`).join("")}</div>
+    <h4 class="ws-sub">Verwachtingen en uitkomsten</h4>
+    <p>${st.verwachtingen ? `${st.verwachtingen} verwachtingen vastgelegd: ${st.bevestigd} bevestigd, ${st.niet} niet bevestigd, ${st.onbekend} onbekend, ${st.open} nog open.` : "Nog geen verwachtingen vastgelegd; dat gebeurt vanaf een beoordeling met gegevens."}</p>
+    <dl class="u-dl hb-stapel"><dt>Herkenbaar (klopte het?)</dt><dd>ja ${st.herkenbaar.ja} · deels ${st.herkenbaar.deels} · nee ${st.herkenbaar.nee}</dd>
+      <dt>Bruikbaar advies</dt><dd>ja ${st.bruikbaar.ja} · nee ${st.bruikbaar.nee}</dd>
+      <dt>Advies gevolgd</dt><dd>ja ${st.gevolgd.ja} · deels ${st.gevolgd.deels} · nee ${st.gevolgd.nee}</dd>
+      <dt>Aantoonbaar betere uitkomst</dt><dd>Niet vast te stellen: herstel na een gevolgd advies bewijst niet dat het advies nodig was.</dd></dl>
+    <h4 class="ws-sub">Gegevensdekking ${kortDatum(dek.van)} t/m ${kortDatum(dek.tot)}</h4>
+    <dl class="u-dl hb-stapel"><dt>Kalenderdagen</dt><dd>${dek.kalenderdagen}</dd>
+      ${Object.values(dek.meet).map(x => `<dt>${x.naam}</dt><dd>${x.dagen} geldige meetdagen</dd>`).join("")}
+      <dt>Herstel beoordeelbaar</dt><dd>volledig ${dek.volledig} · gedeeltelijk ${dek.gedeeltelijk} · geen bruikbare meting ${dek.geen}</dd>
+      <dt>Onvoldoende informatie voor een oordeel</dt><dd>${dek.grijs} dagen (geen geldige check-in)</dd>
+      <dt>Dagen met aangepast trainingsadvies</dt><dd>${dek.aangepast}</dd>
+      ${Object.entries(dek.dom).map(([k, x]) => `<dt>${HS_TAAK[k]}</dt><dd>geen afwijking ${x.groen || 0} · losse afwijking ${x.blauw || 0} · aanhoudend ${x.oranje || 0}${x.rood ? ` · rood ${x.rood}` : ""} · geen bruikbare meting ${x.grijs || 0}</dd>`).join("")}</dl>
+    <h4 class="ws-sub">Modelvoorstellen</h4>
+    ${voorstellen.length ? voorstellen.map(vsHtml).join("") : `<p class="u-klein">Geen voorstel: ${zoek.reden}.</p>`}
+    <h4 class="ws-sub">Modelversies</h4>
+    <p class="u-klein">Actief: ${m.versie}${Object.keys(hbParamsVerschil(m.params)).length ? ` (${Object.entries(hbParamsVerschil(m.params)).map(([k, x]) => `${k} ${x}`).join(", ")})` : " (basisinstellingen)"}.</p>
+    ${m.geschiedenis.length ? `<ul class="u-lijst">${m.geschiedenis.slice().reverse().map(g => `<li>${g.versie} tot ${kortDatum(g.tot)} — ${g.reden} <button class="u-link" data-terug="${g.versie}">Terugdraaien</button></li>`).join("")}</ul>` : `<p class="u-klein">Nog geen eerdere versies.</p>`}
+    <p class="u-klein">Automatisch: nieuwe gegevens verwerken, referenties volgens de vaste methode bijwerken, vergelijkbare sessies toevoegen, dekking en beoordelingen herberekenen. Nooit automatisch: kleuren, afwijkingsdefinities, gewichten, grenzen, adviesregels en de omgang met klachten of ziekte.</p>`,
+    box => {
+      box.querySelectorAll("[data-vs]").forEach(b => b.onclick = () => {
+        const [id, besluit] = b.dataset.vs.split("|");
+        if (besluit === "feedback") { const t = prompt("Feedback op dit voorstel"); if (t) hbVoorstelBesluit(id, "feedback", t); }
+        else hbVoorstelBesluit(id, besluit);
+        uiPaneelSluit(); allesNaInvoer(); setTimeout(hbLeerPaneel, 280);
+      });
+      box.querySelectorAll("[data-terug]").forEach(b => b.onclick = () => { hbTerugdraaien(b.dataset.terug); uiPaneelSluit(); allesNaInvoer(); setTimeout(hbLeerPaneel, 280); });
+    });
+}
+
+/* Terugkoppeling: optioneel, alleen in Details, één keer per beoordeling. */
+function hbFeedbackHtml() {
+  const v = vandaagIso(), log = leerLees(), rec = log[v];
+  const rij = (veld, vraag, opties, f) => `<div class="hb-fb-rij"><span>${vraag}</span><span class="hb-fb-keus">${opties.map(o =>
+    `<button class="u-keuze" aria-pressed="${(f || {})[veld] === o}" data-fb="${veld}|${o}">${o}</button>`).join("")}</span></div>`;
+  const delen = [];
+  if (rec && rec.niveau !== "grijs") {
+    const f = rec.feedback || {};
+    delen.push(rij("klopte", "Klopte dit met hoe je je voelde?", ["ja", "deels", "nee"], f));
+    delen.push(rij("gevolgd", "Heb je het advies gevolgd?", ["ja", "deels", "nee"], f));
+    delen.push(rij("bruikbaar", "Was het advies bruikbaar?", ["ja", "nee"], f));
+    delen.push(`<div class="hb-fb-rij"><span>Andere verklaring?</span><input class="hb-fb-tekst" data-fbtekst value="${(f.verklaring || "").replace(/"/g, "&quot;")}" placeholder="optioneel, bv. slecht geslapen door werk" maxlength="140"></div>`);
+  }
+  const gisteren = log[isoPlus(v, -1)];
+  const ses = gisteren && (gisteren.verwachtingen || []).find(w => w.k === "sessie_passend" && w.sessie && w.sessie.datum <= v);
+  if (ses) delen.push(rij("volgende", `${ses.sessie.titel.split(" · ")[0]}: zwaarder, gelijk of lichter dan verwacht?`, ["zwaarder", "gelijk", "lichter"], gisteren.feedback || {}));
+  return delen.length ? `<h4 class="ws-sub">Jouw terugkoppeling (optioneel)</h4><div class="hb-fb">${delen.join("")}</div>
+    <p class="u-klein">Je antwoorden zijn informatie, geen meetwaarheid; tegenstrijdige gegevens blijven zichtbaar.</p>` : "";
+}
+function hbFeedbackKoppel(box) {
+  const v = vandaagIso();
+  box.querySelectorAll("[data-fb]").forEach(b => b.onclick = () => {
+    const [veld, waarde] = b.dataset.fb.split("|");
+    const datum = veld === "volgende" ? isoPlus(v, -1) : v;
+    leerFeedback(datum, veld, waarde);
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  });
+  const t = box.querySelector("[data-fbtekst]");
+  if (t) t.onchange = () => leerFeedback(v, "verklaring", t.value.trim());
 }
 
 /* Eén compacte balk onder de drie getallen: status, één regel, één actie,
@@ -10423,6 +10873,7 @@ function renderVermoeidheid() {
       <div class="hb-balk-tekst">
         <span class="hb-balk-status">${ic(HB_IC[h.niveau])}${HB_KORT_TITEL[h.niveau]}</span>
         <span class="hb-balk-regel">${hbKorteRegel(h)}</span>
+        ${v < echteDatum() ? `<span class="hb-balk-regel hb-oud">Beoordeling van ${dagNaam(v)} ${kortDatum(v)}, niet van vandaag</span>` : ""}
       </div>
       <div class="hb-balk-acties">
         <button class="u-knop u-knop--klein${ingevuld ? " u-knop--stil" : ""}" data-checkin>${ingevuld ? "Check-in wijzigen" : "Check-in invullen"}</button>
@@ -10456,7 +10907,7 @@ function hbRefTekst(r) {
   if (!r) return "geen referentie";
   if (r.bron === "garmin") return `Afkomstig uit Garmin: ${r.methode}.`;
   if (!r.genoeg) return `Onvoldoende historie: ${r.n} geldige metingen van ${kortDatum(r.van)} t/m ${kortDatum(r.tot)}, minimaal ${r.nodig} nodig.`;
-  return `Eigen berekening uit ${r.n} metingen van ${kortDatum(r.van)} t/m ${kortDatum(r.tot)} (laatste week niet meegeteld): ${r.methode}.${r.uitgesloten ? ` ${r.uitgesloten} metingen van een ander of onbekend toestel uitgesloten.` : ""}${r.verschoven ? " Let op: deze referentie is in vier weken duidelijk verschoven; een aanhoudende verandering kan in je 'normaal' zijn opgenomen." : ""} Gebruikelijk is niet automatisch gezond.`;
+  return `Eigen berekening uit ${r.n} metingen van ${kortDatum(r.van)} t/m ${kortDatum(r.tot)} (laatste week niet meegeteld): ${r.methode}.${r.uitgesloten ? ` ${r.uitgesloten} metingen van een ander of onbekend toestel uitgesloten.` : ""}${r.uitgeslotenZiek ? ` ${r.uitgeslotenZiek} metingen rond ingevulde ziektedagen uitgesloten.` : ""}${r.verschoven ? " Let op: deze referentie is in vier weken duidelijk verschoven; een aanhoudende verandering kan in je 'normaal' zijn opgenomen." : ""} Gebruikelijk is niet automatisch gezond.`;
 }
 function hbMetingRij(naam, m, fmt, eenheid) {
   if (!m || m.actueel == null) return `<dt>${naam}</dt><dd>(haal dit uit de Garmin-data) <span class="u-klein">niet beschikbaar</span></dd>`;
@@ -10479,7 +10930,7 @@ function hbIndicatorInhoud(k) {
     inhoud = `<dl class="u-dl">${dagen.map(d => { const c = ch[d];
       return `<dt>${kortDagNaam(d)} ${kortDatum(d)}</dt><dd>${!c ? `<span class="u-klein">geen check-in</span>` :
         [c.gevoel != null ? `algemeen ${c.gevoel}/5` : null, ...["benen", "herstel", "energie", "slaap", "stress"].map(q => w(c, q))].filter(Boolean).join(" · ") || "alleen zwaarte van een sessie ingevuld"}</dd>`; }).join("")}</dl>
-      <p class="u-klein">${x.normaal != null ? `Je eigen normaal: ${komma(x.normaal)}/5, uit ${x.normaalN} check-ins.` : `Je eigen normaal is nog niet bekend (${x.normaalN} van 7 check-ins); tot dan telt 2/5 of lager.`} Oranje bij twee of meer ongunstige dagen in 7, waarvan één vandaag of gisteren [modelkeuze]. Mentale belasting telt als mogelijke andere verklaring, niet als vermoeidheid.${x.stress ? ` Deze week ${x.stress}× hoge mentale belasting ingevuld.` : ""}</p>`;
+      <p class="u-klein">${x.opbouw.status === "stabiel" ? `Je eigen normaal: ${komma(x.normaal)}/5, uit ${x.opbouw.n} check-ins op ${x.opbouw.weekdagen} weekdagen.` : x.normaal != null ? `Persoonlijke referentie in opbouw: voorlopig ${komma(x.normaal)}/5 uit ${x.opbouw.n} check-ins op ${x.opbouw.weekdagen} weekdagen. Zeven check-ins is een eerste referentie, geen betrouwbare.` : `Persoonlijke referentie in opbouw (${x.opbouw.n} van ${HB.gevoelEerste} check-ins); tot dan telt 2/5 of lager. Een actuele klacht telt altijd direct.`} Oranje bij twee of meer ongunstige dagen in 7, waarvan één vandaag of gisteren [modelkeuze]. Mentale belasting telt als mogelijke andere verklaring, niet als vermoeidheid.${x.stress ? ` Deze week ${x.stress}× hoge mentale belasting ingevuld.` : ""}</p>`;
   } else if (k === "slaap") {
     const m = x.m;
     inhoud = `<dl class="u-dl">${hbMetingRij("Slaapduur", m, n => uurMin(n), "")}
@@ -10509,7 +10960,7 @@ function hbIndicatorInhoud(k) {
     inhoud = (x.punten.length ? `<ul class="u-lijst u-lijst--tekst">${x.punten.slice().reverse().map(p => `<li>${p.slechter ? "↓ " : ""}${p.tekst}${p.noot ? ` <span class="u-klein">(${p.noot})</span>` : ""}</li>`).join("")}</ul>`
       : `<p>Bij vergelijkbare inspanning: (haal dit uit de Garmin-data). Er zijn in de laatste twee weken geen trainingen die eerlijk te vergelijken zijn.</p>`)
       + (x.beperkt.length ? `<p class="u-klein">Niet vergeleken: ${x.beperkt.slice(-4).join("; ")}.</p>` : "")
-      + `<p class="u-klein">Alleen gelijke taken: rustige duurlopen buiten op hetzelfde toestel bij ±5% tempo (minimaal 3 eerdere), krachtoefeningen met hetzelfde gewicht, aantal sets, plek en gelogde RIR, en de zwaarte per sport op dezelfde weekdag (minimaal 4 eerdere). Oranje bij twee slechtere van de laatste drie [modelkeuze]. Eén mindere training zegt weinig; een geschat 1RM is geen maximale test.</p>`;
+      + `<p class="u-klein">Alleen gelijke taken: een stabiel segment van minstens 10 minuten na de warming-up (ronden met minder dan 10% tempoverschil), buiten, hetzelfde toestel, ±5% tempo, vergelijkbare helling, minimaal 3 eerdere segmenten; krachtoefeningen met hetzelfde gewicht, aantal sets, plek en positie in de training (zonder RIR bij beide: halve zekerheid); de zwaarte per sport op dezelfde weekdag (halve zekerheid, minimaal 4 eerdere). Weer en ondergrond zijn niet bekend en worden niet ingevuld. Oranje als de slechtere vergelijkingen bij de laatste drie samen minstens 2 wegen [modelkeuze]. Een lagere hartslag terwijl het zwaarder voelt is een mogelijk signaal, geen bewezen achteruitgang. Eén mindere training zegt weinig; een geschat 1RM is geen maximale test.</p>`;
   }
   return inhoud;
 }
@@ -10517,7 +10968,10 @@ function herstelDetailPaneel() {
   const h = herstelStatus(), v = vandaagIso(), d = h.ind;
   const strook = [6, 5, 4, 3, 2, 1, 0].map(n => { const x = isoPlus(v, -n); return {d: x, n: herstelKern(x).niveau}; });
   const sectie = k => `<details class="up-deel hb-deel"><summary><span class="hs-i-kop"><i class="hs-stip hs-stip--${d[k].niveau}"></i>${HS_TAAK[k]}</span><span class="u-klein">${hoofdletter(d[k].reden)}</span></summary><div>${hbIndicatorInhoud(k)}</div></details>`;
+  const syncTekst = SYNC.aan ? (SYNC.laatst ? `laatste synchronisatie ${new Date(SYNC.laatst).toTimeString().slice(0, 5)}` : "synchronisatie nog niet gelukt") : "synchronisatie niet ingesteld op dit apparaat: invoer van je telefoon ontbreekt hier";
+  const garmin = DATA.generated ? new Date(DATA.generated) : null;
   uiPaneel("Herstel", `<div class="hb-kop">
+      <p class="u-klein">Beoordeling voor ${dagNaam(v)} ${kortDatum(v)}${v < echteDatum() ? " (niet van vandaag)" : ""} · Garmin-gegevens van ${garmin ? `${kortDatum(garmin.toISOString().slice(0, 10))} ${garmin.toTimeString().slice(0, 5)}` : "onbekend"} · ${syncTekst} · model ${h.versie}</p>
       ${hsChip(HB_KORT_TITEL[h.niveau], h.niveau)}
       <p>${h.oorzaak}</p>
       ${h.actie ? `<p><b>${h.actie}</b></p>` : ""}
@@ -10534,6 +10988,9 @@ function herstelDetailPaneel() {
     <p class="u-klein">Een zware week is niet automatisch een slecht herstelde week.</p>
     <h4 class="ws-sub">Gegevensdekking</h4>
     <p class="u-klein">Gevoel ${d.gevoel.dekking}/7 dagen · slaap ${d.slaap.dekking}/7 · hart ${d.hart.dekking}/7 · overig ${d.overig.dekking}/7 · ${d.prestatie.dekking} prestatievergelijking${d.prestatie.dekking === 1 ? "" : "en"}.${h.ontbreekt.length ? ` Ontbreekt: ${h.ontbreekt.join("; ")}. Ontbrekend is onbekend, niet normaal.` : ""}</p>
+    ${hbFeedbackHtml()}
+    <button class="u-knop u-knop--stil u-knop--vol" data-leer>Wat leert de app over mij? ${ic("volgende")}</button>
+    ${(() => { const open = (instelLees().hbVoorstellen || []).filter(x => x.status === "open"); return open.length ? `<p class="u-klein">${open.length} modelvoorstel wacht op je besluit; je actieve advies verandert pas na goedkeuring.</p>` : ""; })()}
     <details class="up-deel"><summary>Onderbouwing</summary><div>
       <p><b>Vandaag:</b> ${h.regel}. Model ${h.versie}.</p>
       <dl class="u-dl">
@@ -10542,7 +10999,7 @@ function herstelDetailPaneel() {
         <dt>${hsChip("Oranje", "oranje")}</dt><dd>Slechter ervaren herstel op meerdere dagen, herhaald slechtere prestatie bij een gelijke taak, of aanhoudend afwijkende hartmetingen samen met slaap of gevoel.</dd>
         <dt>${hsChip("Rood", "rood")}</dt><dd>Ziek, een pijnlijke pees of rug, of prestatie en gevoel die achterblijven zonder hogere belasting. Geen diagnose "overtraind".</dd>
         <dt>${hsChip("Grijs", "grijs")}</dt><dd>Geen geldige check-in. Normale hartmetingen maken het beeld niet groen.</dd></dl>
-      <p class="u-klein">Een voorlopige regel van dit dashboard, geen gevalideerd meetinstrument. Gevoel en prestatie wegen het zwaarst; HRV en rusthartslag tellen samen als één bron; huidtemperatuur en ademhaling alleen als aanvulling. Body Battery, Training Readiness, stress en slaapscore tellen niet nog eens mee. Vorm en belasting zijn modeluitkomsten. Volledige onderbouwing: onderbouwing-herstel.md.</p></div></details>`);
+      <p class="u-klein">Een voorlopige regel van dit dashboard, geen gevalideerd meetinstrument. Gevoel en prestatie wegen het zwaarst; HRV en rusthartslag tellen samen als één bron; huidtemperatuur en ademhaling alleen als aanvulling. Body Battery, Training Readiness, stress en slaapscore tellen niet nog eens mee. Vorm en belasting zijn modeluitkomsten. Volledige onderbouwing: onderbouwing-herstel.md.</p></div></details>`, box => { hbFeedbackKoppel(box); const l = box.querySelector("[data-leer]"); if (l) l.onclick = () => { uiPaneelSluit(); setTimeout(hbLeerPaneel, 280); }; });
 }
 
 /* Welk doel hoort bij welke sessie. Handbal telt ook als conditieprikkel,
@@ -10615,7 +11072,7 @@ function weekScore(ma, opties = {}) {
   const lopend = zo >= v;
   const dagen = [];
   for (let d = ma; d <= tot; d = isoPlus(d, 1)) dagen.push(d);
-  const tel = {gepland: 0, gedaan: 0, deels: 0, overgeslagen: 0, onbekend: 0, extra: 0, aangepast: 0, verwijderd: 0, opAdvies: 0};
+  const tel = {gepland: 0, gedaan: 0, deels: 0, overgeslagen: 0, onbekend: 0, extra: 0, aangepast: 0, verwijderd: 0, vervallen: 0, aangepastGevolgd: 0};
   const gekoppeld = new Set();
   const gemist = [];
   const perDoel = {};
@@ -10626,18 +11083,30 @@ function weekScore(ma, opties = {}) {
     const r = dagRoute(d, {alleenLezen: true});
     r.wijzigingen.forEach(w => { if (MINDER_REGELS.includes(w.regel)) tel.aangepast++;
       if (w.regel === "eigen") { tel.verwijderd++; const g = doelTel(w.was, "verwijderd"); if (g) g.wat.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${w.wat.replace(" uit de planning gehaald", "").split(" · ")[0].toLowerCase()} (verwijderd)`); } });
+    /* door een herstel- of klachtenregel vervallen: telt niet als gepland,
+       maar de oorspronkelijke prikkel blijft zichtbaar */
+    r.items.filter(i => i.soort === "rust" && i.gewijzigd && i.gewijzigd.regel !== "eigen" && i.origineel).forEach(i => {
+      tel.vervallen++;
+      const doel = doelVanSoort(i.origineel.soort);
+      if (doel) { perDoel[doel] = perDoel[doel] || {gepland: 0, gedaan: 0, deels: 0, gemist: 0, onbekend: 0, verwijderd: 0, wat: []};
+        perDoel[doel].wat.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.origineel.titel.split(" · ")[0].toLowerCase()} vervallen (${i.gewijzigd.regel}: ${i.gewijzigd.waarom || i.gewijzigd.wat})`); }
+    });
     r.items.filter(i => i.soort !== "rust" && !i.optioneel && !i.wacht).forEach(i => {
       const s = itemStatus(d, i);
+      /* aangepast plan: telt in zijn aangepaste vorm; wat er oorspronkelijk
+         stond en wat je deed, blijven zichtbaar */
+      if (i.gewijzigd && MINDER_REGELS.includes(i.gewijzigd.regel) && i.origineel && !(d === v && ["vandaag", "gepland"].includes(s.k))) {
+        const doel = doelVanSoort(i.origineel.soort) || doelVanSoort(i.soort);
+        const tekst = `${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.origineel.titel.split(" · ")[0].toLowerCase()} aangepast (${i.gewijzigd.regel}) naar ${i.titel.split(" · ")[0].toLowerCase()}: ${s.k === "gedaan" ? "aangepast plan gevolgd" : STATUS_WOORD[s.k] || s.k}`;
+        if (s.k === "gedaan") tel.aangepastGevolgd++;
+        if (doel) { perDoel[doel] = perDoel[doel] || {gepland: 0, gedaan: 0, deels: 0, gemist: 0, onbekend: 0, verwijderd: 0, wat: []}; perDoel[doel].wat.push(tekst); }
+      }
       (s.acts || []).forEach(a => gekoppeld.add(String(a.id)));
       if (d === v && ["vandaag", "gepland"].includes(s.k)) return;    // vandaag nog open: niet meetellen
       tel.gepland++; doelTel(i.soort, "gepland");
       const t0 = i.titel.split(" · ")[0].toLowerCase();
       const kort = WEEKDAG_LANG.some(n => t0.includes(n.toLowerCase())) ? t0 : `${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${t0}`;
       if (s.k === "gedaan") { s.deels ? tel.deels++ : tel.gedaan++; doelTel(i.soort, s.deels ? "deels" : "gedaan"); }
-      else if (s.k === "overgeslagen" && ["oranje", "rood"].includes(herstelKern(d).niveau)) {
-        /* overgeslagen terwijl herstel om aandacht vroeg: aanpassing op advies, geen fout */
-        tel.gepland--; tel.opAdvies++; const g = perDoel[doelVanSoort(i.soort)]; if (g) { g.gepland--; g.wat.push(kort + " overgeslagen op hersteladvies"); }
-      }
       else if (s.k === "overgeslagen") { tel.overgeslagen++; { const g = doelTel(i.soort, "gemist"); if (g) g.wat.push(kort + " overgeslagen"); } gemist.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.titel.split(" · ")[0].toLowerCase()}`); }
       else if (s.k === "onbekend") { tel.onbekend++; const g = doelTel(i.soort, "onbekend"); if (g) g.wat.push(kort + " (geen registratie)"); eersteOnbekend = eersteOnbekend || d; gemist.push(`${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)} ${i.titel.split(" · ")[0].toLowerCase()} (geen registratie)`); }
     });
@@ -10668,7 +11137,8 @@ function weekScore(ma, opties = {}) {
   redenen.push(`Uitvoering: ${tel.gedaan} gedaan${tel.deels ? `, ${tel.deels} deels` : ""}${tel.overgeslagen ? `, ${tel.overgeslagen} overgeslagen` : ""}${tel.onbekend ? `, ${tel.onbekend} zonder registratie` : ""} van ${tel.gepland} die al aan de beurt waren${tel.extra ? `; ${tel.extra} extra, telt niet mee` : ""}.`);
   if (tel.aangepast) redenen.push(`${tel.aangepast} ${tel.aangepast === 1 ? "sessie" : "sessies"} aangepast door een herstel- of klachtenregel; staat bij Wijzigingen.`);
   if (tel.verwijderd) redenen.push(`${tel.verwijderd} door jou uit de planning gehaald; staat bij Wijzigingen.`);
-  if (tel.opAdvies) redenen.push(`${tel.opAdvies} overgeslagen op een dag dat herstel om aandacht vroeg; telt niet als gemist.`);
+  if (tel.vervallen) redenen.push(`${tel.vervallen} ${tel.vervallen === 1 ? "sessie" : "sessies"} vervallen door een herstel- of klachtenregel; telt niet als gepland, de oorspronkelijke prikkel staat per doel.`);
+  if (tel.aangepastGevolgd) redenen.push(`${tel.aangepastGevolgd} aangepaste ${tel.aangepastGevolgd === 1 ? "sessie" : "sessies"} uitgevoerd zoals aangepast.`);
   redenen.push(aandacht.length ? `Herstel vroeg om aandacht op ${aandacht.map(kortDagNaam).join(", ")} (zie Herstel).` : "Herstel vroeg deze week niet om aandacht (zie Herstel).");
   if (gemRpe != null) redenen.push(`Gemiddelde zwaarte ${komma(gemRpe)}/10 over ${rpes.length} ${rpes.length === 1 ? "sessie" : "sessies"}.`);
   if (loadNormaal) redenen.push(`Garmin-belasting ${load}, je gewone week tot dezelfde dag ${loadNormaal}. Context, telt niet mee in de score.`);
@@ -10684,7 +11154,8 @@ function weekScoreHtml(w, opties = {}) {
   const ann = [];
   if (w.tel.aangepast) ann.push(`${w.tel.aangepast} aangepast voor herstel`);
   if (w.tel.verwijderd) ann.push(`${w.tel.verwijderd} door jou verwijderd`);
-  if (w.tel.opAdvies) ann.push(`${w.tel.opAdvies} overgeslagen op hersteladvies`);
+  if (w.tel.vervallen) ann.push(`${w.tel.vervallen} vervallen door herstelregel`);
+  if (w.tel.aangepastGevolgd) ann.push(`${w.tel.aangepastGevolgd} aangepast plan gevolgd`);
   const kaart = `<div class="ws-kaart">
       <span class="ws-label">Week ${kortDatum(w.ma)} – ${kortDatum(w.zo)}${w.lopend ? " · tot nu toe" : ""}</span>
       ${w.score != null ? `<div class="ws-getal"><b>${w.score}</b><span>/100</span></div><b class="ws-titel">Weekplan uitgevoerd</b>`

@@ -8,8 +8,8 @@
   const uit = [];
   const test = async (naam, f) => { HB_CACHE.clear(); try { const r = await f(); uit.push({naam, ...r}); } catch (e) { uit.push({naam, ok: false, detail: "fout: " + e.message}); } finally { herstel(); } };
   const opslag = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); opslag[k] = localStorage.getItem(k); }
-  const echt = {historie: DATA.historie, acts: DATA.historie_acts, vandaag: DATA.planbasis.vandaag};
-  const herstel = () => { DATA.historie = echt.historie; DATA.historie_acts = echt.acts; DATA.planbasis.vandaag = echt.vandaag;
+  const echt = {historie: DATA.historie, acts: DATA.historie_acts, activities: DATA.activities, vandaag: DATA.planbasis.vandaag};
+  const herstel = () => { DATA.historie = echt.historie; DATA.historie_acts = echt.acts; DATA.activities = echt.activities; DATA.planbasis.vandaag = echt.vandaag;
     Object.keys(localStorage).forEach(k => { if (!(k in opslag)) localStorage.removeItem(k); });
     Object.entries(opslag).forEach(([k, v]) => { if (localStorage.getItem(k) !== v) localStorage.setItem(k, v); }); HB_CACHE.clear(); };
   const V = "2026-11-05";
@@ -18,7 +18,7 @@
     return {date: d, toestel: 1, hrv: 100 + (j - 3) * 3, hrv_week: 100, hrv_band_laag: 85, hrv_band_hoog: 120, hrv_status: "BALANCED",
       rhr: 45 + (j % 3) - 1, slaap_hr: 50 + (j % 3), sleep_h: 7.5 + (j - 3) * 0.1, huidtemp_afw: (j - 3) * 0.05, resp_sleep: 13 + (j % 3) * 0.2,
       spo2_gem: null, readiness: 70, bb_wake: 80, stress_avg: 25, ...f(d, i, n)}; });
-  const zet = (rijen, acts = []) => { DATA.historie = rijen; DATA.historie_acts = acts; DATA.planbasis.vandaag = V; HB_CACHE.clear(); };
+  const zet = (rijen, acts = []) => { DATA.historie = rijen; DATA.historie_acts = acts; DATA.activities = acts; DATA.planbasis.vandaag = V; HB_CACHE.clear(); };
   const checks = o => { checkZet(o); HB_CACHE.clear(); };
   const normaal = {[V]: {gevoel: 4, lijf: {benen: 0, herstel: 0, energie: 0}}};
 
@@ -49,7 +49,8 @@
     checks({[V]: {gevoel: 3, lijf: {benen: 2}}, [isoPlus(V, -1)]: {gevoel: 3, lijf: {benen: 2}}}); const benen = herstelKern(V);
     return {ok: pijn === "rood" && benen.niveau === "oranje" && benen.ind.hart.niveau === "groen", detail: `pijn ${pijn}; zware benen ${benen.niveau} bij hart ${benen.ind.hart.niveau}`};
   });
-  const loop = (d, pace, hr, extra = {}) => ({id: d + pace, date: d, sport: "Hardlopen", toestel: 1, binnen: false, duration_s: 2400, avg_hr: hr, pace_s_per_km: pace, hard_frac: 0.05, load: 50, ...extra});
+  const ronden = (pace, hr) => Array.from({length: 6}, (_, i) => ({start: i * pace * 1.609, duur: pace * 1.609, afstand: 1609, hr}));
+  const loop = (d, pace, hr, extra = {}) => ({id: d + pace, date: d, sport: "Hardlopen", toestel: 1, binnen: false, duration_s: 2400, avg_hr: hr, pace_s_per_km: pace, hard_frac: 0.05, load: 50, rondes: ronden(pace, hr), ...extra});
   const eerdere = [20, 30, 40, 50].map(n => loop(isoPlus(V, -n), 360, 140));
   await test("Hogere hartslag bij sneller lopen is geen vermoeidheidssignaal", () => {
     zet(reeks(), [...eerdere, loop(isoPlus(V, -1), 300, 165)]); checks(normaal);
@@ -66,7 +67,7 @@
     rpe[isoPlus(V, -1)] = {sessies: [{sport: "Hardlopen", rpe: 7, minuten: 40}]};
     zet(reeks(), [...eerdere, loop(isoPlus(V, -1), 360, 125)]); checks({...rpe, ...normaal});
     const p = herstelKern(V).ind.prestatie, l = p.punten.find(x => x.soort === "lopen");
-    return {ok: !!l && l.slechter, detail: l ? l.tekst : "geen vergelijking"};
+    return {ok: !!l && l.aandacht && !/geen achteruitgang/.test(herstelKern(V).ind.prestatie.reden), detail: l ? l.tekst : "geen vergelijking"};
   });
   await test("Huidtemperatuur heet geen lichaamstemperatuur", () => {
     zet(reeks()); checks(normaal);
@@ -101,7 +102,8 @@
     const ander = herstelKern(V).ind.prestatie.punten.length;
     logZet([k(isoPlus(V, -10), 100, 6, null), k(isoPlus(V, -3), 100, 4, 2)]); HB_CACHE.clear();
     const p = herstelKern(V).ind.prestatie;
-    return {ok: ander === 0 && p.punten.length === 0 && p.beperkt.length === 1, detail: `ander gewicht: ${ander}; zonder RIR: ${p.beperkt.join("; ")}`};
+    const pt = p.punten.find(x => x.soort === "kracht");
+    return {ok: ander === 0 && !!pt && pt.gewicht === 0.5, detail: `ander gewicht: ${ander} vergelijkingen; zonder RIR: ${pt ? pt.noot : "geen"}`};
   });
   await test("Ziekte wordt niet weggemiddeld", () => {
     zet(reeks()); checks({[V]: {gevoel: 4, lijf: {ziek: 1}}});
