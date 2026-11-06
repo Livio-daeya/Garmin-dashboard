@@ -127,6 +127,27 @@
     try { activiteitPaneel(9990041); } finally { window.uiPaneel = orig; }
     return {ok: /data-as="verwijder"/.test(html), detail: "knop aanwezig"};
   });
+  await test("Eigen krachtinvoer op een dag met een overgeslagen haltraining telt als kracht", () => {
+    const d = dagen.find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort === "kracht"));
+    if (!d) return {ok: true, detail: "geen geplande kracht deze week"};
+    const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort === "kracht");
+    planStatusZet(d, it.id, "overgeslagen");
+    const c = checkLees(); checkZet({...c, [d]: {...(c[d] || {}), sessies: [{sport: "Kracht", naam: "Kracht", minuten: 45, rpe: 7, handmatig: true}]}});
+    DATA.activities = echt.filter(a => !(a.date === d && a.sport === "Kracht")); HB_CACHE.clear();
+    const a = trainingsAdvies(ma);
+    return {ok: ongeplandOp(d).some(x => x.doel === "kracht" && x.bron === "eigen") && a.kracht.dagen.some(x => x.d === d), detail: `${d}: ${JSON.stringify(a.kracht.dagen)}`};
+  });
+  await test("Een ongeplande loop op de dag van een overgeslagen zaaltraining is een vervanging", () => {
+    const d = dagen.find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort === "handbal"));
+    if (!d) return {ok: true, detail: "geen zaaltraining deze week"};
+    const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort === "handbal");
+    planStatusZet(d, it.id, "overgeslagen");
+    DATA.activities = [...echt.filter(a => !(a.date === d && a.sport === "Handbal")), {id: 9990051, date: d, datetime: `${d}T18:00:00`, sport: "Hardlopen", type_key: "running", name: "Buitenintervallen", duration_s: 2700, aerobic_te: 3.6, anaerobic_te: 2.4, load: 120}];
+    HB_CACHE.clear();
+    const a = trainingsAdvies(ma), x = ongeplandOp(d).find(y => y.act && y.act.id === 9990051);
+    const html = adviesHtml(a);
+    return {ok: !!x && !!x.vervangt && /vervanging van zaaltraining/.test(html) && /geen techniek/.test(html), detail: `${d}: vervangt ${x && x.vervangt}`};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }

@@ -273,18 +273,24 @@
     return {ok, detail: `grijs "${grijs.oorzaak}"; gevoel normaal ${normaal}; ${oranje.niveau} "${oranje.actie}"; ziek ${rood}; pees ${pees.niveau}; kaart ${!!kaart}`};
   });
 
-  await test("Weekscore: compacte kaart en paneel tonen hetzelfde, ook na wijziging buiten de kaart", async () => {
+  await test("Trainingsadvies: compacte kaart en paneel tonen hetzelfde, ook na wijziging buiten de kaart", async () => {
     const di = "2026-11-03", it = dagRoute(di, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
     allesNaInvoer();
     it.forEach(i => planStatusZet(di, i.id, "overgeslagen"));   // wijziging zonder hertekenen, zoals na een sync
     allesHertekenen();
-    const kaart = [...document.querySelectorAll(".ws--kort .ws-getal b")].map(b => b.textContent);
+    const kaart = [...document.querySelectorAll(".ta--kort .hs-chip")].map(b => b.textContent.trim());
     const orig = uiPaneel; let html = ""; window.uiPaneel = (t, h) => { html = h; };
-    try { weekScorePaneel(); } finally { window.uiPaneel = orig; }
-    const paneel = (html.match(/ws-getal"><b>(\d+)/) || [])[1];
-    const nu = String(weekScore(maandagVan(V)).score);
+    try { adviesPaneel(); } finally { window.uiPaneel = orig; }
+    const nu = trainingsAdvies(maandagVan(V)).titel;
+    const paneel = html.includes(nu);
     it.forEach(i => planStatusZet(di, i.id, null)); allesNaInvoer();
-    return {ok: kaart.length >= 1 && kaart.every(k => k === nu) && paneel === nu, detail: `kaarten ${kaart.join("/")}, paneel ${paneel}, berekend ${nu}`};
+    return {ok: kaart.length >= 1 && kaart.every(k => k === nu) && paneel && !/\/100/.test(document.querySelector(".ta--kort").textContent), detail: `kaarten ${kaart.join("/")}, berekend ${nu}`};
+  });
+  await test("Trainingsadvies: één status met vaste betekenis, en extra levert geen bonus", async () => {
+    const a = trainingsAdvies(maandagVan(V));
+    const ok = Object.keys(TA_STATUS).includes(a.status) && a.titel === TA_STATUS[a.status] && a.reden.length > 0 && a.actie.length > 0
+      && TA_STATUS.blauw === "Aanvullende prikkel zinvol" && TA_STATUS.oranje === "Belasting begrenzen";
+    return {ok, detail: `${a.status}: ${a.reden} → ${a.actie}`};
   });
 
   terug();
