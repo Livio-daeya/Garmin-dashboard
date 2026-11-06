@@ -9724,12 +9724,14 @@ function renderTrainingRoute() {
     ${uiWeekstrook(weekDagen(ma, iso), iso)}
     <div class="tk-lijst">${items.length ? items.map(i => trainingKaart(iso, i)).join("")
       : `<p class="u-leeg">${ic("bed")}Geen training gepland op ${dagNaam(iso)}.</p>`}</div>
+    ${iso <= vandaagIso() ? ongeplandHtml(iso) : ""}
     ${iso <= vandaagIso() ? `<button class="u-knop u-knop--stil u-knop--rand" data-toevoegen="${iso}">${ic("plus")}Training toevoegen</button>` : ""}`;
   host.querySelectorAll("[data-dag]").forEach(b => b.onclick = () => { ROUTE_DAG = b.dataset.dag; renderTrainingRoute(); renderTrainingMeet(); });
   host.querySelectorAll("[data-week]").forEach(b => b.onclick = () => {
     ROUTE_DAG = +b.dataset.week === 0 ? vandaagIso() : isoPlus(iso, +b.dataset.week); renderTrainingRoute(); });
   const tv = host.querySelector("[data-toevoegen]");
   if (tv) tv.onclick = () => trainingToevoegen(tv.dataset.toevoegen);
+  host.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
   renderTrainingMeet();
 }
 
@@ -9758,7 +9760,7 @@ function trainingToevoegen(iso) {
       if (!c.sport || !c.duur || c.rpe == null) { fout.textContent = "Kies een training, vul de duur in en kies een zwaarte."; fout.hidden = false; return; }
       const alles = checkLees();
       const dag = alles[iso] || {gevoel: null, sessies: []};
-      alles[iso] = {...dag, sessies: [...(dag.sessies || []), {sport: c.sport, naam: c.sport, minuten: c.duur, rpe: c.rpe, handmatig: true}]};
+      alles[iso] = {...dag, sessies: [...(dag.sessies || []), {sport: c.sport, naam: c.sport, minuten: c.duur, rpe: c.rpe, handmatig: true, toegevoegd: true}]};
       if (checkZet(alles) === false) { fout.textContent = "Opslaan lukte niet. Je invoer staat er nog."; fout.hidden = false; uiMelding("Opslaan mislukt", "fout"); return; }
       uiPaneelSluit(); uiMelding("Training toegevoegd"); belastingHerberekenen(); allesNaInvoer();
     };
@@ -11408,6 +11410,36 @@ const WS_DOELEN = {
   kracht: {naam: "Kracht", wat: "krachttraining"},
   handbal: {naam: "Handbal", wat: "zaaltraining"},
 };
+/* Trainingen die niet op het plan stonden: Garmin-activiteiten die aan geen
+   geplande sessie gekoppeld zijn, en sessies die je zelf toevoegde zonder
+   Garmin-registratie. Ze horen bij een doel (conditie, kracht, handbal). */
+const actDoel = a => a.sport === "Kracht" ? "kracht" : a.sport === "Handbal" ? "handbal" : CONDITIE_TYPE.test(a.type_key || "") ? "conditie" : null;
+const sportDoel = sp => sp === "Kracht" ? "kracht" : sp === "Handbal" ? "handbal" : ["Hardlopen", "Fietsen"].includes(sp) ? "conditie" : null;
+const EXTRA_MIN = 15;   // [modelkeuze] korter dan een kwartier telt niet als training
+function ongeplandOp(d) {
+  const items = dagRoute(d, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
+  const gekoppeld = new Set();
+  items.forEach(i => (itemStatus(d, i).acts || []).forEach(a => gekoppeld.add(String(a.id))));
+  const acts = (DATA.activities || []).filter(a => a.date === d && !gekoppeld.has(String(a.id)) && (a.duration_s || 0) >= EXTRA_MIN * 60);
+  const uit = acts.map(a => ({d, doel: actDoel(a), wat: (a.name || a.sport), sport: a.sport, minuten: Math.round((a.duration_s || 0) / 60), act: a, bron: "garmin"}));
+  const geplandDoel = new Set(items.map(i => doelVanSoort(i.soort)));
+  ((checkLees()[d] || {}).sessies || []).forEach(x => {
+    if (!x.handmatig || (x.minuten || 0) < EXTRA_MIN) return;
+    if ((DATA.activities || []).some(a => a.date === d && a.sport === x.sport)) return;      // staat al in Garmin
+    const doel = sportDoel(x.sport);
+    if (!x.toegevoegd && geplandDoel.has(doel)) return;                                       // zwaarte bij een geplande sessie
+    uit.push({d, doel, wat: x.sport, sport: x.sport, minuten: x.minuten, sessie: x, bron: "eigen"});
+  });
+  return uit;
+}
+function ongeplandHtml(d) {
+  const lijst = ongeplandOp(d);
+  if (!lijst.length) return "";
+  return `<div class="sectie-kop"><h3>Ook gedaan, niet gepland</h3></div><div class="act-lijst">${lijst.map(x => x.act ? activiteitKaart(x.act)
+    : `<div class="act-kaart" style="--cat:${ACT_KLEUR[x.sport] || "var(--ink-2)"}"><span class="act-kop"><span class="tk-sport">${ic(ACT_IC[x.sport] || "puls")}</span>
+        <span class="u-rij-tekst"><b>${x.wat}</b><span class="u-klein">${korteDatum(d)} · zelf toegevoegd</span></span>${uiStatus("Gedaan", "ok")}</span>
+        <span class="act-cijfers"><span><b>${x.minuten}</b> min</span>${x.sessie && x.sessie.rpe != null ? `<span><b>${x.sessie.rpe}</b>/10 zwaarte</span>` : ""}</span></div>`).join("")}</div>`;
+}
 function doelVanSoort(soort) {
   return ["hoog", "ana", "laag", "test"].includes(soort) ? "conditie" : soort === "kracht" ? "kracht"
     : ["handbal", "wedstrijd"].includes(soort) ? "handbal" : null;
@@ -11443,7 +11475,7 @@ function weekDoelen(w) {
 function wsBalken(w) {
   return `<div class="ws-balken">${weekDoelen(w).filter(d => d.t.gepland).map(d => `<div class="ws-balk">
       <span>${d.naam}</span><span class="ws-spoor"><i style="width:${Math.round((d.t.gedaan + 0.5 * d.t.deels) / d.t.gepland * 100)}%"></i></span>
-      <span class="ws-tal">${d.t.gedaan + d.t.deels}/${d.t.gepland}</span></div>`).join("")}</div>`;
+      <span class="ws-tal">${d.t.gedaan + d.t.deels}/${d.t.gepland}${d.t.extra ? ` +${d.t.extra}` : ""}</span></div>`).join("")}</div>`;
 }
 function weekDoelenHtml(w) {
   return `<div class="ws-doelen">${weekDoelen(w).filter(d => d.t.gepland || d.t.verwijderd).map(d => `<div class="ws-doel">
@@ -11458,8 +11490,10 @@ function weekDoelenHtml(w) {
      score = gedaan (deels telt half) / geplande sessies die al aan de beurt
              waren en waarvan bekend is of ze gedaan zijn
    Toekomstige sessies tellen nog niet. Zonder registratie is onbekend en
-   telt niet mee tot je hem invult. Extra trainingen tellen niet (handbal
-   vervangt geen kracht) en de score komt niet boven 100. Sessies die een
+   telt niet mee tot je hem invult. Een ongeplande training telt voor zijn
+   eigen doel: hij vult een sessie zonder registratie of een gemiste sessie
+   van hetzelfde doel in die week (handbal vervangt geen kracht); wat
+   overblijft is extra. De score komt niet boven 100. Sessies die een
    herstelregel aanpaste, tellen in hun aangepaste vorm; wat je zelf weghaalt
    telt niet meer als gepland. Beide staan bij Wijzigingen.
    Hoe je herstelt staat hier los van, bij Herstel: een hoge score is niet
@@ -11511,7 +11545,21 @@ function weekScore(ma, opties = {}) {
     });
   });
   const acts = (DATA.activities || []).filter(a => a.date >= ma && a.date <= tot);
-  tel.extra = acts.filter(a => !gekoppeld.has(String(a.id)) && (a.duration_s || 0) >= 20 * 60 && a.sport !== "Overig").length;
+  /* Ongeplande trainingen tellen mee voor hun eigen doel: ze vullen eerst een
+     sessie zonder registratie (waarschijnlijk dezelfde, op een andere dag),
+     dan een gemiste sessie van hetzelfde doel in deze week. Wat overblijft is
+     extra. Een ander doel vervangen ze niet: extra kracht is geen handbal. */
+  tel.vervangen = 0; tel.extra = 0;
+  dagen.flatMap(ongeplandOp).forEach(x => {
+    const g = x.doel && perDoel[x.doel];
+    const kort = `${WEEKDAG_LANG[isoNaarPy(x.d)].slice(0, 2)} ${String(x.wat).toLowerCase()}`;
+    if (g && g.onbekend > 0) { g.onbekend--; tel.onbekend--; g.gedaan++; tel.gedaan++; tel.vervangen++; g.wat.push(`${kort} (niet gepland) telt voor een sessie zonder registratie`); return; }
+    if (g && g.gemist > 0) { g.gemist--; tel.overgeslagen--; g.gedaan++; tel.gedaan++; tel.vervangen++; g.wat.push(`${kort} (niet gepland) vervangt een gemiste sessie`); return; }
+    tel.extra++;
+    if (x.doel) { perDoel[x.doel] = perDoel[x.doel] || {gepland: 0, gedaan: 0, deels: 0, gemist: 0, onbekend: 0, verwijderd: 0, wat: []};
+      perDoel[x.doel].extra = (perDoel[x.doel].extra || 0) + 1; perDoel[x.doel].wat.push(`${kort} extra`); }
+  });
+  if (tel.onbekend === 0) eersteOnbekend = null;
 
   /* herstel over de week */
   const sigDagen = dagen.map(d => ({d, s: herstelSignalen(d)}));
@@ -11533,7 +11581,7 @@ function weekScore(ma, opties = {}) {
   const score = bekend > 0 ? Math.min(100, Math.round(100 * (tel.gedaan + 0.5 * tel.deels) / bekend)) : null;
   const kop = score != null ? `${score}/100` : tel.onbekend ? "Nog onbekend" : lopend ? "Nog niets te beoordelen" : "Geen planning";
   const redenen = [];
-  redenen.push(`Uitvoering: ${tel.gedaan} gedaan${tel.deels ? `, ${tel.deels} deels` : ""}${tel.overgeslagen ? `, ${tel.overgeslagen} overgeslagen` : ""}${tel.onbekend ? `, ${tel.onbekend} zonder registratie` : ""} van ${tel.gepland} die al aan de beurt waren${tel.extra ? `; ${tel.extra} extra, telt niet mee` : ""}.`);
+  redenen.push(`Uitvoering: ${tel.gedaan} gedaan${tel.deels ? `, ${tel.deels} deels` : ""}${tel.overgeslagen ? `, ${tel.overgeslagen} overgeslagen` : ""}${tel.onbekend ? `, ${tel.onbekend} zonder registratie` : ""} van ${tel.gepland} die al aan de beurt waren${tel.vervangen ? `; ${tel.vervangen} daarvan met een training die niet gepland was` : ""}${tel.extra ? `; ${tel.extra} extra bovenop het plan` : ""}.`);
   if (tel.aangepast) redenen.push(`${tel.aangepast} ${tel.aangepast === 1 ? "sessie" : "sessies"} aangepast door een herstel- of klachtenregel; staat bij Wijzigingen.`);
   if (tel.verwijderd) redenen.push(`${tel.verwijderd} door jou uit de planning gehaald; staat bij Wijzigingen.`);
   if (tel.vervallen) redenen.push(`${tel.vervallen} ${tel.vervallen === 1 ? "sessie" : "sessies"} vervallen door een herstel- of klachtenregel; telt niet als gepland, de oorspronkelijke prikkel staat per doel.`);
@@ -11565,7 +11613,7 @@ function weekScoreHtml(w, opties = {}) {
       ${ann.length ? `<span class="u-klein">${hoofdletter(ann.join(" · "))}; zie Wijzigingen.</span>` : ""}</div>`;
   return `<div class="ws${opties.kort ? " ws--kort" : ""}"${opties.kort ? ` role="button" tabindex="0" aria-label="Weekscore ${w.kop}, details"` : ""}>${kaart}
     ${opties.kort ? "" : `${w.score == null && !w.tel.gepland ? "" : `<h4 class="ws-sub">Per doel</h4>${weekDoelenHtml(w)}`}<h4 class="ws-sub">Meegenomen</h4><ul class="u-lijst u-lijst--tekst ws-redenen">${w.redenen.map(r => `<li>${r}</li>`).join("")}</ul>
-      <p class="u-klein">De score meet hoe goed je het plan volgde, niet hoeveel fitter je wordt en niet of de week gezond was. Gedaan (deels telt half) gedeeld door de sessies die al aan de beurt waren. Zonder registratie telt niet mee tot je hem invult. Extra trainingen tellen niet en de score komt niet boven 100. Aangepaste en verwijderde sessies staan bij Wijzigingen. Hoe je herstelt staat bij Herstel.</p>`}</div>`;
+      <p class="u-klein">De score meet hoe goed je het plan volgde, niet hoeveel fitter je wordt en niet of de week gezond was. Gedaan (deels telt half) gedeeld door de sessies die al aan de beurt waren. Zonder registratie telt niet mee tot je hem invult. Een training die niet gepland was, telt voor zijn eigen doel: hij vult een gemiste sessie of een sessie zonder registratie van hetzelfde doel in die week; wat overblijft staat als extra (+) en de score komt niet boven 100. Aangepaste en verwijderde sessies staan bij Wijzigingen. Hoe je herstelt staat bij Herstel.</p>`}</div>`;
 }
 
 /* wijziging in een ander tabblad van dezelfde pagina: opnieuw tekenen */
@@ -11617,9 +11665,11 @@ function renderPlanNieuw() {
             <span class="tk-sport" style="--cat:${SOORT_KLEUR[i.soort]}">${ic(SOORT_IC[i.soort] || "puls")}</span>
             <span class="u-rij-tekst"><b>${i.titel}</b><span class="u-klein">${i.plek ? PLEK_KORT[i.plek] + " · " : ""}${i.voorschrift ? i.voorschrift.split(".")[0] : ""}</span></span>
             ${sessieStatusLabel(dag, s)}</button>`;
-        }).join("") : `<p class="u-leeg">${ic("bed")}Rust.</p>`}</div>` : `<div id="plMaand"></div>`}`;
+        }).join("") : ongeplandOp(dag).length ? "" : `<p class="u-leeg">${ic("bed")}Rust.</p>`}
+        ${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
     week.querySelectorAll("[data-pdag]").forEach(b => b.onclick = () => { PLAN_DAG = b.dataset.pdag; renderPlanNieuw(); });
     week.querySelectorAll("[data-weergave]").forEach(b => b.onclick = () => { PLAN_WEERGAVE = b.dataset.weergave; renderPlanNieuw(); });
+    week.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
     week.querySelectorAll("[data-psessie]").forEach(b => b.onclick = () => {
       const [d, i] = sessieZoek(b.dataset.psessie);
       if (i) uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, trainingKaart(d, i) +
@@ -14282,11 +14332,13 @@ async function wolkVerversen() {
      kunnen zien dat het echt iets anders is geworden. */
   const voorAfdruk = await paginaAfdruk();
   try {
-    /* Onthoud welke run de nieuwste was, zodat we straks weten welke van ons is. */
-    const voor = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=1`);
-    const vorigeId = ((voor.workflow_runs || [])[0] || {}).id || 0;
-
-    await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/dispatches`,
+    /* Loopt er al een ophaalronde (gepland, of net op een ander apparaat
+       gestart), volg die dan in plaats van er een tweede achteraan te zetten:
+       sneller, en twee tegelijk kunnen elkaars publicatie in de weg zitten. */
+    const voor = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=3`);
+    const lopend = (voor.workflow_runs || []).find(r => r.status !== "completed");
+    const vorigeId = lopend ? lopend.id - 1 : ((voor.workflow_runs || [])[0] || {}).id || 0;
+    if (!lopend) await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/dispatches`,
                 {method: "POST", body: JSON.stringify({ref: "main"})});
 
     const run = await wachtOpRun(repo, vorigeId);
@@ -14340,11 +14392,11 @@ async function wachtOpNieuwePagina(voorAfdruk) {
     await new Promise(r => setTimeout(r, 60000));
     return true;
   }
-  for (let i = 0; i < 40; i++) {                    // ruim drie minuten
-    await new Promise(r => setTimeout(r, 5000));
-    syncbarToon({pct: 80 + Math.min(18, i * 0.6), fase: 2,
-                 titel: "GitHub zet de pagina online",
-                 sub: `Al ${Math.round((i + 1) * 5)} seconden aan het wachten.`});
+  for (let i = 0; i < 100; i++) {                   // ruim drie minuten
+    await new Promise(r => setTimeout(r, 2000));
+    syncbarToon({pct: 80 + Math.min(18, i * 0.25), fase: 2,
+                 titel: "De nieuwe pagina komt online",
+                 sub: `Al ${Math.round((i + 1) * 2)} seconden aan het wachten.`});
     const nu = await paginaAfdruk();
     if (nu && nu !== voorAfdruk) return true;
   }
@@ -14368,8 +14420,8 @@ async function runVoortgang(repo, runId) {
 
 async function wachtOpRun(repo, vorigeId) {
   let run = null;
-  for (let i = 0; i < 100; i++) {                   // ruim acht minuten
-    await new Promise(r => setTimeout(r, 5000));
+  for (let i = 0; i < 200; i++) {                   // ruim acht minuten
+    await new Promise(r => setTimeout(r, i < 30 ? 2000 : 3000));
     let lijst;
     try {
       lijst = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=3`);

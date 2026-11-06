@@ -46,7 +46,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      # Altijd de nieuwste stand van main, ook als deze run in de rij stond
+      # achter een andere: anders wordt het pushen straks geweigerd.
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
@@ -86,4 +90,10 @@ jobs:
           git config user.email "dashboard@users.noreply.github.com"
           git add index.html .nojekyll
           git commit -m "dashboard bijgewerkt $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push
+          # Is main intussen verder (een andere run, of nieuwe code), dan eerst
+          # bijwerken; bij een botsing in index.html wint deze, nieuwere bouw.
+          for poging in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main
+          done
+          exit 1
