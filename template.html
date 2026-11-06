@@ -7258,7 +7258,10 @@ function activiteitPaneel(id) {
         ${(a.rondes || []).length > 1 ? `<span><i class="as-ronde"></i>${rondesAuto(a) ? "automatische ronde" : "ronde of interval"}</span>` : ""}
         <span class="u-klein">Aanwijzen toont tijd en hartslag</span></div>`
     : `<p class="u-klein">${a.avg_hr ? "Het hartslagverloop is alleen van de laatste 28 dagen beschikbaar." : "Geen hartslag geregistreerd."}</p>`;
-  uiPaneel(a.name || a.sport, kop + grafiek + trainingEffectHtml(a) + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
+  const fe = CONDITIE_TYPE.test(a.type_key || "") ? sessieFeiten(a) : null;
+  const inhoud = fe ? `<h4 class="as-sub">Inhoud van de training</h4><p><b>${hoofdletter(fe.soort)}</b> <span class="u-klein">(${fe.zeker === "bevestigd" ? "bevestigd" : fe.zeker === "afgeleid" ? "afgeleid, met beperkingen" : "niet vastgesteld"})</span></p>
+    <ul class="u-lijst u-lijst--tekst">${feitenLabel(fe).map(x => `<li>${x}</li>`).join("")}</ul>${fe.ontbreekt.length ? `<p class="u-klein">Ontbreekt: ${fe.ontbreekt.join(", ")}.</p>` : ""}` : "";
+  uiPaneel(a.name || a.sport, kop + grafiek + trainingEffectHtml(a) + inhoud + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
     if (a.hr_reeks) activiteitGrafiek(a, box.querySelector("#chActiviteit"));
     box.querySelectorAll("[data-as]").forEach(b => b.onclick = e => {
       e.stopPropagation();
@@ -7826,8 +7829,11 @@ function weekMinuten() {
      minuten, ook in pauzes. */
   const zoneMin = (a, zones) => Math.round((a.hr_zones || []).filter(z => zones.includes(z.zone))
     .reduce((t, z) => t + (z.sec || 0), 0) / 60);
-  const laagActs = cond.filter(a => a.hr_zones ? zoneMin(a, [1, 2]) > 0 : (a.aerobic_te || 0) < 3);
-  const laagPer = laagActs.map(a => ({a, min: a.hr_zones ? zoneMin(a, [1, 2]) : Math.round((a.duration_s || 0) / 60)}));
+  /* alleen gemeten zone-1-2-minuten; zonder zones blijft het onbekend (geen
+     schatting uit Training Effect, en ontbrekend TE is geen nul) */
+  const laagActs = cond.filter(a => a.hr_zones && zoneMin(a, [1, 2]) > 0);
+  const laagPer = laagActs.map(a => ({a, min: zoneMin(a, [1, 2])}));
+  const laagOnbekend = cond.filter(a => !a.hr_zones);
   const laagGedaan = laagPer.reduce((t, x) => t + x.min, 0);
   const laagNog = laagItems.filter(it => open(it) && !it.optioneel);
   const laagOptNog = laagItems.filter(it => open(it) && it.optioneel);
@@ -7849,11 +7855,10 @@ function weekMinuten() {
     if (l && l.werk != null && !bevestigdeDagen.has(it.iso)) { hoogGedaan += l.werk; bevestigdeDagen.add(it.iso);
       hoogWorkouts.push({datum: it.iso, titel: it.titel, werk: l.werk, status: "gelogd"}); }
   });
-  cond.filter(a => (a.aerobic_te || 0) >= 3 && !gekoppeldeIds.has(String(a.id)) && !bevestigdeDagen.has(a.date)).forEach(a => {
-    const m = Math.round(((a.z3_s || 0) + (a.z4_s || 0)) / 60);
-    if (m > 0) { hoogGedaan += m; benaderd = true;
-      hoogWorkouts.push({datum: a.date, titel: a.name || a.sport, werk: m, status: "geschat", activiteit: a.id}); }
-  });
+  /* Hartslagminuten in zone 3-4 zijn geen werkminuten: inlopen, herstel en
+     uitlopen zitten er ook in. Ze staan apart, per sessie, als hartslag. */
+  const hoogOnbevestigd = cond.filter(a => !gekoppeldeIds.has(String(a.id)) && !bevestigdeDagen.has(a.date)).map(a => ({a, f: sessieFeiten(a),
+    z34: a.hr_zones ? Math.round(((a.z3_s || 0) + (a.z4_s || 0)) / 60) : null})).filter(x => x.f.soort !== "rustig");
   const hoogNog = hoogItems.filter(open);
 
   /* korte intensieve inspanningen: sessies */
@@ -7861,10 +7866,13 @@ function weekMinuten() {
   const hbOnbekend = items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && it.st.k === "onbekend").length;
   const hbNog = items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && open(it));
   const anaItems = items.filter(it => it.soort === "ana");
-  const anaGedaan = anaItems.filter(it => it.st.k === "gedaan").length;
+  /* een geplande korte-intervalsessie telt pas als zodanig met jouw bevestiging
+     of eigen melding; alleen een loop die dag is uitgevoerd, inhoud onbekend */
+  const anaGedaan = anaItems.filter(it => it.st.k === "gedaan" && (it.st.eigen || it.st.uit)).length;
+  const anaInhoudOnbekend = anaItems.filter(it => it.st.k === "gedaan" && !it.st.eigen && !it.st.uit).length;
   const anaNog = anaItems.filter(open);
 
-  const hoogActs = cond.filter(a => (a.aerobic_te || 0) >= 3);
+  const hoogActs = cond.filter(a => sessieFeiten(a).soort === "langer intensief");
   /* Handbal: gedaan (gemeten zones) en nog verwacht (je mediaan per weekdag). */
   const prof = handbalProfiel();
   const hbActs = acts.filter(a => a.sport === "Handbal" && a.hr_zones);
@@ -7878,11 +7886,12 @@ function weekMinuten() {
       .map(it => ({iso: it.iso, p: prof[isoNaarPy(it.iso)]})).filter(x => x.p)};
   const kortActs = acts.filter(a => a.sport === "Handbal").concat(anaItems.filter(it => it.st.acts).flatMap(it => it.st.acts));
   const hbBevestigd = items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && it.st.k === "gedaan" && !it.st.acts).length;
-  return {ma, zo, handbal, laag: {plan: laagPlan, optioneel: laagOptioneel, gedaan: laagGedaan, nog: laagNog, acts: laagActs, per: laagPer,
+  return {ma, zo, handbal, laag: {plan: laagPlan, optioneel: laagOptioneel, gedaan: laagGedaan, nog: laagNog, acts: laagActs, per: laagPer, onbekend: laagOnbekend,
            dagen: dagLijst(laagNog), optDagen: dagLijst(laagOptNog), nogMin: laagNog.reduce((t, it) => t + (it.min || 0), 0)},
     hoog: {plan: hoogPlan, gedaan: hoogGedaan, benaderd, bronnen: hoogBronnen, workouts: hoogWorkouts, nog: hoogNog, dagen: dagLijst(hoogNog), acts: hoogActs,
+           onbevestigd: hoogOnbevestigd, onbevestigdZ34: hoogOnbevestigd.reduce((t, x) => t + (x.z34 || 0), 0),
            nogWerk: hoogNog.reduce((t, it) => t + (it.werk || 0), 0)},
-    kort: {hbGedaan: hbGedaan + hbBevestigd, hbOnbekend, hbNog, anaGedaan, anaNog, dagen: dagLijst([...hbNog, ...anaNog]),
+    kort: {hbGedaan: hbGedaan + hbBevestigd, hbOnbekend, hbNog, anaGedaan, anaInhoudOnbekend, anaNog, dagen: dagLijst([...hbNog, ...anaNog]),
            plan: items.filter(it => ["handbal", "wedstrijd", "ana"].includes(it.soort)).length, acts: kortActs,
            onbekendItems: items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && it.st.k === "onbekend")}};
 }
@@ -8105,7 +8114,7 @@ function renderBelFocus() {
   const ST = st => ({groen: ["Uitgevoerd", "ok"], blauw: [hoofdletter(st.w), "open"], grijs: [hoofdletter(st.w), st.w === "geen doel" ? "mis" : "let"],
     oranje: ["Meer dan gepland", "let"], rood: ["Minder doen", "fout"]})[st.k] || [st.w, "info"];
   const status = st => uiStatus(...ST(st));
-  const kortGepland = K.hbGedaan + K.anaGedaan + K.hbOnbekend + nogTeDoen.length;
+  const kortGepland = K.hbGedaan + K.anaGedaan + K.anaInhoudOnbekend + K.hbOnbekend + nogTeDoen.length;
   BEL_DETAIL = {
     laag: ["Rustige inspanning", (rustVerwacht ? zin(`Waarschijnlijk via handbal: ${hbDagen} ${hbOpen.length > 1 ? "geven" : "geeft"} naar verwachting nog ±${rustVerwacht} min in zone 1–2, inclusief pauzes. Dat is verwacht, niet uitgevoerd.`) : "") +
       zin("Alle geregistreerde minuten in zone 1–2, ook tijdens pauzes en uitleg. Lage hartslag tijdens stilstaan is geen actieve duurprikkel; zonder bewegingsgegevens per minuut is dat niet te scheiden.") +
@@ -8128,12 +8137,13 @@ function renderBelFocus() {
       waarde: rustActs.length ? `${Math.round(z1 + z2)}` : null, eenheid: "min", sub: rustActs.length ? "zone 1–2 geregistreerd" : "Geen registratie",
       status: status(lSt)})}
     ${uiMeet({sleutel: "hoog", icoon: "klok", kleur: SOORT_KLEUR.hoog, titel: "Langere intervallen",
-      waarde: `${H.gedaan}${H.benaderd ? "*" : ""}`, eenheid: "werkmin",
+      waarde: `${H.gedaan}`, eenheid: "werkmin",
+      sub: H.onbevestigd.length ? `${H.onbevestigd.length} sessie${H.onbevestigd.length === 1 ? "" : "s"} zonder bevestigde werkminuten${H.onbevestigdZ34 ? ` · ${H.onbevestigdZ34} min hartslag in zone 3–4 (geen werkmin)` : ""}` : null,
       balk: uiBalk({gedaan: H.gedaan, verwacht: H.nogWerk, doel: hPlanWerk, eenheid: "werkmin", doelWoord: "gepland"}), status: status(hSt)})}
     ${uiMeet({sleutel: "kort", icoon: "bliksem", kleur: SOORT_KLEUR.ana, titel: "Korte intensieve prikkels",
       waarde: `${K.hbGedaan + K.anaGedaan}`, eenheid: K.hbGedaan + K.anaGedaan === 1 ? "sessie" : "sessies",
       balk: uiBalk({gedaan: K.hbGedaan + K.anaGedaan, verwacht: nogTeDoen.length, doel: kortGepland, eenheid: "sessies", doelWoord: "gepland"}),
-      sub: K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : null, status: status(kSt)})}
+      sub: [K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : "", K.anaInhoudOnbekend ? `${K.anaInhoudOnbekend} uitgevoerd, inhoud niet bevestigd` : ""].filter(Boolean).join(" · ") || null, status: status(kSt)})}
   </div>`;
   host.insertAdjacentHTML("beforeend", `${adviesHtml(trainingsAdvies(m.ma), {kort: true})}<button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>`);
   host.querySelector("[data-weekscore]").onclick = adviesPaneel;
@@ -9165,7 +9175,7 @@ function weekDoelHtml(w) {
   return `<div class="weekdoel">
     <h4>Week van ${kortDatum(w.maandag)}</h4>
     ${rij("Rustige duur", `${som("laag", "min")} min gepland${opt ? ` (+${opt} optioneel)` : ""}`, m ? `${m.laag.gedaan} min` : null)}
-    ${rij("Tempo en langere intervallen", `${som("hoog", "werk")} werkminuten`, m ? `${m.hoog.gedaan}${m.hoog.benaderd ? " (ongeveer)" : ""}` : null)}
+    ${rij("Tempo en langere intervallen", `${som("hoog", "werk")} werkminuten`, m ? `${m.hoog.gedaan}${m.hoog.onbevestigd.length ? ` (+ ${m.hoog.onbevestigd.length} sessie(s) zonder bevestigde werkminuten)` : ""}` : null)}
     ${rij("Korte intensieve inspanningen", `${hb} handbalsessie${hb === 1 ? "" : "s"}${ana ? ` en ${ana} intervaltraining` : ""}`, m ? `${m.kort.hbGedaan + m.kort.anaGedaan}` : null)}
     ${kracht.length ? rij("Kracht", zinLijst(kracht)) : ""}
   </div>`;
@@ -10357,7 +10367,7 @@ function renderControle() {
   const telt = a.sport === "Handbal" || CONDITIE_TYPE.test(a.type_key || "");
   const m = weekMinuten();
   const inWeek = a.date >= m.ma && a.date <= m.zo;
-  const schatting = m.hoog.workouts.find(w => w.status === "geschat" && String(w.activiteit) === String(a.id));
+  const feiten = CONDITIE_TYPE.test(a.type_key || "") ? sessieFeiten(a) : null;
   const advies = routeAdvies();
   const r = (l, w) => `<div class="wd-rij"><span>${l}</span><span>${w}</span></div>`;
   const mm = sec => `${(sec / 60).toFixed(2)} min`;
@@ -10377,7 +10387,8 @@ function renderControle() {
     ${r("Intervalgrenzen", link ? "niet geregistreerd; werkblokken uit je bevestiging" : "nvt")}
     <div class="rb-klein" style="margin-top:var(--sp3)">Bijdrage aan de drie blokken${inWeek ? "" : " (niet in de huidige week)"}</div>
     ${r("Rustige inspanning · zone 1–2", telt ? `${((zsec(1) + zsec(2)) / 60).toFixed(2)} min (zone 1 en 2 van deze training)` : "telt niet mee (geen loop-, fiets-, roei- of handbaltraining)")}
-    ${r("Tempo en langere intervallen", link && link.soort === "hoog" ? `${link.werk} werkmin (bevestigd); de hartslagminuten tellen niet nog eens` : schatting ? `${schatting.werk} min geschat uit zone 3–4` : "0")}
+    ${r("Tempo en langere intervallen", link && link.soort === "hoog" ? `${link.werk} werkmin (bevestigd); de hartslagminuten tellen niet nog eens` : feiten && feiten.soort !== "rustig" ? `geen bevestigde werkminuten; ${((zsec(3) + zsec(4)) / 60).toFixed(1)} min hartslag in zone 3–4 (geen werkmin)` : "0")}
+    ${feiten ? r("Inhoud", `${feiten.soort} · ${feiten.zeker}${feitenLabel(feiten).length ? ` · ${feitenLabel(feiten).join("; ")}` : ""}`) : ""}
     ${r("Korte intensieve inspanningen", a.sport === "Handbal" ? "1 sessie" : link && link.soort === "ana" ? "1 sessie" : "0")}
     <div class="rb-klein" style="margin-top:var(--sp3)">Advies van vandaag</div>
     <p class="rb-klein"><b>${advies.kop}</b> ${advies.zin}</p>`;
@@ -11081,14 +11092,15 @@ function dagCombinatie(d) {
   const kracht = acts.some(a => a.sport === "Kracht") || extra.some(x => x.doel === "kracht") || items.some(i => i.soort === "kracht" && itemStatus(d, i).k === "gedaan");
   const zaal = acts.some(a => a.sport === "Handbal");
   const tijden = acts.map(a => a.datetime && a.datetime.length > 10 ? new Date(a.datetime).getTime() : null).filter(Boolean).sort();
-  const intensief = x => (DATA.activities || []).some(a => a.date === x && (a.sport === "Handbal" || (CONDITIE_TYPE.test(a.type_key || "") && /intensief/.test(conditieInhoud(a).soort))));
-  let opRij = 0; for (let n = 0; n < 7; n++) { if (intensief(isoPlus(d, -n))) opRij++; else break; }
+  const rk = zwareReeks(d), opRij = rk.opRij;
   const wed = [0, 1, 2, 3, 4, 5, 6, 7].map(n => isoPlus(d, n)).find(x => dagRoute(x, {alleenLezen: true}).items.some(i => i.soort === "wedstrijd"));
   const c = checkLees()[d] || {};
   return {krachtEnZaal: kracht && zaal, uurTussenEersteEnLaatste: tijden.length > 1 ? Math.round((tijden[tijden.length - 1] - tijden[0]) / 36e5 * 10) / 10 : null,
-    intensieveDagenOpRij: opRij, dagenTotWedstrijd: wed ? dagVerschil(d, wed) : null,
+    intensieveDagenOpRij: opRij, reeksOnzeker: rk.onzeker, dagZwaarte: dagZwaarte(d).k, dagenTotWedstrijd: wed ? dagVerschil(d, wed) : null,
     belasting: Math.round(acts.reduce((t, a) => t + (a.load || 0), 0)),
-    sessies: [...acts.map(a => ({sport: a.sport, min: Math.round((a.duration_s || 0) / 60), te: a.aerobic_te ?? null, ana: a.anaerobic_te ?? null, bron: "Garmin"})),
+    sessies: [...acts.map(a => { const f = CONDITIE_TYPE.test(a.type_key || "") ? sessieFeiten(a) : null;
+      return {sport: a.sport, min: Math.round((a.duration_s || 0) / 60), te: a.aerobic_te ?? null, ana: a.anaerobic_te ?? null, bron: "Garmin",
+        ...(f ? {inhoud: f.soort, zeker: f.zeker, werkmin: f.bevestigd ? f.bevestigd.werk : null} : {})}; }),
       ...extra.filter(x => !x.act).map(x => ({sport: x.sport, min: x.minuten, bron: "zelf"}))],
     gelogdeKracht: logLees().some(l => l.datum === d), zwaarte: (c.sessies || []).map(x => x.rpe).filter(x => x != null)};
 }
@@ -11919,36 +11931,90 @@ const TA_STATUS = {
   blauw: "Aanvullende prikkel zinvol", groen: "Prikkel passend", oranje: "Belasting begrenzen",
   rood: "Training aanpassen", grijs: "Nog niet te beoordelen",
 };
-/* Wat een conditiesessie inhoudelijk was, uit werkelijke informatie:
-   1. je bevestigde workout (soort en werkminuten),
-   2. werkblokken in je hartslag (aaneengesloten tijd boven zone 3 of 4),
-   3. tijd per hartslagzone.
-   Training Effect en je zwaarte-feedback zijn aanvullend, nooit zelfstandig
-   beslissend. Te weinig informatie: "inhoud niet betrouwbaar vastgesteld";
-   de sessie telt dan wel als uitgevoerd en in je totale belasting.
-   Grenzen [modelkeuze]: langer intensief bij minstens 10 min in blokken
-   boven zone 3 of 6 min boven zone 4, of 12 min in zone 4-5; kort intensief
-   bij minstens 6 pieken in zone 4 zonder lange blokken; rustig bij 80% of
-   meer in zone 1-2 en minder dan 3 min in zone 4-5. */
-function conditieInhoud(a) {
+/* =======================================================================
+   Feiten per sessie: één verwerking voor Training, Belasting, Plan,
+   trainingsadvies, coach en leerlus. Apart bewaard en apart getoond:
+     bevestigd   je bevestigde workout (soort, werkminuten) of gelogde werkminuten
+     werkblokken aaneengesloten tijd boven zone 3 / zone 4 in je hartslag
+     zones       gemeten minuten per hartslagzone
+     pieken      aantal keer dat je hartslag kort zone 4 inschoot
+     afgeleid    een vermoeden over de inhoud uit hartslag, met beperking
+     te          Garmins Training Effect (aanvullend)
+     zwaarte     jouw ervaren zwaarte (RPE)
+     ontbreekt   wat er niet is
+   Een geplande workout is geen bevestigde uitvoering; een hartslagpatroon
+   ook niet. Pieken worden geen sprints of korte intervallen.
+   Grenzen voor "afgeleid" [modelkeuze]: langer intensief bij minstens 10 min
+   in blokken boven zone 3 of 6 min boven zone 4, of (zonder blokken) 12 min
+   in zone 4-5; rustig bij 80% of meer in zone 1-2 en minder dan 3 min in
+   zone 4-5.
+   ======================================================================= */
+function sessieFeiten(a) {
   const bev = uitgevoerdLees().find(x => String(x.activiteit) === String(a.id));
-  const fb = ((checkLees()[a.date] || {}).sessies || []).find(x => x.sport === a.sport && x.rpe != null);
-  const steun = [a.aerobic_te != null ? `Training Effect aeroob ${komma(a.aerobic_te.toFixed(1))}, anaeroob ${komma((a.anaerobic_te || 0).toFixed(1))} (aanvullend)` : null,
-    fb ? `jouw zwaarte ${fb.rpe}/10` : null].filter(Boolean);
-  if (bev) return {soort: bev.soort === "laag" ? "rustig" : bev.soort === "ana" ? "kort intensief" : "langer intensief", bron: `bevestigde workout${bev.werk ? ` (${bev.werk} werkmin)` : ""}`, steun};
-  const det = a.hr_detail;
+  const det = a.hr_detail || null;
   const z = [a.z1_s, a.z2_s, a.z3_s, a.z4_s, a.z5_s].map(x => x || 0), zt = z.reduce((t, x) => t + x, 0);
-  const z45 = (z[3] + z[4]) / 60;
-  if (det) {
-    const b3 = (det.blokken_z3 || []).reduce((t, x) => t + x, 0), b4 = (det.blokken_z4 || []).reduce((t, x) => t + x, 0);
-    if (b3 >= 10 || b4 >= 6) return {soort: "langer intensief", bron: `werkblokken: ${komma(hbRond(b3, 1))} min boven zone 3, ${komma(hbRond(b4, 1))} min boven zone 4`, steun};
-    if ((det.pieken_z4 || 0) >= 6) return {soort: "kort intensief", bron: `${det.pieken_z4} korte pieken in zone 4`, steun};
-    if (zt && (z[0] + z[1]) / zt >= 0.8 && z45 < 3) return {soort: "rustig", bron: "vooral zone 1–2, geen werkblokken", steun};
-  } else if (zt) {
-    if (z45 >= 12) return {soort: "langer intensief", bron: `${Math.round(z45)} min in zone 4–5 (zonder blokstructuur)`, steun};
-    if ((z[0] + z[1]) / zt >= 0.8 && z45 < 3) return {soort: "rustig", bron: "vooral zone 1–2", steun};
+  const zones = zt ? z.map(x => Math.round(x / 60)) : null;
+  const fb = ((checkLees()[a.date] || {}).sessies || []).find(x => x.sport === a.sport && x.rpe != null) || null;
+  const werkblokken = det ? {z3: det.blokken_z3 || [], z4: det.blokken_z4 || []} : null;
+  let afgeleid = null;
+  if (!bev) {
+    const b3 = werkblokken ? werkblokken.z3.reduce((t, x) => t + x, 0) : 0, b4 = werkblokken ? werkblokken.z4.reduce((t, x) => t + x, 0) : 0;
+    const z45 = (z[3] + z[4]) / 60;
+    if (werkblokken && (b3 >= 10 || b4 >= 6)) afgeleid = {soort: "langer intensief", grond: `werkblokken: ${komma(hbRond(b3, 1))} min boven zone 3, ${komma(hbRond(b4, 1))} min boven zone 4`};
+    else if (!werkblokken && zt && z45 >= 12) afgeleid = {soort: "langer intensief", grond: `${Math.round(z45)} min in zone 4–5, zonder blokstructuur`};
+    else if (zt && (z[0] + z[1]) / zt >= 0.8 && z45 < 3) afgeleid = {soort: "rustig", grond: "vooral zone 1–2"};
+    if (afgeleid) afgeleid.beperking = "afgeleid uit hartslag; geen bevestigde workout, geen werkblokken uit ronden";
   }
-  return {soort: "inhoud niet vastgesteld", bron: det || zt ? "hartslag niet eenduidig" : "geen werkblokken of zones beschikbaar", steun};
+  const ontbreekt = [!bev && "bevestigde workout", !det && "hartslagverloop", !zt && "hartslagzones", a.aerobic_te == null && "Training Effect", !fb && "jouw zwaarte"].filter(Boolean);
+  const soort = bev ? (bev.soort === "laag" ? "rustig" : bev.soort === "ana" ? "kort intensief" : "langer intensief") : afgeleid ? afgeleid.soort : "inhoud niet vastgesteld";
+  return {id: String(a.id), datum: a.date, sport: a.sport,
+    bevestigd: bev ? {soort: bev.soort, werk: bev.werk ?? null, titel: bev.titel || null, bron: bev.bron || "door jou bevestigd"} : null,
+    werkblokken, pieken: det ? (det.pieken_z4 ?? null) : null, zones, afgeleid,
+    te: a.aerobic_te != null || a.anaerobic_te != null ? {aeroob: a.aerobic_te ?? null, anaeroob: a.anaerobic_te ?? null} : null,
+    zwaarte: fb ? fb.rpe : null, ontbreekt, soort, zeker: bev ? "bevestigd" : afgeleid ? "afgeleid" : "onbekend"};
+}
+/* korte samenvatting met herkomstlabels, overal dezelfde */
+function feitenLabel(f) {
+  const delen = [];
+  if (f.bevestigd) delen.push(`bevestigde workout${f.bevestigd.werk != null ? ` (${f.bevestigd.werk} werkmin)` : ""}`);
+  else if (f.afgeleid) delen.push(`${f.afgeleid.grond}; ${f.afgeleid.beperking}`);
+  else delen.push(f.zones || f.werkblokken ? "hartslag niet eenduidig" : "geen werkblokken of zones beschikbaar");
+  if (f.pieken) delen.push(`${f.pieken} hartslagpieken in zone 4 geregistreerd (geen sprintaantal)`);
+  if (f.te) delen.push(`Training Effect aeroob ${f.te.aeroob != null ? komma(f.te.aeroob.toFixed(1)) : "?"}, anaeroob ${f.te.anaeroob != null ? komma(f.te.anaeroob.toFixed(1)) : "?"} (aanvullend)`);
+  if (f.zwaarte != null) delen.push(`jouw zwaarte ${f.zwaarte}/10`);
+  return delen;
+}
+/* compatibel met de eerdere aanroep: soort, bron en aanvullende steun */
+function conditieInhoud(a) {
+  const f = sessieFeiten(a), l = feitenLabel(f);
+  return {soort: f.soort, zeker: f.zeker, bron: l[0], steun: l.slice(1), feiten: f};
+}
+/* Een dag: zwaar, licht of onbekend. Onbekend verlaagt de belasting niet. */
+function dagZwaarte(d) {
+  const acts = (DATA.activities || []).filter(a => a.date === d);
+  const extra = ongeplandOp(d);
+  const items = dagRoute(d, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
+  const rpe = Math.max(-1, ...((checkLees()[d] || {}).sessies || []).map(x => x.rpe ?? -1));
+  if (acts.some(a => a.sport === "Handbal")) return {k: "zwaar", bron: "zaaltraining of wedstrijd geregistreerd"};
+  if (acts.some(a => a.sport === "Kracht") || extra.some(x => x.doel === "kracht") || items.some(i => i.soort === "kracht" && itemStatus(d, i).k === "gedaan"))
+    return {k: "zwaar", bron: "krachttraining"};
+  const cond = acts.filter(a => CONDITIE_TYPE.test(a.type_key || "")).map(conditieInhoud);
+  const int = cond.find(c => /intensief/.test(c.soort));
+  if (int) return {k: "zwaar", bron: int.zeker === "bevestigd" ? "intensief, bevestigd" : "intensief, afgeleid uit hartslag"};
+  if (rpe >= 7) return {k: "zwaar", bron: `jouw zwaarte ${rpe}/10`};
+  if (cond.some(c => c.soort === "inhoud niet vastgesteld")) return {k: "onbekend", bron: "training met onbekende inhoud"};
+  return {k: "licht", bron: acts.length ? "rustige training" : "geen training"};
+}
+function zwareReeks(v) {
+  let n = 0, onzeker = false, max = 0;
+  const dagen = [];
+  for (let i = 0; i < 7; i++) {
+    const d = isoPlus(v, -i), z = dagZwaarte(d); dagen.push({d, ...z});
+    if (z.k === "zwaar") { if (!onzeker) n++; max++; }
+    else if (z.k === "onbekend") { onzeker = true; max++; }
+    else break;
+  }
+  return {opRij: n, opRijMogelijk: max, onzeker, dagen};
 }
 function trainingsAdvies(ma) {
   const v = vandaagIso(); ma = ma || maandagVan(v);
@@ -11969,7 +12035,7 @@ function trainingsAdvies(ma) {
   /* conditie */
   const cond = acts.filter(a => CONDITIE_TYPE.test(a.type_key || "") && (a.duration_s || 0) >= 10 * 60);
   const condLijst = cond.map(a => { const e = extra.find(x => x.act && x.act.id === a.id) || {}, k = conditieInhoud(a);
-    return {a, d: a.date, soort: k.soort, bron: k.bron, steun: k.steun, vervangt: e.vervangt || null, vraag: e.vervangVraag ? e.vervangVraag.titel : null}; });
+    return {a, d: a.date, soort: k.soort, zeker: k.zeker, bron: k.bron, steun: k.steun, vervangt: e.vervangt || null, vraag: e.vervangVraag ? e.vervangVraag.titel : null}; });
   const intensief = condLijst.filter(x => x.soort === "langer intensief" || x.soort === "kort intensief");
   const condLater = later.filter(x => ["hoog", "ana"].includes(x.i.soort));
   const conditie = {lijst: condLijst, intensief: intensief.length, geleverd: intensief.length > 0, later: condLater};
@@ -12047,17 +12113,16 @@ function trainingsAdvies(ma) {
      samen met duidelijk boven je gewone week. Geplande opbouw is geen afwijking. */
   const ongeplandWezenlijk = garminPunten > 0 && ongeplandPunten > 0.2 * garminPunten;
   const afwijking = bovenGewoon && (bovenPlan === true || ongeplandWezenlijk);
-  /* zware dagen achter elkaar: intensieve conditie, handbal of kracht */
-  const zwareDag = d => acts.some(a => a.date === d && (a.sport === "Handbal" || (CONDITIE_TYPE.test(a.type_key || "") && /intensief/.test(conditieInhoud(a).soort))))
-    || extra.some(x => x.d === d && x.doel === "kracht") || items.some(x => x.d === d && x.i.soort === "kracht" && x.st.k === "gedaan");
-  let opRij = 0; for (let n = 0; n < 7; n++) { if (zwareDag(isoPlus(v, -n))) opRij++; else break; }
+  /* zware dagen achter elkaar: bevestigd zwaar, licht of onbekend; een dag
+     met onbekende inhoud breekt de reeks niet af, maar maakt hem onzeker */
+  const reeks = zwareReeks(v), opRij = reeks.opRij;
   const zwaar = afwijking && (opRij >= 3 || (wedstrijd != null && totWedstrijd <= 2) || hk.ind.prestatie.ongunstig);
   const r0 = x => Math.round(x);
   /* lokale spierbelasting: zwaar beenwerk in de laatste 48 uur uit je krachtlog;
      zonder log onbekend (een ontbrekende registratie is geen ontbrekende belasting) */
   const ks = krachtStand();
   const benen48 = ks && !ks.onbekend ? (ks.benen ? ks.benen.datum : null) : undefined;
-  const belasting = {benen48,nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, garminPunten: r0(garminPunten),
+  const belasting = {benen48, reeks,nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, garminPunten: r0(garminPunten),
     verwacht: verwacht ? r0(verwacht) : null, verwachtBereik: verwacht ? [r0(verwachtLaag), r0(verwachtHoog)] : null, uitgevoerdVergelijkbaar: r0(uitgevoerdVergelijkbaar),
     vergelijkbaar: vergelijkbaar.map(x => ({d: x.d, titel: x.titel, bereik: x.e.bereik, punten: r0(x.punten), soort: x.soort})),
     zonderBereik: zonderBereik.map(x => ({d: x.d, titel: x.titel, punten: r0(x.punten)})), ongepland: ongepland.map(x => ({...x, punten: r0(x.punten)})),
@@ -12099,7 +12164,8 @@ function trainingsAdvies(ma) {
     }
   } else {
     const ontbreekt = [];
-    if (!conditie.geleverd && !condLater.length) ontbreekt.push("langer intensief conditiewerk");
+    /* ontbrekende inhoud is geen ontbrekende prikkel: geen aanvuladvies */
+    if (!conditie.geleverd && !condLater.length && !condLijst.some(x => x.soort === "inhoud niet vastgesteld")) ontbreekt.push("langer intensief conditiewerk");
     if (!kracht.geleverd && !kracht.later.length) ontbreekt.push("een krachtsessie");
     /* Coachingsregel, geen herstelgrens [modelkeuze], en alleen voor een
        VOORGESTELDE AANVULLENDE training: intensief conditiewerk niet binnen 3
@@ -12115,7 +12181,7 @@ function trainingsAdvies(ma) {
       ontbreekt.splice(0, ontbreekt.length, ...ontbreektMet);
       status = "blauw"; reden = `Deze week ontbreekt ${zinLijst(ontbreekt)}, en er staat niets meer van gepland.`;
       actie = `Ruimte voor één sessie ${zinLijst(ontbreekt)}${wedstrijd ? ` vóór ${dagWoord(isoPlus(wedstrijd, -1), totWedstrijd - 1)}; de dag voor je wedstrijd blijft rustig` : ""}.`;
-    } else if (hk.niveau === "groen" && (conditie.geleverd || kracht.geleverd)) {
+    } else if (hk.niveau === "groen" && (conditie.geleverd || kracht.geleverd) && !(afwijking && reeks.onzeker && reeks.opRijMogelijk >= 3 && opRij < 3)) {
       /* Groen = prikkel passend en geen extra nodig. Alleen met een geleverde
          prikkel én herstel dat op gegevens groen is. "Binnen de verwachting van
          je plan" is context, geen reden voor groen. */
@@ -12195,7 +12261,7 @@ function adviesHtml(a, opties = {}) {
       <dt>Uitgevoerd zonder verwachting</dt><dd>${B.zonderVerwachting} Garmin-punten <span class="u-klein">${[B.zonderBereikPunten ? `${B.zonderBereikPunten} uit geplande sessies zonder verantwoord bereik (${B.zonderBereik.map(x => x.titel.toLowerCase()).join(", ")})` : "", B.ongeplandPunten ? `${B.ongeplandPunten} uit training die niet gepland was (${B.ongepland.map(x => x.titel.toLowerCase()).join(", ")})` : ""].filter(Boolean).join("; ") || "geen"}${B.zonderRegistratie.length ? `. Zonder registratie, dus zonder punten: ${B.zonderRegistratie.map(x => x.titel.toLowerCase()).join(", ")}` : ""}.</span></dd>
       <dt>Tegenover je gebruikelijke week</dt><dd>${B.gewoon ? `${B.nu} tegenover ${B.gewoon} tot dezelfde dag (${B.verhouding}%)` : "onvoldoende historie"} <span class="u-klein">dashboardbelasting${B.max8 ? `; zwaarste van 8 weken ${B.max8}${B.hoogste8 ? ", deze week is hoger (een feit, geen grens)" : ""}` : ""}</span></dd>
       ${B.onverwachtZwaar.length ? `<dt>Zwaarder dan verwacht</dt><dd>${B.onverwachtZwaar.map(x => `${kortDatum(x.d)} ${x.titel.toLowerCase()}: ${x.punten} punten, verwacht ${x.bereik[0]}–${x.bereik[1]}`).join("; ")}</dd>` : ""}
-      <dt>Zware dagen op rij</dt><dd>${B.opRij} <span class="u-klein">intensieve conditie, handbal of kracht, ook zelf ingevuld zonder Garmin</span></dd>
+      <dt>Zware dagen op rij</dt><dd>${B.reeks.onzeker ? `minstens ${B.opRij}, mogelijk ${B.reeks.opRijMogelijk}` : B.opRij} <span class="u-klein">${B.reeks.dagen.slice(0, Math.max(B.reeks.opRijMogelijk, 1) + 1).map(x => `${kortDagNaam(x.d)} ${x.k}${x.k !== "licht" ? ` (${x.bron})` : ""}`).join(" · ")}${B.reeks.onzeker ? ". Een dag met onbekende inhoud: de reeks is niet betrouwbaar vast te stellen" : ""}</span></dd>
       <dt>Lokale spierbelasting</dt><dd>${hoofdletter(benenTekst)}</dd>
       ${a.wedstrijd ? `<dt>Volgende wedstrijd</dt><dd>${hoofdletter(dagWoord(a.wedstrijd, a.totWedstrijd))}</dd>` : ""}</dl>
     <p class="u-klein">Krachtwerk dat Garmin niet registreerde, zit niet in de Garmin-belasting; die is dan te laag. "Prikkel geleverd" en "hersteld genoeg voor meer" zijn twee aparte vragen: een goede training kan betekenen dat extra intensiteit vandaag juist ongewenst is.</p>
@@ -15246,7 +15312,7 @@ function coachContext() {
     /* hetzelfde trainingsadvies als in het dashboard */
     trainingsadvies: (() => { try { const a = trainingsAdvies();
       return {status: a.status, betekenis: a.titel, reden: a.reden, actie: a.actie,
-        conditie: {sessies: a.conditie.lijst.map(x => ({datum: x.d, naam: x.a.name, minuten: Math.round((x.a.duration_s || 0) / 60), soort: x.soort, aeroob_te: x.a.aerobic_te, anaeroob_te: x.a.anaerobic_te, vervangt: x.vervangt})), prikkel_geleverd: a.conditie.geleverd},
+        conditie: {sessies: a.conditie.lijst.map(x => ({datum: x.d, naam: x.a.name, minuten: Math.round((x.a.duration_s || 0) / 60), inhoud: x.soort, herkomst: x.zeker, grond: x.bron, aeroob_te: x.a.aerobic_te, anaeroob_te: x.a.anaerobic_te, vervangt: x.vervangt})), prikkel_geleverd: a.conditie.geleverd},
         kracht: {sessies: a.kracht.dagen, gelogde_sets: a.kracht.sets, uitdagende_sets: a.kracht.uitdagend, sets_zonder_rir: a.kracht.zonderRir, per_spiergroep_7_dagen: a.kracht.spieren, krachtlog_ingevuld: a.kracht.gelogd},
         handbal: a.handbal, herstel: a.herstel.niveau, belasting: a.belasting, volgende_wedstrijd: a.wedstrijd}; } catch (e) { return null; } })(),
     week: (() => { try { const w = weekScore(maandagVan(vandaagIso()));

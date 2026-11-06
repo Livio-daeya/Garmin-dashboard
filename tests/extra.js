@@ -363,6 +363,65 @@
       && coach.uitdagende_sets === 2 && comb.gelogdeKracht === true;
     return {ok, detail: `oude RIR onzeker (origineel ${oud.oefeningen.bench.rirOrigineel}); uitdagend ${K.uitdagend} (alleen genoemde RIR 1), onzeker ${K.rirOnzeker}; volume ${Object.keys(vol).join(",")}; coach ${coach.uitdagende_sets}; leerlus gelogd ${comb.gelogdeKracht}`};
   });
+  /* ---- één verwerking voor alle schermen ---- */
+  const woAct = () => echt.find(a => String(a.id) === String((BEVESTIGDE_WORKOUTS[0] || {}).activiteit));
+  await test("Dezelfde sessie krijgt overal dezelfde feiten en herkomstlabels", () => {
+    const a = woAct(); if (!a) return {ok: false, detail: "bevestigde woensdagactiviteit niet in de data"};
+    const f = sessieFeiten(a), lab = feitenLabel(f)[0];
+    let html = ""; const orig = uiPaneel; window.uiPaneel = (t, h) => { html = h; }; try { activiteitPaneel(a.id); } finally { window.uiPaneel = orig; }
+    const m = weekMinuten(), w = m.hoog.workouts.find(x => String(x.activiteit) === String(a.id));
+    const adv = trainingsAdvies(maandagVan(a.date)).conditie.lijst.find(x => x.a.id === a.id);
+    const coach = coachContext().trainingsadvies.conditie.sessies.find(x => x.datum === a.date && x.naam === a.name);
+    const ok = html.includes(lab) && w && w.status === "bevestigd" && adv && adv.bron === lab && adv.zeker === "bevestigd" && coach && coach.herkomst === "bevestigd" && coach.grond === lab;
+    return {ok, detail: `${a.date} ${a.name}: "${lab}" | Training ${html.includes(lab)}, Belasting ${w && w.status} ${w && w.werk} werkmin, advies ${adv && adv.zeker}, coach ${coach && coach.herkomst}`};
+  });
+  await test("Bevestigde werkminuten worden niet dubbel geteld", () => {
+    const a = woAct(); const m = weekMinuten();
+    const bev = uitgevoerdLees().filter(x => x.soort === "hoog" && x.datum >= m.ma && x.datum <= m.zo).reduce((t, x) => t + (x.werk || 0), 0);
+    return {ok: m.hoog.gedaan === bev && !m.hoog.onbevestigd.some(x => String(x.a.id) === String(a && a.id)), detail: `werkmin ${m.hoog.gedaan}, bevestigd ${bev}; zone 3–4 van die sessie ${a ? Math.round(((a.z3_s || 0) + (a.z4_s || 0)) / 60) : "?"} min telt niet nog eens`};
+  });
+  await test("Zone-minuten worden geen werkminuten", () => {
+    const voor = weekMinuten().hoog.gedaan;
+    DATA.activities = [...echt, {id: 9995001, date: vandaagIso(), datetime: `${vandaagIso()}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 3000, aerobic_te: 4.0, z1_s: 300, z2_s: 300, z3_s: 900, z4_s: 900, z5_s: 0, hr_zones: [{zone: 3, sec: 900}, {zone: 4, sec: 900}], load: 80}];
+    HB_CACHE.clear();
+    const m = weekMinuten(), x = m.hoog.onbevestigd.find(y => y.a.id === 9995001);
+    return {ok: m.hoog.gedaan === voor && x && x.z34 === 30, detail: `werkmin ${voor} → ${m.hoog.gedaan}; apart: ${x && x.z34} min hartslag zone 3–4`};
+  });
+  await test("Hartslagpieken worden geen sprints of bevestigde korte intervallen", () => {
+    const a = {id: 9995101, date: vandaagIso(), sport: "Hardlopen", type_key: "running", duration_s: 1800, hr_detail: {blokken_z3: [], blokken_z4: [], pieken_z4: 12}, z1_s: 600, z2_s: 600, z3_s: 300, z4_s: 300, z5_s: 0};
+    const f = sessieFeiten(a), lab = feitenLabel(f).join(" | ");
+    return {ok: f.soort !== "kort intensief" && /hartslagpieken in zone 4 geregistreerd \(geen sprintaantal\)/.test(lab), detail: `${f.soort} · ${lab}`};
+  });
+  await test("Ontbrekende zones en Training Effect geven geen verzonnen rustige minuten", () => {
+    const voor = weekMinuten().laag.gedaan;
+    DATA.activities = [...echt, {id: 9995201, date: vandaagIso(), datetime: `${vandaagIso()}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop zonder hartslag", duration_s: 2400, load: 0}];
+    HB_CACHE.clear();
+    const m = weekMinuten(), f = sessieFeiten(DATA.activities.find(x => x.id === 9995201));
+    return {ok: m.laag.gedaan === voor && m.laag.onbekend.some(x => x.id === 9995201) && f.soort === "inhoud niet vastgesteld" && f.te === null, detail: `rustige min ${voor} → ${m.laag.gedaan}; ${f.soort}; ontbreekt ${f.ontbreekt.join(", ")}`};
+  });
+  await test("Een onbekende sessie maakt de week niet automatisch lichter", () => {
+    const d = isoPlus(vandaagIso(), -1);
+    DATA.activities = [...echt.filter(a => a.date !== d), {id: 9995301, date: d, datetime: `${d}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 2400, load: 60}];
+    HB_CACHE.clear();
+    const z = dagZwaarte(d), r = zwareReeks(vandaagIso());
+    return {ok: z.k === "onbekend" && (r.dagen[1].k !== "onbekend" || r.onzeker || r.dagen[0].k !== "zwaar"), detail: `${d}: ${z.k} (${z.bron}); reeks ${r.opRij}, mogelijk ${r.opRijMogelijk}, onzeker ${r.onzeker}`};
+  });
+  await test("Ontbrekende intensiteitsgegevens veroorzaken geen aanvuladvies", () => {
+    const echtK = herstelKern; window.herstelKern = dd => ({...echtK(dd), niveau: "groen"});
+    try {
+      DATA.activities = [...echt.filter(a => a.date < ma || a.date > isoPlus(ma, 6) || !CONDITIE_TYPE.test(a.type_key || "")),
+        {id: 9995401, date: ma, datetime: `${ma}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 2400, load: 60}];
+      const I = bewaardLees(INSTEL_KEY, {}); bewaardSchrijf(INSTEL_KEY, {...I, uitgevoerd: [{datum: "2000-01-01", soort: "hoog", werk: 0}]});   // geen bevestigde woensdag
+      HB_CACHE.clear();
+      const a = trainingsAdvies(ma);
+      return {ok: a.status !== "blauw", detail: `${a.status}: ${a.reden} → ${a.actie}`};
+    } finally { window.herstelKern = echtK; HB_CACHE.clear(); }
+  });
+  await test("De bevestigde woensdagworkout blijft herkenbaar als uitgevoerd intervalwerk", () => {
+    const a = woAct(); if (!a) return {ok: false, detail: "niet gevonden"};
+    const f = sessieFeiten(a), z = dagZwaarte(a.date);
+    return {ok: f.soort === "langer intensief" && f.zeker === "bevestigd" && f.bevestigd.werk === 16 && z.k === "zwaar", detail: `${f.soort}, ${f.zeker}, ${f.bevestigd.werk} werkmin; dag ${z.k} (${z.bron})`};
+  });
   herstel(); allesHertekenen();
   return uit;
   function itemStatusLink(a) { return dagRoute(a.date, {alleenLezen: true}).items.some(i => (itemStatus(a.date, i).acts || []).some(x => x.id === a.id)); }
