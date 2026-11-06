@@ -8725,14 +8725,19 @@ function itemStatus(iso, item) {
   if (item.soort === "rust") return {k: "rust", tekst: "rust"};
   if (item.wacht) return {k: "gepland", tekst: "voorwaardelijk"};
   const eigen = (instelLees().planstatus || {})[`${iso}|${item.id}`];
+  /* de Garmin-registratie die bij deze sessie hoort, ook als je hem zelf als
+     gedaan markeerde of eerder bevestigde: anders lijkt hij "niet gepland" */
+  const passend = () => { const link = gekoppeld(), past = PAST_BIJ[item.soort];
+    return past ? (DATA.activities || []).filter(a => a.date === iso && past(a) && !(link.has(String(a.id)) && link.get(String(a.id)).soort !== item.soort)) : []; };
   if (eigen) return {k: eigen === "deels" ? "gedaan" : eigen, deels: eigen === "deels", eigen: true,
+    acts: eigen === "overgeslagen" ? [] : passend(),
     tekst: eigen === "gedaan" ? "gedaan (zelf gemeld)" : eigen === "deels" ? "deels gedaan" : "overgeslagen"};
   /* Bevestigd op deze dag, of (bij een kwaliteitsprikkel) eerder of later in
      dezelfde week gedaan: dan is hij uitgevoerd, alleen op een andere dag. */
   const uit = uitgevoerdLees();
   const zelfde = uit.find(x => x.datum === iso && x.soort === item.soort);
-  if (zelfde) return {k: "gedaan", tekst: "uitgevoerd, door jou bevestigd", uit: zelfde,
-    acts: (DATA.activities || []).filter(a => String(a.id) === String(zelfde.activiteit))};
+  if (zelfde) { const bev = (DATA.activities || []).filter(a => String(a.id) === String(zelfde.activiteit));
+    return {k: "gedaan", tekst: "uitgevoerd, door jou bevestigd", uit: zelfde, acts: bev.length ? bev : passend()}; }
   const link = gekoppeld();
   const past = PAST_BIJ[item.soort];
   const acts = past ? (DATA.activities || []).filter(a => a.date === iso && past(a) &&
@@ -11953,45 +11958,61 @@ function trainingsAdvies(ma) {
      telt pas als je duidelijk boven je gewone week zit én boven wat je plan
      tot vandaag liet verwachten (geplande opbouw is geen afwijking).
      [modelkeuze: 130% van je gewone week, 120% van het verwachte plan] */
-  /* Verwacht tegenover uitgevoerd, alleen voor sessies met een vooraf
-     vastgelegde verwachting. Sessies zonder verwachting en ongeplande
-     trainingen staan apart: hun belasting verdwijnt niet, maar wordt ook
-     niet als verwachting gebruikt. */
+  /* Verwacht tegenover uitgevoerd, alleen over DEZELFDE sessies: geplande
+     sessies met een registratie én een vooraf vastgelegd bereik, plus
+     bevestigde vervangingen (met de verwachting van wat ze vervangen). Alles
+     zonder verwachting telt mee in je totale weekbelasting, maar niet in deze
+     vergelijking: geplande sessies zonder bereik, ongeplande trainingen, en
+     sessies die je bevestigde zonder registratie. */
   try { verwachtingenVastleggen(); } catch (e) { /* zonder opslag: dan onbekend */ }
-  const planTotNu = items.filter(x => x.d <= v && x.st.k !== "overgeslagen").map(x => ({...x, e: geldigeVerwachting(x.d, x.i),
-    punten: (x.st.acts || []).reduce((u, a) => u + (a.garmin_load || 0), 0)}));
-  const bekend = planTotNu.filter(x => x.e && x.e.bereik);
-  const dekking = planTotNu.length ? bekend.length / planTotNu.length : 0;
-  let verwacht = bekend.reduce((t, x) => t + (x.e.bereik[0] + x.e.bereik[1]) / 2, 0);
-  let uitgevoerdBekend = bekend.reduce((t, x) => t + x.punten, 0);
-  /* Een bevestigde vervanging telt met de verwachting van de sessie die hij
-     vervangt. Ongeplande trainingen hadden geen verwachting: hun belasting
-     komt volledig boven het plan (ze verdwijnen niet uit de beoordeling). */
-  let extraPunten = 0;
+  const titelVan = i => i.titel.split(" · ")[0];
+  const uitgevoerdGepland = items.filter(x => x.d <= v && x.st.k === "gedaan").map(x => ({d: x.d, titel: titelVan(x.i), e: geldigeVerwachting(x.d, x.i),
+    acts: x.st.acts || [], punten: (x.st.acts || []).reduce((u, a) => u + (a.garmin_load || 0), 0)}));
+  const vergelijkbaar = uitgevoerdGepland.filter(x => x.acts.length && x.e && x.e.bereik).map(x => ({...x, soort: "gepland"}));
+  const zonderBereik = uitgevoerdGepland.filter(x => x.acts.length && !(x.e && x.e.bereik));
+  const zonderRegistratie = uitgevoerdGepland.filter(x => !x.acts.length);
+  const ongepland = [];
   extra.filter(x => x.act).forEach(x => {
     const pnt = x.act.garmin_load || 0;
     const it = x.vervangtItem ? dagRoute(x.d, {alleenLezen: true}).items.find(i => i.id === x.vervangtItem) : null;
     const e = it ? geldigeVerwachting(x.d, it) : null;
-    if (e && e.bereik) { verwacht += (e.bereik[0] + e.bereik[1]) / 2; uitgevoerdBekend += pnt; }
-    else extraPunten += pnt;
+    if (e && e.bereik) vergelijkbaar.push({d: x.d, titel: `${x.act.name || x.sport} (vervangt ${titelVan(it).toLowerCase()})`, e, punten: pnt, soort: "vervanging"});
+    else ongepland.push({d: x.d, titel: x.act.name || x.sport, punten: pnt, vervangt: x.vervangt || null});
   });
-  uitgevoerdBekend += extraPunten;
-  const onverwachtZwaar = bekend.filter(x => x.punten > x.e.bereik[1] * 1.25);   // [modelkeuze] ruim boven je eigen bereik
+  const som = (l, f) => l.reduce((t, x) => t + f(x), 0);
+  const verwachtLaag = som(vergelijkbaar, x => x.e.bereik[0]), verwachtHoog = som(vergelijkbaar, x => x.e.bereik[1]);
+  const verwacht = som(vergelijkbaar, x => (x.e.bereik[0] + x.e.bereik[1]) / 2);
+  const uitgevoerdVergelijkbaar = som(vergelijkbaar, x => x.punten);
+  const geplandMetRegistratie = vergelijkbaar.filter(x => x.soort === "gepland").length + zonderBereik.length;
+  const dekking = geplandMetRegistratie ? vergelijkbaar.filter(x => x.soort === "gepland").length / geplandMetRegistratie : 0;
+  const ongeplandPunten = som(ongepland, x => x.punten), zonderBereikPunten = som(zonderBereik, x => x.punten);
+  const onverwachtZwaar = vergelijkbaar.filter(x => x.punten > x.e.bereik[1] * 1.25);   // [modelkeuze] ruim boven je eigen bereik
   const hoogste8 = w.loadMax8 != null && w.load > w.loadMax8;
   const bovenGewoon = w.loadNormaal ? w.load > 1.3 * w.loadNormaal : false;
-  /* zelfde eenheid: Garmins punten per sessie */
   const garminPunten = acts.reduce((t, a) => t + (a.garmin_load || 0), 0);
-  const zonderVerwachting = Math.round(garminPunten - uitgevoerdBekend);
-  const bovenPlan = dekking >= 0.6 && verwacht > 0 && uitgevoerdBekend > 0 ? uitgevoerdBekend > 1.2 * verwacht : null;
-  const afwijking = bovenGewoon && bovenPlan !== false;
+  /* Plan tegenover uitvoering alleen met genoeg dekking [modelkeuze: minstens
+     3 vergelijkbare sessies en 60% van de uitgevoerde geplande sessies], en
+     "boven" pas als je boven het HELE verwachte bereik zit. */
+  const bovenPlan = dekking >= 0.6 && vergelijkbaar.length >= 3 ? uitgevoerdVergelijkbaar > verwachtHoog : null;
+  /* Afwijking van je plan: boven de verwachting, of een wezenlijk deel
+     ongeplande training [modelkeuze: meer dan 20% van je weekpunten]; alleen
+     samen met duidelijk boven je gewone week. Geplande opbouw is geen afwijking. */
+  const ongeplandWezenlijk = garminPunten > 0 && ongeplandPunten > 0.2 * garminPunten;
+  const afwijking = bovenGewoon && (bovenPlan === true || ongeplandWezenlijk);
   /* zware dagen achter elkaar: intensieve conditie, handbal of kracht */
   const zwareDag = d => acts.some(a => a.date === d && (a.sport === "Handbal" || (a.aerobic_te || 0) >= 3 || (a.anaerobic_te || 0) >= 2))
     || extra.some(x => x.d === d && x.doel === "kracht") || items.some(x => x.d === d && x.i.soort === "kracht" && x.st.k === "gedaan");
   let opRij = 0; for (let n = 0; n < 7; n++) { if (zwareDag(isoPlus(v, -n))) opRij++; else break; }
   const zwaar = afwijking && (opRij >= 3 || (wedstrijd != null && totWedstrijd <= 2) || hk.ind.prestatie.ongunstig);
-  const belasting = {nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, verwacht: verwacht ? Math.round(verwacht) : null, garminPunten: Math.round(garminPunten),
-    uitgevoerdBekend: Math.round(uitgevoerdBekend), extraPunten: Math.round(extraPunten), zonderVerwachting, dekking: Math.round(dekking * 100), onbekend: planTotNu.length - bekend.length,
-    onverwachtZwaar: onverwachtZwaar.map(x => ({d: x.d, titel: x.i.titel.split(" · ")[0], bereik: x.e.bereik, punten: Math.round(x.punten)})), bovenGewoon, bovenPlan, afwijking, opRij, zwaar,
+  const r0 = x => Math.round(x);
+  const belasting = {nu: w.load, gewoon: w.loadNormaal, max8: w.loadMax8, hoogste8, garminPunten: r0(garminPunten),
+    verwacht: verwacht ? r0(verwacht) : null, verwachtBereik: verwacht ? [r0(verwachtLaag), r0(verwachtHoog)] : null, uitgevoerdVergelijkbaar: r0(uitgevoerdVergelijkbaar),
+    vergelijkbaar: vergelijkbaar.map(x => ({d: x.d, titel: x.titel, bereik: x.e.bereik, punten: r0(x.punten), soort: x.soort})),
+    zonderBereik: zonderBereik.map(x => ({d: x.d, titel: x.titel, punten: r0(x.punten)})), ongepland: ongepland.map(x => ({...x, punten: r0(x.punten)})),
+    zonderRegistratie: zonderRegistratie.map(x => ({d: x.d, titel: x.titel})),
+    zonderVerwachting: r0(ongeplandPunten + zonderBereikPunten), ongeplandPunten: r0(ongeplandPunten), zonderBereikPunten: r0(zonderBereikPunten),
+    dekking: r0(dekking * 100), gedekt: vergelijkbaar.filter(x => x.soort === "gepland").length, geplandMetRegistratie,
+    onverwachtZwaar: onverwachtZwaar.map(x => ({d: x.d, titel: x.titel, bereik: x.e.bereik, punten: r0(x.punten)})), bovenGewoon, bovenPlan, afwijking, opRij, zwaar,
     verhouding: w.loadNormaal ? Math.round(w.load / w.loadNormaal * 100) : null};
   const niets = !acts.length && !logs.length && !extra.length && !items.some(x => x.st.k === "gedaan");
 
@@ -12005,11 +12026,25 @@ function trainingsAdvies(ma) {
     status = "grijs"; reden = "Deze week is nog niets geregistreerd."; actie = "Ververs je Garmin-gegevens of voeg je training toe.";
   } else if (hk.niveau === "oranje" || zwaar) {
     status = "oranje";
-    const waarom = hk.niveau === "oranje" ? "je herstel vraagt om aandacht"
-      : `je belasting ligt op ${belasting.verhouding}% van je gewone week${bovenPlan ? " en boven wat je plan liet verwachten" : ""}, ${opRij >= 3 ? `met ${opRij} zware dagen op rij` : wedstrijd != null && totWedstrijd <= 2 ? `met ${wedWoordVoor()}` : "en je prestatie bij gelijke taak was minder"}`;
-    reden = `${hoofdletter(samen)}. ${hoofdletter(waarom)}.`;
-    actie = `Geen extra training toevoegen${wedWoord && totWedstrijd <= 2 ? (later.some(x => x.d < wedstrijd && x.i.soort !== "wedstrijd") || items.some(x => x.d === v && ["gepland", "vandaag"].includes(x.st.k))
-      ? `; je geplande training kan door, binnen het voorschrift en zonder extra intensiteit richting ${wedWoord}` : `; rustig aan richting ${wedWoord}`) : later.length ? `; ${later[0].i.titel.split(" · ")[0].toLowerCase()} ${dagWoord(later[0].d, dagVerschil(v, later[0].d))} mag lichter` : ""}.`;
+    if (hk.niveau === "oranje") {
+      /* oorzaak herstel: dan bepaalt het hersteladvies de actie, niet het plan */
+      reden = `${hoofdletter(samen)}. Je herstel vraagt om aandacht: ${hk.oorzaak || hk.regel}.`;
+      actie = hk.actie ? hk.actie.replace(/\.$/, "") + "." : "Geen extra training; pas je volgende training aan zoals bij Herstel staat.";
+    } else {
+      const waarom = [`je belasting ligt op ${belasting.verhouding}% van je gewone week`];
+      if (bovenPlan) waarom.push(`boven het verwachte bereik voor ${vergelijkbaar.length} vergelijkbare sessies`);
+      if (ongeplandWezenlijk) waarom.push(`met ${r0(ongeplandPunten)} Garmin-punten uit training die niet gepland was`);
+      const omdat = opRij >= 3 ? `${opRij} zware dagen op rij` : wedstrijd != null && totWedstrijd <= 2 ? wedWoordVoor() : "mindere prestatie bij gelijke taak";
+      reden = `${hoofdletter(samen)}. ${hoofdletter(zinLijst(waarom))}, en ${omdat}.`;
+      const nogGepland = later.find(x => wedstrijd == null || x.d < wedstrijd) || items.find(x => x.d === v && ["gepland", "vandaag"].includes(x.st.k));
+      const herstelBekend = ["groen", "blauw"].includes(hk.niveau);
+      if (hk.ind.prestatie.ongunstig) actie = `Geen extra training; ${nogGepland ? `houd ${titelVan(nogGepland.i).toLowerCase()} lichter` : "houd de volgende training lichter"} en kijk of je prestatie herstelt.`;
+      else if (wedstrijd != null && totWedstrijd <= 2) actie = nogGepland && herstelBekend
+        ? `Geen extra training; ${titelVan(nogGepland.i).toLowerCase()} kan volgens voorschrift, zonder extra intensiteit richting ${wedWoord}.`
+        : nogGepland ? `Geen extra training; vul je check-in in voordat je ${titelVan(nogGepland.i).toLowerCase()} doet. Rustig richting ${wedWoord}.`
+        : `Geen extra training; rustig aan richting ${wedWoord}.`;
+      else actie = `Geen extra training${nogGepland ? `; ${titelVan(nogGepland.i).toLowerCase()} ${dagWoord(nogGepland.d, dagVerschil(v, nogGepland.d))} mag lichter` : ""}.`;
+    }
   } else {
     const ontbreekt = [];
     if (!conditie.geleverd && !condLater.length) ontbreekt.push("langer intensief conditiewerk");
@@ -12032,8 +12067,9 @@ function trainingsAdvies(ma) {
       status = "grijs"; reden = `Deze week ontbreekt ${zinLijst(ontbreekt)}, maar je herstel is onbekend.`;
       actie = "Vul je check-in in; dan zie je of aanvullen verstandig is.";
     } else {
-      status = "groen"; reden = `${hoofdletter(samen)}.${bovenGewoon && bovenPlan === false ? ` Belasting ${belasting.verhouding}% van je gewone week, in lijn met je plan.` : ""}${hoogste8 ? " Hoogste geregistreerde belasting van de afgelopen 8 weken." : ""}${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
-      actie = afwijking ? "Geen extra intensief werk nodig." : "Geen extra training nodig.";
+      status = "groen";
+      reden = `${hoofdletter(samen)}.${bovenGewoon ? ` Belasting ${belasting.verhouding}% van je gewone week${bovenPlan === false ? `, binnen de verwachting voor ${vergelijkbaar.length} vergelijkbare sessies` : bovenPlan === null ? "; verwachting voor te weinig sessies bekend" : ""}.` : ""}${opRij >= 3 ? ` ${opRij} zware dagen op rij${bovenPlan === false ? ", zoals gepland" : ""}.` : ""}${hoogste8 ? " Hoogste geregistreerde belasting van de afgelopen 8 weken." : ""}${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
+      actie = (bovenGewoon || opRij >= 3) && wedWoord && totWedstrijd <= 2 ? `Geen extra training nodig; geen extra intensief werk richting ${wedWoord}.` : "Geen extra training nodig.";
     }
   }
   /* de week per sessie: datum, wat, inhoud, bron en vervanging */
@@ -12084,10 +12120,12 @@ function adviesHtml(a, opties = {}) {
     <p>${H.gepland ? `${H.gedaan} van ${H.gepland} zaaltrainingen en wedstrijden gedaan.` : "Geen handbal gepland."}
       ${H.overgeslagen.map(x => `${hoofdletter(d(x.d))} ${x.titel.toLowerCase()} ${x.vervangen ? `vervangen door ${String(x.vervangen).toLowerCase()}: dat levert conditiewerk, geen techniek, wedstrijdsituaties of richtingsveranderingen` : "overgeslagen"}.`).join(" ")}</p>
     <h4 class="ws-sub">Herstel en belasting</h4>
-    <dl class="u-dl"><dt>Herstel</dt><dd>${HB_KORT_TITEL[a.herstel.niveau]} <span class="u-klein">${a.herstel.oorzaak || ""}</span></dd>
-      <dt>Garmin-belasting</dt><dd>${B.nu}${B.gewoon ? ` <span class="u-klein">gewone week tot vandaag ${B.gewoon} (${B.verhouding}%)${B.max8 ? `, zwaarste van 8 weken ${B.max8}${B.hoogste8 ? " (deze week is hoger: een feit, geen grens)" : ""}` : ""}</span>` : ""}</dd>
-      <dt>Verwacht tegenover uitgevoerd</dt><dd>${B.verwacht ? `${B.uitgevoerdBekend} Garmin-punten tegenover een vooraf vastgelegde verwachting van ongeveer ${B.verwacht}${B.extraPunten ? ` (waarvan ${B.extraPunten} uit trainingen buiten het plan)` : ""}` : "verwachte belasting onbekend"}
-        <span class="u-klein">${B.onbekend ? `${B.onbekend} geplande sessie${B.onbekend === 1 ? "" : "s"} zonder verantwoorde verwachting (onbekend, niet als nul geteld). ` : ""}${B.zonderVerwachting > 0 ? `${B.zonderVerwachting} punten uit geplande sessies zonder verwachting; die tellen mee in je belasting, niet in deze vergelijking. ` : ""}${B.dekking < 60 ? "Te weinig sessies met een verwachting om plan en uitvoering te vergelijken." : ""}</span></dd>
+    <dl class="u-dl hb-stapel"><dt>Herstel</dt><dd>${HB_KORT_TITEL[a.herstel.niveau]} <span class="u-klein">${a.herstel.oorzaak || ""}</span></dd>
+      <dt>Totale geregistreerde weekbelasting</dt><dd>${B.garminPunten} Garmin-punten <span class="u-klein">alle registraties deze week, ook zonder verwachting</span></dd>
+      <dt>Uitgevoerd tegenover verwacht</dt><dd>${B.verwacht ? `${B.uitgevoerdVergelijkbaar} tegenover ${B.verwachtBereik[0]}–${B.verwachtBereik[1]} (midden ${B.verwacht})` : "verwachte belasting onbekend"}
+        <span class="u-klein">alleen dezelfde sessies: ${B.gedekt} van ${B.geplandMetRegistratie} uitgevoerde geplande sessies hebben een vooraf vastgelegde verwachting${B.vergelijkbaar.some(x => x.soort === "vervanging") ? ", plus bevestigde vervangingen" : ""}${B.bovenPlan === null ? "; te weinig gedekt voor een conclusie over je plan (minstens 3 sessies en 60%)" : B.bovenPlan ? "; boven het hele verwachte bereik" : "; binnen of onder het verwachte bereik"}. Geen verhouding met het totaal: sessies zonder verwachting staan hieronder apart.</span></dd>
+      <dt>Uitgevoerd zonder verwachting</dt><dd>${B.zonderVerwachting} Garmin-punten <span class="u-klein">${[B.zonderBereikPunten ? `${B.zonderBereikPunten} uit geplande sessies zonder verantwoord bereik (${B.zonderBereik.map(x => x.titel.toLowerCase()).join(", ")})` : "", B.ongeplandPunten ? `${B.ongeplandPunten} uit training die niet gepland was (${B.ongepland.map(x => x.titel.toLowerCase()).join(", ")})` : ""].filter(Boolean).join("; ") || "geen"}${B.zonderRegistratie.length ? `. Zonder registratie, dus zonder punten: ${B.zonderRegistratie.map(x => x.titel.toLowerCase()).join(", ")}` : ""}.</span></dd>
+      <dt>Tegenover je gebruikelijke week</dt><dd>${B.gewoon ? `${B.nu} tegenover ${B.gewoon} tot dezelfde dag (${B.verhouding}%)` : "onvoldoende historie"} <span class="u-klein">dashboardbelasting${B.max8 ? `; zwaarste van 8 weken ${B.max8}${B.hoogste8 ? ", deze week is hoger (een feit, geen grens)" : ""}` : ""}</span></dd>
       ${B.onverwachtZwaar.length ? `<dt>Zwaarder dan verwacht</dt><dd>${B.onverwachtZwaar.map(x => `${kortDatum(x.d)} ${x.titel.toLowerCase()}: ${x.punten} punten, verwacht ${x.bereik[0]}–${x.bereik[1]}`).join("; ")}</dd>` : ""}
       <dt>Zware dagen op rij</dt><dd>${B.opRij}</dd>
       ${a.wedstrijd ? `<dt>Volgende wedstrijd</dt><dd>${hoofdletter(dagWoord(a.wedstrijd, a.totWedstrijd))}</dd>` : ""}</dl>

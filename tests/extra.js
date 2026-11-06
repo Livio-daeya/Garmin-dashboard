@@ -216,8 +216,26 @@
     const a2 = trainingsAdvies(ma);
     const woItem = dagRoute(wo, {alleenLezen: true}).items.find(i => ["hoog", "ana"].includes(i.soort));
     const e = woItem ? geldigeVerwachting(wo, woItem) : null;
-    const ok = a2.belasting.verwacht === a1.belasting.verwacht && a2.belasting.garminPunten === a1.belasting.garminPunten + 500 && (!e || !e.bereik ? a1.belasting.onbekend >= 1 && /onbekend/.test(adviesHtml(a1)) : true);
-    return {ok, detail: `woensdag verwacht ${e && e.bereik ? e.bereik.join("–") : "onbekend"}; verwacht ${a1.belasting.verwacht} → ${a2.belasting.verwacht} bij +500 werkelijke punten; onbekend ${a1.belasting.onbekend}`};
+    const B = a2.belasting, inVergelijking = B.vergelijkbaar.some(x => x.d === wo && /4x4/.test(x.titel));
+    const ok = B.verwacht === a1.belasting.verwacht && B.uitgevoerdVergelijkbaar === a1.belasting.uitgevoerdVergelijkbaar && B.garminPunten === a1.belasting.garminPunten + 500
+      && B.zonderVerwachting === a1.belasting.zonderVerwachting + 500 && !inVergelijking && /Uitgevoerd zonder verwachting/.test(adviesHtml(a2));
+    return {ok, detail: `woensdag verwacht ${e && e.bereik ? e.bereik.join("–") : "onbekend"}; verwacht ${a1.belasting.verwacht} → ${B.verwacht}, vergelijkbaar uitgevoerd ${a1.belasting.uitgevoerdVergelijkbaar} → ${B.uitgevoerdVergelijkbaar}, zonder verwachting ${a1.belasting.zonderVerwachting} → ${B.zonderVerwachting}`};
+  }));
+  await test("Uitgevoerd en verwacht worden over dezelfde sessies vergeleken; alles telt in het totaal", () => metVandaag(() => {
+    beschrevenWeek();
+    const B = trainingsAdvies(ma).belasting;
+    const somV = B.vergelijkbaar.reduce((t, x) => t + x.punten, 0);
+    const ok = somV === B.uitgevoerdVergelijkbaar && B.garminPunten === B.uitgevoerdVergelijkbaar + B.zonderVerwachting
+      && B.vergelijkbaar.every(x => x.bereik) && B.gedekt <= B.geplandMetRegistratie;
+    const regel = l => l.map(x => `${x.d.slice(8)} ${x.titel} ${x.punten}${x.bereik ? ` [${x.bereik.join("–")}]` : ""}`).join("; ");
+    return {ok, detail: `TESTWEEK (nagebouwd) | vergelijkbaar: ${regel(B.vergelijkbaar)} → ${B.uitgevoerdVergelijkbaar} tegenover ${B.verwachtBereik ? B.verwachtBereik.join("–") : "–"} (midden ${B.verwacht}), gedekt ${B.gedekt}/${B.geplandMetRegistratie} | zonder bereik: ${regel(B.zonderBereik) || "–"} | niet gepland: ${regel(B.ongepland) || "–"} | zonder registratie: ${B.zonderRegistratie.map(x => x.d.slice(8) + " " + x.titel).join("; ") || "–"} | totaal ${B.garminPunten}`};
+  }));
+  await test("Oranje door herstel geeft het hersteladvies, niet 'geplande training kan door'", () => metVandaag(() => {
+    const {wo, dn} = beschrevenWeek({vandaag: isoPlus(ma, 3)});
+    const c = checkLees(); checkZet({...c, [wo]: {gevoel: 1, lijf: {benen: 2}}, [dn]: {gevoel: 1, lijf: {benen: 2, energie: 2}}}); HB_CACHE.clear();
+    const a = trainingsAdvies(ma);
+    const ok = a.status === "oranje" || a.status === "rood" ? !/kan volgens voorschrift|kan door/.test(a.actie) : true;
+    return {ok, detail: `herstel ${a.herstel.niveau}; advies ${a.status}: ${a.actie}`};
   }));
   await test("Een onverwacht zware uitvoering blijft zichtbaar", () => metVandaag(() => {
     const {dn} = beschrevenWeek({doZaal: 300});
