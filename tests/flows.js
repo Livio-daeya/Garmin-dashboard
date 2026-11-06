@@ -273,7 +273,21 @@
     return {ok, detail: `grijs "${grijs.oorzaak}"; gevoel normaal ${normaal}; ${oranje.niveau} "${oranje.actie}"; ziek ${rood}; pees ${pees.niveau}; kaart ${!!kaart}`};
   });
 
+  await test("Weekscore: compacte kaart en paneel tonen hetzelfde, ook na wijziging buiten de kaart", async () => {
+    const di = "2026-11-03", it = dagRoute(di, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
+    allesNaInvoer();
+    it.forEach(i => planStatusZet(di, i.id, "overgeslagen"));   // wijziging zonder hertekenen, zoals na een sync
+    allesHertekenen();
+    const kaart = [...document.querySelectorAll(".ws--kort .ws-getal b")].map(b => b.textContent);
+    const orig = uiPaneel; let html = ""; window.uiPaneel = (t, h) => { html = h; };
+    try { weekScorePaneel(); } finally { window.uiPaneel = orig; }
+    const paneel = (html.match(/ws-getal"><b>(\d+)/) || [])[1];
+    const nu = String(weekScore(maandagVan(V)).score);
+    it.forEach(i => planStatusZet(di, i.id, null)); allesNaInvoer();
+    return {ok: kaart.length >= 1 && kaart.every(k => k === nu) && paneel === nu, detail: `kaarten ${kaart.join("/")}, paneel ${paneel}, berekend ${nu}`};
+  });
+
   terug();
-  DATA.planbasis.vandaag = V; ROUTE_DAG = null; belastingHerberekenen(); allesNaInvoer();
+  DATA.planbasis.vandaag = V; ROUTE_DAG = null; belastingHerberekenen(); allesNaInvoer(); HB_CACHE.clear(); allesHertekenen();
   return uit;
 })()

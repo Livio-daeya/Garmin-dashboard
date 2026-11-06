@@ -3990,6 +3990,10 @@ function allesHertekenen() {
   renderVandaagTegels();
   renderPlanner(); renderPlan(); renderWorkout(); renderDoelen();
   renderAlcohol(); renderRouteAlles();
+  /* Na een sync of andere wijziging van buitenaf: ook de nieuwe weergaven
+     (weekscore op Plan en Belasting, herstelbalk) opnieuw berekenen, anders
+     tonen ze nog de stand van vóór de wijziging. */
+  allesNaInvoer();
 }
 
 function planHertekenen() {
@@ -9293,6 +9297,8 @@ function allesNaInvoer() {
   try { renderRouteAlles(); } catch (e) { console.error(e); }
   try { renderVandaagNieuw(); } catch (e) { console.error(e); }
   try { renderBelFocus(); } catch (e) { console.error(e); }
+  try { renderPlanNieuw(); } catch (e) { console.error(e); }
+  try { renderVermoeidheid(); } catch (e) { console.error(e); }
   window.scrollTo({top: y, behavior: "instant"});
 }
 
@@ -10692,6 +10698,12 @@ function weekScoreHtml(w, opties = {}) {
       <p class="u-klein">De score meet hoe goed je het plan volgde, niet hoeveel fitter je wordt en niet of de week gezond was. Gedaan (deels telt half) gedeeld door de sessies die al aan de beurt waren. Zonder registratie telt niet mee tot je hem invult. Extra trainingen tellen niet en de score komt niet boven 100. Aangepaste en verwijderde sessies staan bij Wijzigingen. Hoe je herstelt staat bij Herstel.</p>`}</div>`;
 }
 
+/* wijziging in een ander tabblad van dezelfde pagina: opnieuw tekenen */
+let OPSLAG_TIMER = null;
+window.addEventListener("storage", e => {
+  if (![CHECK_KEY, INSTEL_KEY, LOG_KEY].includes(e.key)) return;
+  clearTimeout(OPSLAG_TIMER); OPSLAG_TIMER = setTimeout(() => { try { allesHertekenen(); } catch (x) { console.error(x); } }, 200);
+});
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".ws--kort")) { e.preventDefault(); weekScorePaneel(); }
 });
@@ -10703,6 +10715,9 @@ document.addEventListener("click", e => {
   ROUTE_DAG = b.dataset.wsdag; naarTab("training");
 });
 function weekScorePaneel() {
+  /* de compacte kaarten eerst bijwerken, zodat kaart en paneel altijd uit
+     dezelfde berekening op hetzelfde moment komen */
+  try { renderBelFocus(); renderPlanNieuw(); } catch (e) { console.error(e); }
   const ma = maandagVan(vandaagIso());
   /* alleen weken waarin je plan al liep; daarvoor is er niets om tegen af te zetten */
   const start = status().planStart || ma;
