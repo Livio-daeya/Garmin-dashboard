@@ -836,6 +836,26 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .mt .lg-kop { min-height: 18px; }
 #herstelTegels:empty, #belTegels:empty { display: none; }
 #vormOverzicht.vlak { padding: 16px; }
+/* maandkalender */
+.mk-kal { display: grid; gap: 8px; }
+.mk-nav { display: flex; align-items: center; justify-content: space-between; }
+.mk-nav b { font-size: var(--t-body); }
+.mk-rij { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mk-kop span { text-align: center; font-size: var(--t-label); color: var(--muted); text-transform: lowercase; }
+.mk-cel { position: relative; display: grid; justify-items: center; align-content: start; gap: 4px; min-height: 52px; padding: 6px 0; border: 0; border-radius: 10px;
+  background: var(--bg2); color: var(--ink); font: inherit; cursor: pointer; }
+.mk-cel--buiten { background: none; cursor: default; }
+.mk-cel--voorbij { opacity: .62; }
+.mk-cel--vandaag { box-shadow: inset 0 0 0 1.5px var(--ink); opacity: 1; }
+.mk-nr { font-size: var(--t-klein); font-weight: 600; font-variant-numeric: tabular-nums; }
+.mk-ic { display: flex; gap: 3px; }
+.mk-ic i { width: 7px; height: 7px; border-radius: 50%; }
+.mk-ic i.over { opacity: .35; }
+.mk-st { position: absolute; top: 3px; right: 3px; line-height: 0; }
+.mk-st .ta3-badge { width: 12px; height: 12px; } .mk-st .ta3-badge svg { width: 8px; height: 8px; }
+.mk-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.mk-leg i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.mk-cel:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 /* =====================================================================
    Verfijnde stijl (donker thema): licht op de vlakken, een zweem blauw
    bovenin, kleurverloop in ringen en staafjes, een vervagende vulling onder
@@ -8368,6 +8388,14 @@ function renderBelFocus() {
   ].map(x => ({...x, status: ST(x.st)}));
   meters.forEach(x => { BEL_DETAIL[x.sleutel][1] = meetKopHtml(x) + BEL_DETAIL[x.sleutel][1]; });
   host.innerHTML = meetBalkHtml(meters);
+  /* "Deze week" opent één overzicht van de drie meters; elke regel opent zijn detail */
+  host.querySelector("[data-weekinfo]").onclick = () => uiPaneel(`Deze week · ${kortDatum(m.ma)} – ${kortDatum(isoPlus(m.ma, 6))}`,
+    `<div class="vlak">${meters.map(x => { const soort = meetSoort(x.st);
+      return `<button class="vd-rij" data-weekmeet="${x.sleutel}" style="--cat:${x.kleur}"><span class="vd-sport">${ic(x.icoon)}</span>
+        <span><b>${x.titel}</b><small>${String(x.status[0])}${x.sub ? ` · ${String(x.sub).replace(/<[^>]+>/g, "")}` : ""}</small></span>
+        <span class="vd-w">${x.waarde ?? "–"}${x.waarde != null ? ` <small style="display:inline;font-weight:500">${x.eenheid}</small>` : ""}</span></button>`; }).join("")}</div>
+    <p class="u-klein">Uitvoering tegenover je plan voor deze week. Een tik op een regel opent de zones en sessies. Of je iets moet aanvullen, staat bij Trainingsadvies.</p>`,
+    box => box.querySelectorAll("[data-weekmeet]").forEach(b => b.onclick = () => { uiPaneelSluit(); setTimeout(() => belDetailOpen(b.dataset.weekmeet), 280); }));
   host.insertAdjacentHTML("beforeend", adviesBalkHtml(trainingsAdvies(m.ma)));
   host.hidden = false;
   host.querySelectorAll("[data-meet]").forEach(b => b.onclick = () => belDetailOpen(b.dataset.meet));
@@ -9640,7 +9668,7 @@ const MEET_KLEUR = {uitgevoerd: "groen", gepland: "grijs", geendoel: "grijs", me
 const meetSoort = st => st.k === "groen" ? "uitgevoerd" : st.k === "blauw" ? "gepland" : st.k === "oranje" ? "meer" : st.k === "rood" ? "minder" : st.w === "geen doel" ? "geendoel" : "onbekend";
 const meetBadge = soort => `<span class="ta3-badge ta3--${MEET_KLEUR[soort]}" aria-hidden="true"><svg viewBox="0 0 24 24">${MEET_SYMBOOL[soort]}</svg></span>`;
 function meetBalkHtml(meters) {
-  return `<div class="ta3 ta3--meter"><div class="ta3-titel">Deze week</div><div class="ta3-drie">${meters.map(m => { const soort = meetSoort(m.st);
+  return `<div class="ta3 ta3--meter"><button class="ta3-kop" data-weekinfo aria-label="Deze week: meer informatie"><span class="ta3-alg">Deze week</span>${ic("volgende")}</button><div class="ta3-drie">${meters.map(m => { const soort = meetSoort(m.st);
     return `<button class="ta3-deel" data-meet="${m.sleutel}" data-status="${m.status[1]}" style="--cat:${m.kleur}"
       aria-label="${m.titel}: ${m.waarde != null ? `${m.waarde} ${m.eenheid}` : (m.sub || "onbekend").toLowerCase()}, ${String(m.status[0]).toLowerCase()}">
       <span class="ta3-ic">${ic(m.icoon)}${meetBadge(soort)}</span>
@@ -12629,6 +12657,14 @@ const TA3_SYMBOOL = {blauw: '<path d="M12 6v12M6 12h12"/>', groen: '<path d="m6 
 const TA3_HERSTEL = {groen: "Zonder afwijking", blauw: "Verwachte vermoeidheid", oranje: "Vraagt aandacht", rood: "Duidelijk achteruit", grijs: "Onvoldoende gegevens"};
 const ta3Badge = st => `<span class="ta3-badge ta3--${st}" aria-hidden="true"><svg viewBox="0 0 24 24">${TA3_SYMBOOL[st]}</svg></span>`;
 const ta3Status = (st, tekst = TA_STATUS[st]) => `<span class="ta3-status ta3--${st}">${ta3Badge(st)}<span>${tekst}</span></span>`;
+/* Weergave van het algemene advies. "Nog niet te beoordelen" (grijs) is in
+   de berekening een eigen uitkomst, met als actie: niets extra intensiefs.
+   In beeld is dat oranje, met de reden erbij, zodat je weet wat je doet. */
+function taWeergave(a) {
+  if (a.status !== "grijs") return {s: a.status, label: TA_STATUS[a.status]};
+  return {s: "oranje", label: /nog niets geregistreerd/.test(a.reden) ? "Nog geen trainingen: niets extra"
+    : a.herstel && a.herstel.niveau === "blauw" ? "Lichte vermoeidheid: niets extra" : "Check-in ontbreekt: niets extra"};
+}
 function adviesDelen(a, k = adviesKort(a)) {
   const C = a.conditie, K = a.kracht, H = a.herstel;
   const onb = C.lijst.filter(x => x.soort === "inhoud niet vastgesteld").length;
@@ -12636,27 +12672,36 @@ function adviesDelen(a, k = adviesKort(a)) {
   /* Bij een onbekend herstel blijft een vastgestelde prikkel groen: geen
      aanvulling nodig is dan waar, los van je herstel. Alleen wat zelf
      onbekend is, blijft grijs. */
-  const deel = (soort, vastgesteld) => a.status === "rood" || a.status === "oranje" ? "oranje"
-    : mist(soort) ? "blauw" : vastgesteld ? "groen" : "grijs";
+  /* De balk zegt altijd wat je moet doen, in een van de vier kleuren:
+     blauw iets erbij, groen volg je plan, oranje niets extra en houd het
+     licht, rood pas aan. Wat al gedaan of gepland is en niet aangevuld hoeft
+     te worden, is groen, ook als de omvang onbekend is (dat staat in het
+     detail). Is het herstel nog niet beoordeeld, dan geldt: niets extra. */
+  const deel = (soort, gedaan) => a.status === "rood" || a.status === "oranje" ? "oranje"
+    : mist(soort) ? "blauw" : a.status === "grijs" && !gedaan ? "oranje" : "groen";
   const cKort = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}` : onb ? "Inhoud onbekend" : C.later.length ? "Nog gepland" : "Geen intensieve prikkel";
   const kKort = K.gelogd && K.sets ? `${K.sets} sets gelogd` : K.sessies ? "Omvang onbekend" : K.later.length ? "Nog gepland" : "Geen sessie";
-  const hSt = ["groen", "oranje", "rood"].includes(H.niveau) ? H.niveau : "grijs";
+  const hSt = H.niveau === "groen" || H.niveau === "rood" ? H.niveau : "oranje";
   const kOntbreekt = K.sessies && !K.gelogd ? "Sets, gewichten en RIR in je krachtlog." : K.rirOnzeker || K.zonderRir ? "RIR bij een deel van je sets." : "";
-  return [
-    {k: "conditie", naam: "Conditie", icoon: "puls", s: deel("conditie", C.intensief > 0), kort: cKort, vast: k.prikkelC, volgende: k.vervolgC,
+  const uit = [
+    {k: "conditie", naam: "Conditie", icoon: "puls", s: deel("conditie", C.intensief > 0 || C.lijst.length > 0 || C.later.length > 0), kort: cKort, vast: k.prikkelC, volgende: k.vervolgC,
       ontbreekt: onb ? `Inhoud van ${onb} conditiesessie${onb > 1 ? "s" : ""} (werkblokken of bevestiging).` : ""},
-    {k: "kracht", naam: "Kracht", icoon: "halter", s: deel("kracht", K.gelogd && K.sets > 0), kort: kKort, vast: k.prikkelK, volgende: k.vervolgK, ontbreekt: kOntbreekt},
-    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: TA3_HERSTEL[H.niveau] || TA3_HERSTEL.grijs, label: H.niveau === "blauw" ? "Verwachte vermoeidheid" : null,
+    {k: "kracht", naam: "Kracht", icoon: "halter", s: deel("kracht", K.sessies > 0 || K.later.length > 0), kort: kKort, vast: k.prikkelK, volgende: k.vervolgK, ontbreekt: kOntbreekt},
+    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: TA3_HERSTEL[H.niveau] || TA3_HERSTEL.grijs, label: H.niveau === "blauw" ? "Lichte vermoeidheid: niets extra" : H.niveau === "grijs" ? "Check-in ontbreekt: niets extra" : null,
       vast: H.niveau === "grijs" ? "Geen geldige check-in of te weinig metingen." : `${HB_KORT_TITEL[H.niveau]}${H.oorzaak ? `: ${String(H.oorzaak).replace(/\.$/, "").toLowerCase()}` : ""}.`,
       volgende: H.actie ? String(H.actie).replace(/\.?$/, ".") : H.niveau === "groen" ? "Geen beperking vanuit herstel." : "Eerst je herstel beoordelen; niets extra intensiefs.",
       ontbreekt: H.niveau === "grijs" ? "Een geldige check-in van vandaag." : ""},
   ];
+  /* groen zonder vastgestelde prikkel: niets aanvullen, gewoon je plan volgen */
+  if (uit[0].s === "groen" && !C.intensief) uit[0].label = "Volg je plan";
+  if (uit[1].s === "groen" && !(K.gelogd && K.sets)) uit[1].label = "Volg je plan";
+  return uit;
 }
 /* De iconenbalk onder de drie hoofdgetallen: alleen titel, drie iconen en labels. */
 function adviesBalkHtml(a, delen = adviesDelen(a), opties = {}) {
   const tag = opties.voorbeeld ? "div" : "button";
   return `<div class="ta3"${opties.voorbeeld ? "" : " data-ta3"}>
-    <${tag} class="ta3-kop"${opties.voorbeeld ? "" : ` data-ta3open="overzicht"`} aria-label="Trainingsadvies: ${a.titel.toLowerCase()}${opties.voorbeeld ? "" : ". Openen"}"><span class="ta3-alg ta3--${a.status}">${ta3Badge(a.status)}<span>Trainingsadvies</span></span>${opties.voorbeeld ? "" : ic("volgende")}</${tag}>
+    <${tag} class="ta3-kop"${opties.voorbeeld ? "" : ` data-ta3open="overzicht"`} aria-label="Trainingsadvies: ${taWeergave(a).label.toLowerCase()}${opties.voorbeeld ? "" : ". Openen"}"><span class="ta3-alg ta3--${taWeergave(a).s}">${ta3Badge(taWeergave(a).s)}<span>Trainingsadvies</span></span>${opties.voorbeeld ? "" : ic("volgende")}</${tag}>
     <div class="ta3-drie">${delen.map(d => `<${tag} class="ta3-deel ta3--${d.s}"${opties.voorbeeld ? "" : ` data-ta3open="${d.k}"`} aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${(d.label || TA_STATUS[d.s]).toLowerCase()}">
       <span class="ta3-ic">${ic(d.icoon)}${ta3Badge(d.s)}</span><span class="ta3-naam" aria-hidden="true">${d.naam}</span></${tag}>`).join("")}</div></div>`;
 }
@@ -12712,7 +12757,7 @@ function ta2Teken(scroll) {
   const todo = ta2Todo();
   const link = (nav, tekst) => `<button class="ta2-link" data-ta2nav="${nav}">${tekst}${ic("volgende")}</button>`;
   if (view === "overzicht") {
-    html = `<div class="ta2-hoofd">${ta3Status(a.status)}<p class="ta2-actie">${k.actie}</p><p class="ta2-reden">${k.reden}</p></div>
+    html = `<div class="ta2-hoofd">${ta3Status(taWeergave(a).s, taWeergave(a).label)}<p class="ta2-actie">${k.actie}</p><p class="ta2-reden">${k.reden}</p></div>
       <div>${delen.map(d => `<button class="ta3-rij" data-ta2deel="${d.k}" aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${(d.label || TA_STATUS[d.s]).toLowerCase()}"><span class="ta3-ic ta3--${d.s}">${ic(d.icoon)}${ta3Badge(d.s)}</span>
         <span><b>${d.naam}</b><small>${d.kort}</small></span>${ic("volgende")}</button>`).join("")}</div>
       ${todo.length ? `<div class="ta2-todo">${todo.slice(0, 3).map(t => t.html).join("")}</div>` : ""}
@@ -12879,10 +12924,14 @@ function renderPlanNieuw() {
   const dag = PLAN_DAG && PLAN_DAG >= v ? PLAN_DAG : v;
   const week = document.getElementById("plWeek");
   if (week) {
+    /* De weekplanner eerst terug in de opslag: anders verdwijnt hij met de
+       oude inhoud zodra deze kaart opnieuw getekend wordt. */
+    const pk0 = document.getElementById("plannerKaart"), opslag = document.getElementById("plOpslag");
+    if (pk0 && opslag && !opslag.contains(pk0)) { pk0.hidden = true; opslag.appendChild(pk0); }
     const dagen = weekDagen(v, dag);
     const alleItems = dagRoute(dag, {alleenLezen: dag !== v}).items.filter(i => i.soort !== "rust");
     const items = alleItems.filter(nietOvergeslagen(dag));
-    week.innerHTML = `<div class="pg-kop"><h2>Komende 7 dagen</h2>
+    week.innerHTML = `<div class="pg-kop"><h2>${PLAN_WEERGAVE === "maand" ? "Maand" : "Komende 7 dagen"}</h2>
         <div class="pg-kop-acties" role="tablist">
           <button class="u-keuze" aria-pressed="${PLAN_WEERGAVE === "week"}" data-weergave="week">Week</button>
           <button class="u-keuze" aria-pressed="${PLAN_WEERGAVE === "maand"}" data-weergave="maand">Maand</button></div></div>
@@ -12896,9 +12945,17 @@ function renderPlanNieuw() {
             <span class="u-rij-tekst"><b>${i.titel}</b><span class="u-klein">${i.plek ? PLEK_KORT[i.plek] + " · " : ""}${i.voorschrift ? i.voorschrift.split(".")[0] : ""}</span></span>
             ${sessieStatusLabel(dag, s)}</button>`;
         }).join("") : ongeplandOp(dag).length ? "" : `<p class="u-leeg">${ic("bed")}Rust.</p>`}
-        ${overgeslagenRegel(dag, alleItems)}${verborgenRegel(dag)}${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `<div id="plMaand"></div>`}`;
+        ${overgeslagenRegel(dag, alleItems)}${verborgenRegel(dag)}${dag <= v ? ongeplandHtml(dag) : ""}</div>` : `${maandKalenderHtml(PLAN_MAAND || v.slice(0, 7))}
+        <details class="verdieping verdieping--binnen"><summary>Planning per week bewerken</summary><div id="plMaand"></div></details>`}`;
     week.querySelectorAll("[data-pdag]").forEach(b => b.onclick = () => { PLAN_DAG = b.dataset.pdag; renderPlanNieuw(); });
     week.querySelectorAll("[data-weergave]").forEach(b => b.onclick = () => { PLAN_WEERGAVE = b.dataset.weergave; renderPlanNieuw(); });
+    week.querySelectorAll("[data-mkmaand]").forEach(b => b.onclick = () => { PLAN_MAAND = b.dataset.mkmaand; renderPlanNieuw(); });
+    week.querySelectorAll("[data-mkdag]").forEach(b => b.onclick = () => {
+      const d = b.dataset.mkdag;
+      if (d >= v) { PLAN_DAG = d; PLAN_WEERGAVE = "week"; renderPlanNieuw(); return; }
+      const its = dagRoute(d, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
+      uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, its.length ? its.map(i => trainingKaart(d, i)).join("") + ongeplandHtml(d) : `<p class="u-leeg">${ic("bed")}Rust.</p>` + ongeplandHtml(d));
+    });
     week.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
     overgeslagenKoppel(week); verborgenKoppel(week); vervangKoppel(week);
     week.querySelectorAll("[data-psessie]").forEach(b => b.onclick = () => {
@@ -13010,6 +13067,37 @@ function renderPlanNieuw() {
   }
 }
 let PLAN_WEERGAVE = "week";
+let PLAN_MAAND = null;
+/* Maandkalender: zeven kolommen (ma–zo), per dag de sporticonen, een vinkje
+   als het gedaan is en een streep als het is overgeslagen. Een tik op een dag
+   opent die dag in de weekweergave (vandaag en later) of de sessies van die
+   dag (eerder). De bestaande weekplanner blijft eronder om te bewerken. */
+const MAANDNAAM = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+function maandKalenderHtml(maand) {
+  const v = vandaagIso(), eerste = `${maand}-01`, ma = maandagVan(eerste);
+  const [j, m] = maand.split("-").map(Number), volgende = m === 12 ? `${j + 1}-01` : `${j}-${String(m + 1).padStart(2, "0")}`;
+  const vorige = m === 1 ? `${j - 1}-12` : `${j}-${String(m - 1).padStart(2, "0")}`;
+  const dagen = []; for (let d = ma; d < `${volgende}-01` || isoNaarPy(d) !== 0; d = isoPlus(d, 1)) dagen.push(d);
+  const cel = d => {
+    if (d.slice(0, 7) !== maand) return `<span class="mk-cel mk-cel--buiten" aria-hidden="true"></span>`;
+    const items = dagRoute(d, {alleenLezen: d !== v}).items.filter(i => i.soort !== "rust" && !i.optioneel);
+    const st = items.map(i => d <= v ? itemStatus(d, i).k : "gepland");
+    const gedaan = st.filter(k => k === "gedaan").length, over = st.filter(k => k === "overgeslagen").length;
+    const label = `${dagNaam(d)} ${kortDatum(d)}: ${items.length ? items.map(i => titelVanItem(i)).join(", ") : "rust"}${gedaan ? `, ${gedaan} gedaan` : ""}${over ? `, ${over} overgeslagen` : ""}`;
+    return `<button class="mk-cel${d === v ? " mk-cel--vandaag" : ""}${d < v ? " mk-cel--voorbij" : ""}" data-mkdag="${d}" aria-label="${veiligeTekst(label)}">
+      <span class="mk-nr">${Number(d.slice(8))}</span>
+      <span class="mk-ic">${items.slice(0, 3).map((i, n) => `<i class="${st[n] === "overgeslagen" ? "over" : ""}" style="background:${SOORT_KLEUR[i.soort] || "var(--ink-2)"}"></i>`).join("")}</span>
+      ${gedaan && gedaan === items.length ? `<span class="mk-st">${meetBadge("uitgevoerd")}</span>` : ""}</button>`;
+  };
+  return `<div class="mk-kal">
+    <div class="mk-nav"><button class="u-icoonknop" data-mkmaand="${vorige}" aria-label="Vorige maand">${ic("vorige")}</button>
+      <b>${hoofdletter(MAANDNAAM[m - 1])} ${j}</b>
+      <button class="u-icoonknop" data-mkmaand="${volgende}" aria-label="Volgende maand">${ic("volgende")}</button></div>
+    <div class="mk-rij mk-kop">${["ma", "di", "wo", "do", "vr", "za", "zo"].map(x => `<span>${x}</span>`).join("")}</div>
+    <div class="mk-rij">${dagen.map(cel).join("")}</div>
+    <p class="u-klein mk-leg"><span><i style="background:var(--c-zaal)"></i>zaal</span><span><i style="background:var(--c-int)"></i>conditie</span><span><i style="background:var(--c-kracht)"></i>kracht</span><span><i style="background:var(--c-rust)"></i>rustig</span></p>
+  </div>`;
+}
 const maandJaar = iso => `${["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"][Number(iso.slice(5, 7)) - 1]} ${iso.slice(2, 4) === "27" ? "'27" : "'" + iso.slice(2, 4)}`;
 
 function renderRouteAlles() {

@@ -293,8 +293,8 @@
     beschrevenWeek();
     const a = trainingsAdvies(ma), c = coachContext().trainingsadvies;
     allesHertekenen();
-    const kaart = [...document.querySelectorAll("[data-ta3] .ta3-alg")].map(b => b.className.match(/ta3--(\w+)/)[1]);
-    const ok = c.status === a.status && c.kracht.sessies.length === a.kracht.sessies && c.handbal.gedaan === a.handbal.gedaan && kaart.every(k => k === a.status) && kaart.length >= 1
+    const kaart = [...document.querySelectorAll("[data-ta3] .ta3-alg")].filter(b => /ta3--/.test(b.className)).map(b => b.className.match(/ta3--(\w+)/)[1]);
+    const ok = c.status === a.status && c.kracht.sessies.length === a.kracht.sessies && c.handbal.gedaan === a.handbal.gedaan && kaart.every(k => k === taWeergave(a).s) && kaart.length >= 1
       && a.kracht.sessies === 3 && a.handbal.gedaan === 2;
     return {ok, detail: `advies ${a.status}, kaarten ${kaart.join("/")}, coach ${c.status}; kracht ${a.kracht.sessies}/${c.kracht.sessies.length}, handbal ${a.handbal.gedaan}/${c.handbal.gedaan} | ${a.reden} → ${a.actie}`};
   }));
@@ -439,7 +439,7 @@
       && k.offsetHeight >= 96 && k.offsetHeight <= 130 && !tekst.includes(adviesKort(a).actie);
     return {ok, detail: `"${tekst}", hoogte ${k.offsetHeight}, ${labels.join(" | ")}`};
   });
-  await test("Onderdelen hebben eigen statussen; onbekend blijft grijs, nooit groen of blauw", () => {
+  await test("Advies in vier stoplichtkleuren: onderdelen apart, onbekend herstel wordt oranje (niets extra), nooit grijs", () => {
     const basis = trainingsAdvies(maandagVan(vandaagIso()));
     const met = (status, reden, herstel, cond, krach) => adviesDelen({...basis, status, reden, herstel: {...basis.herstel, niveau: herstel},
       conditie: {...basis.conditie, ...cond}, kracht: {...basis.kracht, ...krach}}).map(d => d.s).join("/");
@@ -449,7 +449,8 @@
     const oranje = met("oranje", "", "groen", twee, {sessies: 0, gelogd: false, sets: 0, later: []});
     const grijs = met("grijs", "", "grijs", twee, {sessies: 2, gelogd: true, sets: 20});
     const vermoeid = met("grijs", "", "blauw", geen, {sessies: 0, gelogd: false, sets: 0, later: []});
-    const ok = blauwKracht === "groen/blauw/groen" && onbekendeKracht === "groen/grijs/groen" && oranje === "oranje/oranje/groen" && grijs === "groen/groen/grijs" && vermoeid === "grijs/grijs/grijs";
+    const ok = blauwKracht === "groen/blauw/groen" && onbekendeKracht === "groen/groen/groen" && oranje === "oranje/oranje/groen" && grijs === "groen/groen/oranje" && vermoeid === "oranje/oranje/oranje"
+      && taWeergave({status: "grijs", reden: "", herstel: {niveau: "blauw"}}).s === "oranje";
     return {ok, detail: `blauw kracht ${blauwKracht}; kracht zonder log ${onbekendeKracht}; oranje ${oranje}; grijs ${grijs}; vermoeid ${vermoeid}`};
   });
   await test("Slaap: elke nacht van de laatste zeven opent met lengte en fasen", async () => {
@@ -460,6 +461,16 @@
     const ok = dagen.length >= 1 && dagen.length <= 7 && !!box.querySelector(".hypno") && /Diep|Licht/.test(box.textContent);
     uiPaneelSluit();
     return {ok, detail: `${dagen.length} nachten met fasen; ${iso}`};
+  });
+  await test("Plan: maandkalender met zeven kolommen, vandaag gemarkeerd, vorige en volgende maand", async () => {
+    naarTab("plan"); PLAN_WEERGAVE = "maand"; PLAN_MAAND = null; renderPlanNieuw();
+    const k = document.querySelector("#plWeek .mk-kal"), cellen = k ? k.querySelectorAll("[data-mkdag]").length : 0;
+    const vandaag = k && k.querySelector(".mk-cel--vandaag"), titel = k && k.querySelector(".mk-nav b").textContent;
+    k.querySelector("[data-mkmaand]:last-child").click();
+    const later = document.querySelector("#plWeek .mk-nav b").textContent;
+    PLAN_WEERGAVE = "week"; PLAN_MAAND = null; renderPlanNieuw();
+    const n = new Date(vandaagIso() + "T12:00").getMonth(), dagenInMaand = new Date(+vandaagIso().slice(0, 4), n + 1, 0).getDate();
+    return {ok: cellen === dagenInMaand && !!vandaag && titel !== later, detail: `${titel}: ${cellen} dagen, vandaag ${vandaag && vandaag.dataset.mkdag}; volgende ${later}`};
   });
   await test("Detail: één paneel, terug met scrollpositie, verdieping standaard dicht, workout bereikbaar met grafiek", async () => {
     adviesPaneel2();
@@ -492,7 +503,8 @@
     naarTab("belasting"); renderBelFocus();
     const kaart = document.querySelector("[data-ta3] .ta3-kop").getAttribute("aria-label");
     adviesPaneel2(); const paneel = document.querySelector("#uPaneel .ta2-hoofd .ta3-status").textContent.trim(); uiPaneelSluit();
-    return {ok: kaart.includes(a.titel.toLowerCase()) && paneel === a.titel && TA_STATUS[a.status] === a.titel, detail: `${a.status} "${a.titel}" → kaart "${kaart}"; actie "${k.actie}"`};
+    const w = taWeergave(a);
+    return {ok: kaart.includes(w.label.toLowerCase()) && paneel === w.label && TA_STATUS[a.status] === a.titel && (a.status !== "grijs" || w.s === "oranje"), detail: `${a.status} "${a.titel}" → kaart "${kaart}"; actie "${k.actie}"`};
   });
   herstel(); allesHertekenen();
   return uit;
