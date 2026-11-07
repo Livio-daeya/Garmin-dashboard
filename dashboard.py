@@ -847,6 +847,10 @@ def build_payload(cache: dict[str, Any], weeks: int) -> dict[str, Any]:
         # De fases van de jongste gemeten nacht op een tijdlijn. Net als de
         # HRV-curve maar die ene nacht: 85 nachten x 22 blokken is ballast
         # voor een hypnogram dat je alleen over vannacht bekijkt.
+        # Dezelfde tijdlijn voor de laatste zeven nachten, zodat je elke nacht
+        # uit het staafjesoverzicht kunt openen. Zeven keer ~22 blokken.
+        "slaap_fases_nachten": {dag: f for dag in days[-7:]
+                                if (f := A.nacht_fases(cache.get("daily", {}).get(dag) or {}))},
         "slaap_fases": next(
             (r for r in (A.nacht_fases(cache.get("daily", {}).get(d) or {})
                          for d in reversed(days)) if r), None),

@@ -449,8 +449,17 @@
     const oranje = met("oranje", "", "groen", twee, {sessies: 0, gelogd: false, sets: 0, later: []});
     const grijs = met("grijs", "", "grijs", twee, {sessies: 2, gelogd: true, sets: 20});
     const vermoeid = met("grijs", "", "blauw", geen, {sessies: 0, gelogd: false, sets: 0, later: []});
-    const ok = blauwKracht === "groen/blauw/groen" && onbekendeKracht === "groen/grijs/groen" && oranje === "oranje/oranje/groen" && grijs === "grijs/grijs/grijs" && vermoeid === "grijs/grijs/grijs";
+    const ok = blauwKracht === "groen/blauw/groen" && onbekendeKracht === "groen/grijs/groen" && oranje === "oranje/oranje/groen" && grijs === "groen/groen/grijs" && vermoeid === "grijs/grijs/grijs";
     return {ok, detail: `blauw kracht ${blauwKracht}; kracht zonder log ${onbekendeKracht}; oranje ${oranje}; grijs ${grijs}; vermoeid ${vermoeid}`};
+  });
+  await test("Slaap: elke nacht van de laatste zeven opent met lengte en fasen", async () => {
+    const per = DATA.slaap_fases_nachten || {}, dagen = Object.keys(per);
+    const iso = dagen[dagen.length - 1];
+    nachtPaneel(iso); await new Promise(r => setTimeout(r, 50));
+    const box = document.querySelector("#uPaneel .up");
+    const ok = dagen.length >= 1 && dagen.length <= 7 && !!box.querySelector(".hypno") && /Diep|Licht/.test(box.textContent);
+    uiPaneelSluit();
+    return {ok, detail: `${dagen.length} nachten met fasen; ${iso}`};
   });
   await test("Detail: één paneel, terug met scrollpositie, verdieping standaard dicht, workout bereikbaar met grafiek", async () => {
     adviesPaneel2();

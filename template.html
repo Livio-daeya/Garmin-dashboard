@@ -822,6 +822,20 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .lg-stippen span { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--bg1); pointer-events: none; }
 .lg-as { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-label); color: var(--muted); margin-top: 6px; }
 .lg-leeg { padding: 14px 16px; color: var(--muted); font-size: var(--t-klein); }
+.mt { padding: 14px 0 0; }
+.mt + .mt { border-top: 1px solid var(--hair); }
+.mt-kop { display: flex; align-items: center; gap: 8px; padding: 0 16px; min-height: 28px; }
+.mt-ic { color: var(--cat); line-height: 0; } .mt-ic .ic { width: 18px; height: 18px; }
+.mt-lab { font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; flex: 1; }
+.mt-kop .u-link { min-height: 44px; font-size: var(--t-klein); }
+.mt-w { padding: 2px 16px 0; font-size: 2rem; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mt-w small { font-size: var(--t-klein); font-weight: 500; color: var(--ink-2); margin-left: 4px; letter-spacing: 0; }
+.mt-bij { margin: 4px 16px 0; color: var(--ink-2); font-size: var(--t-klein); }
+.mt-bij b { color: var(--ink); }
+.mt .lg { padding-top: 4px; }
+.mt .lg-kop { min-height: 18px; }
+#herstelTegels:empty, #belTegels:empty { display: none; }
+#vormOverzicht.vlak { padding: 16px; }
 
 /* nachten als staafjes */
 .nb { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 124px; padding: 14px 12px 6px; }
@@ -898,6 +912,7 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .dials--compact { margin-top: var(--sp2); }
 .vd-peil { margin: 0 0 var(--sp4); text-align: center; font-size: var(--t-klein); color: var(--ink-2); }
 .vd-dagen { display: grid; }
+.vd-dagen.vlak .vd-dag { padding-left: 16px; padding-right: 16px; }
 .vd-dag { display: grid; grid-template-columns: 56px 44px 1fr; align-items: center; gap: var(--sp2); min-height: 52px; padding: 0;
   background: none; border: 0; border-top: 1px solid var(--hair); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .vd-dag:first-child { border-top: 0; }
@@ -2524,7 +2539,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
   <div class="sectie-kop"><h3>Beweging</h3><span class="u-klein">tik voor 28 dagen</span></div>
   <div class="vlak" id="vandaagTegels"></div>
-  <div class="card" id="vdKomend"></div>
+  <div id="vdKomend"></div>
 
   <details class="verdieping">
     <summary>Wedstrijdprojectie</summary>
@@ -2654,7 +2669,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
   <!-- Het compacte vormoverzicht staat helemaal onderaan: verdieping, geen
        hoofdboodschap. De uitgebreide grafiek klapt eronder open. -->
-  <div class="card" id="vormOverzicht"></div>
+  <div class="vlak" id="vormOverzicht"></div>
   <div class="card" id="tsbCard" style="display:none">
     <div class="card-head">
       <div><h2>Vorm (TSB)</h2>
@@ -6767,7 +6782,7 @@ function renderDials() {
   const slaapVorig = slaapDag ? vorigeMet("sleep_score", slaapDag.date) : null;
   const slaap = {
     cap: "Slaap", num: sl.sleep_score ?? null, deel: (sl.sleep_score || 0) / 100,
-    band: slaapBand, ga: "herstel",
+    band: slaapBand, ga: "slaapnacht",
     delta: deltaVan(sl.sleep_score ?? null, slaapVorig ? slaapVorig.sleep_score : null, true, 1),
     subt: sl.sleep_h ? `${uurMin(sl.sleep_h)} · ${({EXCELLENT:"uitstekend", GOOD:"goed",
             FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten"}`
@@ -7179,7 +7194,8 @@ function wijzersBedraden(hostSel, paneelId) {
   document.querySelectorAll(`${hostSel} button[data-ga]`).forEach(b => {
     const ga = b.dataset.ga;
     if (!ga) return;
-    if (OPBOUW[ga]) b.onclick = () => opbouwWisselen(b, ga, hostSel, paneelId);
+    if (ga === "slaapnacht") b.onclick = () => { const n = laatsteMet("sleep_h") || laatsteMet("sleep_score"); if (n) nachtPaneel(n.date); };
+    else if (OPBOUW[ga]) b.onclick = () => opbouwWisselen(b, ga, hostSel, paneelId);
     else b.onclick = () => naarTab(ga);
   });
 }
@@ -7615,7 +7631,7 @@ function renderVandaagNieuw() {
   if (km) {
     const dagen = [1, 2, 3].map(n => isoPlus(v, n));
     km.innerHTML = `<div class="sectie-kop"><h3>Komende dagen</h3><button class="u-link" data-naar="plan">Plan</button></div>
-      <div class="vd-dagen">${dagen.map(d => {
+      <div class="vd-dagen vlak">${dagen.map(d => {
         const it = dagRoute(d, {alleenLezen: true}).items.filter(i => i.soort !== "rust");
         return `<button class="vd-dag" data-plandag="${d}">
           <span class="vd-dag-wd">${WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2)}<b>${Number(d.slice(8))}</b></span>
@@ -9576,7 +9592,16 @@ function lgKoppel(root, wacht = 0) {
 /* Een dagreeks uit DATA.daily: labels en waarden op dezelfde dagen. */
 function lgDagen(veld, aantal = 28, om = w => w) {
   const d = (DATA.daily || []).slice(-aantal);
-  return {labels: d.map(x => `${kortDagNaam(x.date)} ${short(x.date)}`), pts: d.map(x => x[veld] == null ? null : om(x[veld]))};
+  return {labels: d.map(x => `${kortDagNaam(x.date)} ${short(x.date)}`), isos: d.map(x => x.date), pts: d.map(x => x[veld] == null ? null : om(x[veld]))};
+}
+/* Eén metriek: gekleurd icoon en label, het getal groot, één regel uitleg en
+   de grafiek met hulplijn. Dezelfde vorm voor HRV, rusthartslag, slaap,
+   stress en VO2max. */
+function metriekHtml({icoon, kleur, label, waarde, eenheid = "", bij = "", grafiek = "", knop = ""}) {
+  return `<div class="mt" style="--cat:${kleur}">
+    <div class="mt-kop"><span class="mt-ic">${ic(icoon)}</span><span class="mt-lab">${label}</span>${knop}</div>
+    <div class="mt-w">${waarde ?? "–"}${waarde != null && eenheid ? `<small>${eenheid}</small>` : ""}</div>
+    ${bij ? `<p class="mt-bij">${bij}</p>` : ""}${grafiek}</div>`;
 }
 
 /* Meterbalk: drie iconen met statusrondje, hoofdgetal en label. De status is
@@ -12581,7 +12606,10 @@ function adviesDelen(a, k = adviesKort(a)) {
   const C = a.conditie, K = a.kracht, H = a.herstel;
   const onb = C.lijst.filter(x => x.soort === "inhoud niet vastgesteld").length;
   const mist = soort => a.status === "blauw" && (soort === "kracht" ? /krachtsessie/ : /conditiewerk/).test(a.reden);
-  const deel = (soort, vastgesteld) => a.status === "rood" || a.status === "oranje" ? "oranje" : a.status === "grijs" ? "grijs"
+  /* Bij een onbekend herstel blijft een vastgestelde prikkel groen: geen
+     aanvulling nodig is dan waar, los van je herstel. Alleen wat zelf
+     onbekend is, blijft grijs. */
+  const deel = (soort, vastgesteld) => a.status === "rood" || a.status === "oranje" ? "oranje"
     : mist(soort) ? "blauw" : vastgesteld ? "groen" : "grijs";
   const cKort = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}` : onb ? "Inhoud onbekend" : C.later.length ? "Nog gepland" : "Geen intensieve prikkel";
   const kKort = K.gelogd && K.sets ? `${K.sets} sets gelogd` : K.sessies ? "Omvang onbekend" : K.later.length ? "Nog gepland" : "Geen sessie";
@@ -12591,7 +12619,7 @@ function adviesDelen(a, k = adviesKort(a)) {
     {k: "conditie", naam: "Conditie", icoon: "puls", s: deel("conditie", C.intensief > 0), kort: cKort, vast: k.prikkelC, volgende: k.vervolgC,
       ontbreekt: onb ? `Inhoud van ${onb} conditiesessie${onb > 1 ? "s" : ""} (werkblokken of bevestiging).` : ""},
     {k: "kracht", naam: "Kracht", icoon: "halter", s: deel("kracht", K.gelogd && K.sets > 0), kort: kKort, vast: k.prikkelK, volgende: k.vervolgK, ontbreekt: kOntbreekt},
-    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: TA3_HERSTEL[H.niveau] || TA3_HERSTEL.grijs,
+    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: TA3_HERSTEL[H.niveau] || TA3_HERSTEL.grijs, label: H.niveau === "blauw" ? "Verwachte vermoeidheid" : null,
       vast: H.niveau === "grijs" ? "Geen geldige check-in of te weinig metingen." : `${HB_KORT_TITEL[H.niveau]}${H.oorzaak ? `: ${String(H.oorzaak).replace(/\.$/, "").toLowerCase()}` : ""}.`,
       volgende: H.actie ? String(H.actie).replace(/\.?$/, ".") : H.niveau === "groen" ? "Geen beperking vanuit herstel." : "Eerst je herstel beoordelen; niets extra intensiefs.",
       ontbreekt: H.niveau === "grijs" ? "Een geldige check-in van vandaag." : ""},
@@ -12602,7 +12630,7 @@ function adviesBalkHtml(a, delen = adviesDelen(a), opties = {}) {
   const tag = opties.voorbeeld ? "div" : "button";
   return `<div class="ta3"${opties.voorbeeld ? "" : " data-ta3"}>
     <${tag} class="ta3-kop"${opties.voorbeeld ? "" : ` data-ta3open="overzicht"`} aria-label="Trainingsadvies: ${a.titel.toLowerCase()}${opties.voorbeeld ? "" : ". Openen"}"><span class="ta3-alg ta3--${a.status}">${ta3Badge(a.status)}<span>Trainingsadvies</span></span>${opties.voorbeeld ? "" : ic("volgende")}</${tag}>
-    <div class="ta3-drie">${delen.map(d => `<${tag} class="ta3-deel ta3--${d.s}"${opties.voorbeeld ? "" : ` data-ta3open="${d.k}"`} aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${TA_STATUS[d.s].toLowerCase()}">
+    <div class="ta3-drie">${delen.map(d => `<${tag} class="ta3-deel ta3--${d.s}"${opties.voorbeeld ? "" : ` data-ta3open="${d.k}"`} aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${(d.label || TA_STATUS[d.s]).toLowerCase()}">
       <span class="ta3-ic">${ic(d.icoon)}${ta3Badge(d.s)}</span><span class="ta3-naam" aria-hidden="true">${d.naam}</span></${tag}>`).join("")}</div></div>`;
 }
 /* Sessies per dag voor de weekstrip: uitgevoerd, gepland, overgeslagen, onbekend. */
@@ -12658,7 +12686,7 @@ function ta2Teken(scroll) {
   const link = (nav, tekst) => `<button class="ta2-link" data-ta2nav="${nav}">${tekst}${ic("volgende")}</button>`;
   if (view === "overzicht") {
     html = `<div class="ta2-hoofd">${ta3Status(a.status)}<p class="ta2-actie">${k.actie}</p><p class="ta2-reden">${k.reden}</p></div>
-      <div>${delen.map(d => `<button class="ta3-rij" data-ta2deel="${d.k}" aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${TA_STATUS[d.s].toLowerCase()}"><span class="ta3-ic ta3--${d.s}">${ic(d.icoon)}${ta3Badge(d.s)}</span>
+      <div>${delen.map(d => `<button class="ta3-rij" data-ta2deel="${d.k}" aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${(d.label || TA_STATUS[d.s]).toLowerCase()}"><span class="ta3-ic ta3--${d.s}">${ic(d.icoon)}${ta3Badge(d.s)}</span>
         <span><b>${d.naam}</b><small>${d.kort}</small></span>${ic("volgende")}</button>`).join("")}</div>
       ${todo.length ? `<div class="ta2-todo">${todo.slice(0, 3).map(t => t.html).join("")}</div>` : ""}
       <div>${link("waarom", "Waarom dit advies?")}${link("bronnen", "Berekeningen en bronnen")}${link("feedback", "Feedback en leerlus")}</div>`;
@@ -12669,7 +12697,7 @@ function ta2Teken(scroll) {
     const knop = view === "kracht" && a.kracht.sessies && !a.kracht.gelogd ? `<button class="ta2-primair" data-ta2krachtlog>Krachtlog invullen</button>`
       : view === "conditie" && todo.some(t => t.soort === "vervanging") ? todo.find(t => t.soort === "vervanging").html
       : view === "herstel" && a.herstel.niveau === "grijs" ? `<button class="ta2-primair" data-ta2checkin>Check-in invullen</button>` : "";
-    html = `<div>${ta3Status(d.s)}</div>
+    html = `<div>${ta3Status(d.s, d.label || TA_STATUS[d.s])}</div>
       <div class="ta3-vraag"><span>Vastgesteld</span>${d.vast}</div>
       <div class="ta3-vraag"><span>Volgende training</span>${d.volgende}</div>
       ${d.ontbreekt ? `<div class="ta3-vraag"><span>Ontbreekt</span>${d.ontbreekt}</div>` : ""}
@@ -13213,8 +13241,12 @@ function renderBelTegels() {
   ];
 
   const zichtbaar = defs.filter(t => !t.weg);
-  host.innerHTML = zichtbaar.map(t => tegelHtml(t)).join("");
-  tegelsWireOp(host, uit, zichtbaar);
+  const vo2 = zichtbaar.find(t => t.id === "vo2"), sch = vo2Schattingen();
+  host.className = "vlak";
+  host.innerHTML = vo2 ? metriekHtml({icoon: "meter", kleur: "var(--accent)", label: "VO2max", waarde: vo2.waarde, eenheid: "ml/kg/min", bij: vo2.bij || vo2.leegtekst,
+    grafiek: sch.length >= 2 ? lgHtml({eenheid: "ml/kg/min", periode: `${sch.length} schattingen`, labels: sch.map(x => short(x.datum)),
+      series: [{naam: "VO2max", pts: sch.map(x => x.waarde), kleur: "var(--accent)", fmt: w => komma(w.toFixed(1))}]}) : ""}) : "";
+  lgKoppel(host);
   const sh = document.getElementById("sesTegels"), su = document.getElementById("sesTegelUit");
   if (sh && su) { sh.innerHTML = sesDefs.map(t => tegelHtml({...t, breed: true})).join(""); tegelsWireOp(sh, su, sesDefs); }
 }
@@ -13356,13 +13388,14 @@ function renderVandaagTegels() {
      teken: () => tegelLijn("chKcal", reeks("calories"), "--s4", 0, null)},
   ];
 
+  const BEW = {stappen: ["sprong", "var(--accent)"], intens: ["klok", "var(--good)"], kcal: ["vlam", "var(--c-kort)"]};
   host.innerHTML = defs.map(t => `<button class="vd-rij" data-beweging="${t.id}" aria-label="${t.label}: ${t.waarde ?? "geen meting"}. 28 dagen openen">
-      <span class="vd-sport" style="--cat:var(--ink-2)">${ic(t.icoon)}</span><span><b>${t.label}</b><small>${String(t.bij || "").replace(/<[^>]+>/g, "")}</small></span>
+      <span class="vd-sport" style="--cat:${BEW[t.id][1]}">${ic(BEW[t.id][0])}</span><span><b>${t.label}</b><small>${String(t.bij || "").replace(/<[^>]+>/g, "")}</small></span>
       <span class="vd-w">${t.waarde ?? "–"}</span></button>`).join("");
   host.querySelectorAll("[data-beweging]").forEach(b => b.onclick = () => {
     const t = defs.find(x => x.id === b.dataset.beweging), veld = {stappen: "steps", intens: "intensity_min", kcal: "calories"}[t.id];
     const r = lgDagen(veld, 28);
-    uiPaneel(t.titel, lgHtml({titel: t.label, periode: "28 dagen", labels: r.labels, series: [{naam: t.label, pts: r.pts, kleur: "var(--ink)", fmt: w => Math.round(w).toLocaleString("nl-NL")}]}) +
+    uiPaneel(t.titel, lgHtml({titel: t.label, periode: "28 dagen", labels: r.labels, series: [{naam: t.label, pts: r.pts, kleur: BEW[t.id][1], fmt: w => Math.round(w).toLocaleString("nl-NL")}]}) +
       `<p class="u-klein">${t.uitleg}</p>`, box => lgKoppel(box, 260));
   });
 }
@@ -13450,7 +13483,7 @@ function renderHerstelKop() {
     {v: hrvW, l: "HRV", groot: true, ga: "hrv", st: statusTegenBand(hrvW, hrvB),
      deel: bandVulling(hrvW, hrvB, +1), band: bandKleur(hrvW, hrvB, +1),
      delta: deltaVan(hrvW, hrvVorig ? hrvVorig.hrv : null, true, 1)},
-    {v: sl.sleep_score ?? null, l: "Slaapscore", ga: "slaapscore",
+    {v: sl.sleep_score ?? null, l: "Slaapscore", ga: "slaapnacht",
      deel: (sl.sleep_score || 0) / 100,
      delta: deltaVan(sl.sleep_score ?? null, slVorig ? slVorig.sleep_score : null, true, 1),
      band: sl.sleep_score == null ? "n" : BAND(sl.sleep_score),
@@ -13556,8 +13589,10 @@ function renderNachtcurve() {
 function renderHypnogram() {
   const host = document.getElementById("hypno");
   if (!host) return;
-  const f = DATA.slaap_fases;
-  if (!f || !f.blokken || !f.blokken.length || !f.duur_min) { host.innerHTML = ""; return; }
+  host.innerHTML = hypnogramHtml(DATA.slaap_fases);
+}
+function hypnogramHtml(f) {
+  if (!f || !f.blokken || !f.blokken.length || !f.duur_min) return "";
 
   /* Wakker bovenaan, diep onderin: zo wordt een hypnogram gelezen, en zo
      loopt de nacht ook visueel naar beneden weg. */
@@ -13590,8 +13625,7 @@ function renderHypnogram() {
     ticks.push(`<span style="left:${p.toFixed(2)}%">${minNaarKlok(startMin + m)}</span>`);
   }
 
-  host.innerHTML =
-    `<div class="hypno">
+  return `<div class="hypno">
        <div class="hypno-tijd"><b>${f.start}</b> tot <b>${f.eind}</b>
          <span>· ${uurMin(totaal / 60)} van inslapen tot ontwaken</span></div>
        ${sporen}
@@ -13600,6 +13634,13 @@ function renderHypnogram() {
          ${ticks.join("")}
          <span class="rand-r" style="left:100%">${f.eind}</span></div></div>
      </div>`;
+}
+/* De fases van een nacht: uit de tijdlijn als die er is. */
+function nachtFases(iso) {
+  const per = DATA.slaap_fases_nachten || {};
+  if (per[iso]) return per[iso];
+  const sl = DATA.slaap_fases, laatste = ((DATA.sleep_last || {}).date) || null;
+  return sl && (!laatste || laatste === iso) ? sl : null;
 }
 
 const klokNaarMin = t => {
@@ -13726,7 +13767,13 @@ function nachtPaneel(iso) {
   const d = (DATA.daily || []).find(x => x.date === iso) || {};
   const bh = bandVan("hrv"), br = bandVan("rhr");
   const rij = (l, w, extra) => `<dt>${l}</dt><dd>${w ?? "onbekend"}${extra ? ` <span class="u-klein">${extra}</span>` : ""}</dd>`;
-  uiPaneel(`Nacht naar ${dagNaam(iso)} ${kortDatum(iso)}`, `<dl class="u-dl">
+  const f = nachtFases(iso);
+  const FASE = [["Diep", "--sl-diep"], ["Licht", "--sl-licht"], ["REM", "--sl-rem"], ["Wakker", "--sl-wakker"]];
+  const minNaam = n => f && f.minuten ? (f.minuten[n.toLowerCase()] ?? null) : null;
+  const kop = `<div class="mt-w" style="padding:0">${d.sleep_h != null ? uurMin(d.sleep_h) : "–"}${d.sleep_score != null ? `<small>score ${d.sleep_score}</small>` : ""}</div>
+    ${f ? hypnogramHtml(f) + `<p class="u-klein" style="display:flex;gap:12px;flex-wrap:wrap">${FASE.map(([n, k]) => minNaam(n) == null ? "" : `<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(${k});margin-right:6px;vertical-align:-1px"></i>${n} ${uurMin(minNaam(n) / 60)}</span>`).join("")}</p>`
+      : `<p class="u-klein">Voor deze nacht is geen tijdlijn met fasen geregistreerd.</p>`}`;
+  uiPaneel(`Nacht naar ${dagNaam(iso)} ${kortDatum(iso)}`, kop + `<dl class="u-dl">
       ${rij("Slaapduur", d.sleep_h != null ? uurMin(d.sleep_h) : null)}
       ${rij("Slaapscore", d.sleep_score)}
       ${rij("HRV", d.hrv != null ? `${d.hrv} ms` : null, bh && bh.genoeg ? `band ${Math.round(bh.onder)}–${Math.round(bh.boven)}` : "")}
@@ -13777,6 +13824,7 @@ function renderHerstelNieuw() {
 /* De zes metingen die eerst elk een eigen grafiekkaart hadden. Elke tegel toont
    de laatste waarde, waar die hoort te liggen, en het verloop over 28 dagen.
    De volle grafiek zit erachter. */
+let SLAAP_ISOS = [];
 function renderHerstelTegels() {
   const host = document.getElementById("herstelTegels");
   const uit = document.getElementById("herstelTegelUit");
@@ -13794,11 +13842,30 @@ function renderHerstelTegels() {
 
   const graf = document.getElementById("herstelGrafieken");
   if (graf) {
-    const h = lgDagen("hrv"), r = lgDagen("rhr", 28, Math.round);
+    const h = lgDagen("hrv"), r = lgDagen("rhr", 28, Math.round), sl = lgDagen("sleep_h"), st = lgDagen("stress_avg");
     const bandVanB = b => b && b.genoeg && b.onder != null ? [b.onder, b.boven] : null;
-    graf.innerHTML = lgHtml({titel: "HRV", eenheid: "ms", band: bandVanB(hrvB), periode: "28 dagen", labels: h.labels, series: [{naam: "HRV", pts: h.pts, kleur: "var(--ink)"}]}) +
-      lgHtml({titel: "Rusthartslag", eenheid: "bpm", band: bandVanB(rhrB), periode: "28 dagen", labels: r.labels, series: [{naam: "Rusthartslag", pts: r.pts, kleur: "var(--ink)"}]});
+    const bandTekst = (b, e) => b && b.genoeg ? `jouw band <b>${Math.round(b.onder)}–${Math.round(b.boven)}</b> ${e}` : "band nog in opbouw";
+    const slGem = gem(laatste28("sleep_h"));
+    SLAAP_ISOS = sl.isos;
+    graf.innerHTML =
+      metriekHtml({icoon: "puls", kleur: "var(--accent)", label: "HRV", waarde: hrvNu, eenheid: "ms", bij: bandTekst(hrvB, "ms"),
+        grafiek: lgHtml({eenheid: "ms", band: bandVanB(hrvB), periode: "28 dagen", labels: h.labels, series: [{naam: "HRV", pts: h.pts, kleur: "var(--accent)"}]})}) +
+      metriekHtml({icoon: "hart", kleur: "var(--critical)", label: "Rusthartslag", waarde: rhrNu == null ? null : Math.round(rhrNu), eenheid: "bpm", bij: bandTekst(rhrB, "bpm"),
+        grafiek: lgHtml({eenheid: "bpm", band: bandVanB(rhrB), periode: "28 dagen", labels: r.labels, series: [{naam: "Rusthartslag", pts: r.pts, kleur: "var(--critical)"}]})}) +
+      metriekHtml({icoon: "maan", kleur: "var(--sl-licht)", label: "Slaap", waarde: slNu == null ? null : uurMin(slNu),
+        bij: (scoreNu != null ? `score <b>${scoreNu}</b> · ` : "") + (slGem ? `gemiddeld <b>${uurMin(slGem)}</b> per nacht` : ""),
+        knop: `<button class="u-link" data-slaapnacht>Nacht openen</button>`,
+        grafiek: lgHtml({periode: "28 dagen", labels: sl.labels, series: [{naam: "Slaap", pts: sl.pts, kleur: "var(--sl-licht)", fmt: uurMin}]})}) +
+      metriekHtml({icoon: "wolk", kleur: "var(--good)", label: "Stress overdag", waarde: strNu, bij: "schaal <b>0–100</b>, continu gemeten via je HRV",
+        grafiek: lgHtml({periode: "28 dagen", labels: st.labels, series: [{naam: "Stress", pts: st.pts, kleur: "var(--good)", fmt: Math.round}]})});
     lgKoppel(graf);
+    /* "Nacht openen" volgt de dag die je in de slaapgrafiek kiest */
+    graf.querySelector("[data-slaapnacht]").onclick = e => {
+      const lg = e.target.closest(".mt").querySelector(".lg"), i = lg ? +lg.dataset.i : SLAAP_ISOS.length - 1;
+      nachtPaneel(SLAAP_ISOS[i] || SLAAP_ISOS[SLAAP_ISOS.length - 1]);
+    };
+    host.innerHTML = "";
+    return;
   }
   const defs = [
     {id: "hrv", label: "HRV", icoon: "puls", waarde: hrvNu, eenheid: "ms",
