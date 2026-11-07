@@ -278,13 +278,13 @@
     allesNaInvoer();
     it.forEach(i => planStatusZet(di, i.id, "overgeslagen"));   // wijziging zonder hertekenen, zoals na een sync
     allesHertekenen();
-    const kaart = [...document.querySelectorAll(".ta--kort .hs-chip")].map(b => b.textContent.trim());
+    const kaart = [...document.querySelectorAll("[data-ta3] .ta3-alg")].map(b => TA_STATUS[b.className.match(/ta3--(\w+)/)[1]]);
     const orig = uiPaneel; let html = ""; window.uiPaneel = (t, h) => { html = h; };
     try { adviesPaneel(); } finally { window.uiPaneel = orig; }
     const nu = trainingsAdvies(maandagVan(V)).titel;
     const paneel = html.includes(nu);
     it.forEach(i => planStatusZet(di, i.id, null)); allesNaInvoer();
-    return {ok: kaart.length >= 1 && kaart.every(k => k === nu) && paneel && !/\/100/.test(document.querySelector(".ta--kort").textContent), detail: `kaarten ${kaart.join("/")}, berekend ${nu}`};
+    return {ok: kaart.length >= 1 && kaart.every(k => k === nu) && paneel && !/\/100/.test(document.querySelector("[data-ta3]").textContent), detail: `kaarten ${kaart.join("/")}, berekend ${nu}`};
   });
   await test("Trainingsadvies: één status met vaste betekenis, en extra levert geen bonus", async () => {
     const a = trainingsAdvies(maandagVan(V));

@@ -293,8 +293,8 @@
     beschrevenWeek();
     const a = trainingsAdvies(ma), c = coachContext().trainingsadvies;
     allesHertekenen();
-    const kaart = [...document.querySelectorAll(".ta--kort .hs-chip")].map(b => b.textContent.trim());
-    const ok = c.status === a.status && c.kracht.sessies.length === a.kracht.sessies && c.handbal.gedaan === a.handbal.gedaan && kaart.every(k => k === a.titel) && kaart.length >= 1
+    const kaart = [...document.querySelectorAll("[data-ta3] .ta3-alg")].map(b => b.className.match(/ta3--(\w+)/)[1]);
+    const ok = c.status === a.status && c.kracht.sessies.length === a.kracht.sessies && c.handbal.gedaan === a.handbal.gedaan && kaart.every(k => k === a.status) && kaart.length >= 1
       && a.kracht.sessies === 3 && a.handbal.gedaan === 2;
     return {ok, detail: `advies ${a.status}, kaarten ${kaart.join("/")}, coach ${c.status}; kracht ${a.kracht.sessies}/${c.kracht.sessies.length}, handbal ${a.handbal.gedaan}/${c.handbal.gedaan} | ${a.reden} → ${a.actie}`};
   }));
@@ -404,7 +404,7 @@
     DATA.activities = [...echt.filter(a => a.date !== d), {id: 9995301, date: d, datetime: `${d}T08:00:00`, sport: "Hardlopen", type_key: "running", name: "Loop", duration_s: 2400, load: 60}];
     HB_CACHE.clear();
     const z = dagZwaarte(d), r = zwareReeks(vandaagIso());
-    return {ok: z.k === "onbekend" && (r.dagen[1].k !== "onbekend" || r.onzeker || r.dagen[0].k !== "zwaar"), detail: `${d}: ${z.k} (${z.bron}); reeks ${r.opRij}, mogelijk ${r.opRijMogelijk}, onzeker ${r.onzeker}`};
+    return {ok: z.k === "onbekend" && ((r.dagen[1] || {}).k !== "onbekend" || r.onzeker || r.dagen[0].k !== "zwaar"), detail: `${d}: ${z.k} (${z.bron}); reeks ${r.dagen.map(x => x.d.slice(5) + " " + x.k).join(", ")}: ${r.opRij}, mogelijk ${r.opRijMogelijk}, onzeker ${r.onzeker}`};
   });
   await test("Ontbrekende intensiteitsgegevens veroorzaken geen aanvuladvies", () => {
     const echtK = herstelKern; window.herstelKern = dd => ({...echtK(dd), niveau: "groen"});
@@ -421,6 +421,69 @@
     const a = woAct(); if (!a) return {ok: false, detail: "niet gevonden"};
     const f = sessieFeiten(a), z = dagZwaarte(a.date);
     return {ok: f.soort === "langer intensief" && f.zeker === "bevestigd" && f.bevestigd.werk === 16 && z.k === "zwaar", detail: `${f.soort}, ${f.zeker}, ${f.bevestigd.werk} werkmin; dag ${z.k} (${z.bron})`};
+  });
+  /* ---- compacte presentatie ---- */
+  await test("Handbal: Belasting en trainingsadvies tellen dezelfde sessies, ook zelf bevestigd zonder Garmin", () => {
+    const m = weekMinuten(), a = trainingsAdvies(maandagVan(vandaagIso()));
+    return {ok: m.kort.hbGedaan === a.handbal.gedaan, detail: `Belasting ${m.kort.hbGedaan}, advies ${a.handbal.gedaan}`};
+  });
+  await test("Iconenbalk: alleen titel en drie labels, geen advieszin of schaal, toegankelijke labels", () => {
+    naarTab("belasting"); renderBelFocus();
+    const k = document.querySelector("#belFocus [data-ta3]");
+    const tekst = k.textContent.replace(/\s+/g, " ").trim();
+    const delen = [...k.querySelectorAll(".ta3-deel")];
+    const labels = delen.map(d => d.getAttribute("aria-label"));
+    const a = trainingsAdvies(maandagVan(vandaagIso()));
+    const ok = tekst === "Trainingsadvies Conditie Kracht Herstel" && delen.length === 3 && delen.every(d => d.tagName === "BUTTON" && d.offsetHeight >= 44)
+      && labels.every(l => /^(Conditie|Kracht|Herstel): .+, .+/.test(l)) && !k.querySelector("canvas, progress, .u-balk")
+      && k.offsetHeight >= 96 && k.offsetHeight <= 130 && !tekst.includes(adviesKort(a).actie);
+    return {ok, detail: `"${tekst}", hoogte ${k.offsetHeight}, ${labels.join(" | ")}`};
+  });
+  await test("Onderdelen hebben eigen statussen; onbekend blijft grijs, nooit groen of blauw", () => {
+    const basis = trainingsAdvies(maandagVan(vandaagIso()));
+    const met = (status, reden, herstel, cond, krach) => adviesDelen({...basis, status, reden, herstel: {...basis.herstel, niveau: herstel},
+      conditie: {...basis.conditie, ...cond}, kracht: {...basis.kracht, ...krach}}).map(d => d.s).join("/");
+    const geen = {intensief: 0, lijst: [], later: []}, twee = {intensief: 2};
+    const blauwKracht = met("blauw", "Deze week ontbreekt een krachtsessie, en er staat niets meer van gepland.", "groen", twee, {sessies: 0, gelogd: false, sets: 0, later: []});
+    const onbekendeKracht = met("groen", "", "groen", twee, {sessies: 3, gelogd: false, sets: 0});
+    const oranje = met("oranje", "", "groen", twee, {sessies: 0, gelogd: false, sets: 0, later: []});
+    const grijs = met("grijs", "", "grijs", twee, {sessies: 2, gelogd: true, sets: 20});
+    const vermoeid = met("grijs", "", "blauw", geen, {sessies: 0, gelogd: false, sets: 0, later: []});
+    const ok = blauwKracht === "groen/blauw/groen" && onbekendeKracht === "groen/grijs/groen" && oranje === "oranje/oranje/groen" && grijs === "grijs/grijs/grijs" && vermoeid === "grijs/grijs/grijs";
+    return {ok, detail: `blauw kracht ${blauwKracht}; kracht zonder log ${onbekendeKracht}; oranje ${oranje}; grijs ${grijs}; vermoeid ${vermoeid}`};
+  });
+  await test("Detail: één paneel, terug met scrollpositie, verdieping standaard dicht, workout bereikbaar met grafiek", async () => {
+    adviesPaneel2();
+    const up = document.querySelector("#uPaneel .up");
+    const eerst = up.innerHTML;
+    const hoofden = up.querySelectorAll(".ta2-actie").length;
+    const geenSchema = !up.querySelector(".ta2-strip, .ta2-dag, canvas") && up.querySelectorAll(".ta3-rij").length === 3;
+    const dicht = !/Berekeningen en bronnen<\/h|Uitgevoerd zonder verwachting|Garmin-punten/.test(up.textContent) && /Waarom dit advies\?/.test(up.textContent);
+    up.scrollTop = 120; const voor = up.scrollTop;
+    const deel = up.querySelector(".ta3-rij[data-ta2deel='conditie']") || up.querySelector(".ta3-rij");
+    deel.click(); await new Promise(r => setTimeout(r, 30));
+    const via = document.querySelector("#uPaneel [data-ta2nav^='trainingen']");
+    via && via.click(); await new Promise(r => setTimeout(r, 30));
+    const knop = document.querySelector("#uPaneel [data-ta2sessie]");
+    knop && knop.click();
+    await new Promise(r => setTimeout(r, 50));
+    const inWorkout = !!document.querySelector("#uPaneel [data-ta2terug]");
+    const grafiek = !!document.querySelector("#uPaneel #chActiviteit") || /Gearceerd|uitgevoerd|gepland|overgeslagen/.test(document.querySelector("#uPaneel .up").textContent);
+    document.querySelector("#uPaneel [data-ta2terug]").click();
+    await new Promise(r => setTimeout(r, 50));
+    document.querySelector("#uPaneel [data-ta2terug]") && document.querySelector("#uPaneel [data-ta2terug]").click(); await new Promise(r => setTimeout(r, 30));
+    document.querySelector("#uPaneel [data-ta2terug]") && document.querySelector("#uPaneel [data-ta2terug]").click(); await new Promise(r => setTimeout(r, 50));
+    const na = document.querySelector("#uPaneel .up").scrollTop;
+    const panelen = document.querySelectorAll("#uPaneel").length;
+    uiPaneelSluit();
+    return {ok: hoofden === 1 && geenSchema && dicht && (!knop || inWorkout) && grafiek && panelen === 1 && Math.abs(na - voor) < 2, detail: `hoofdadvies ${hoofden}×, verdieping dicht ${dicht}, workout ${inWorkout}, scroll ${voor} → ${na}, panelen ${panelen}`};
+  });
+  await test("Presentatie verandert geen beoordelingsuitkomst", () => {
+    const a = trainingsAdvies(maandagVan(vandaagIso())), k = adviesKort(a);
+    naarTab("belasting"); renderBelFocus();
+    const kaart = document.querySelector("[data-ta3] .ta3-kop").getAttribute("aria-label");
+    adviesPaneel2(); const paneel = document.querySelector("#uPaneel .ta2-hoofd .ta3-status").textContent.trim(); uiPaneelSluit();
+    return {ok: kaart.includes(a.titel.toLowerCase()) && paneel === a.titel && TA_STATUS[a.status] === a.titel, detail: `${a.status} "${a.titel}" → kaart "${kaart}"; actie "${k.actie}"`};
   });
   herstel(); allesHertekenen();
   return uit;

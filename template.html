@@ -686,6 +686,71 @@ body.up-open { overflow: hidden; }
 .ta-rij { display: grid; grid-template-columns: 74px 1fr; gap: 8px; font-size: var(--t-klein); }
 .ta-actie { margin: 0; }
 .ta--kort .ta-actie b::after { content: " \203A"; opacity: .6; }
+/* ---- Trainingsadvies, compact (WHOOP-achtig: donker, rustig, kleur alleen voor status) ---- */
+@keyframes ta2In { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ta2-actie { margin: 0; font-size: 1.5rem; line-height: 1.2; font-weight: 800; color: var(--ink); letter-spacing: -.01em; }
+.ta2-reden { margin: 0; color: var(--ink-2); font-size: var(--t-body); }
+.ta2-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 22px; border: 0; background: var(--bg3); color: var(--ink);
+  font: inherit; font-weight: 600; cursor: pointer; justify-self: start; margin-bottom: 8px; }
+.ta2-chip .ic { width: 16px; height: 16px; }
+.ta2-chip--stil { background: transparent; border: 1px solid var(--hair); }
+.ta2-paneel { display: grid; gap: 14px; }
+.ta2-hoofd { display: grid; gap: 6px; padding-bottom: 6px; }
+.ta2-todo { display: grid; gap: 8px; }
+.ta2-actie-rij { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); font-size: var(--t-klein); }
+.ta2-knoppen { display: flex; gap: 8px; flex-wrap: wrap; }
+.ta2-knoppen .ta2-chip { margin: 0; }
+.ta2-link { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 48px; background: none; border: 0; border-top: 1px solid var(--hair);
+  color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+.ta2-link .ic { width: 18px; height: 18px; color: var(--muted); }
+.ta2-terug { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; background: none; border: 0; color: var(--ink-2); font: inherit; cursor: pointer; padding: 0 8px 0 0; margin-bottom: 4px; }
+.ta2-terug .ic { width: 18px; height: 18px; }
+.ta2-lijst { display: grid; }
+.ta2-sessie { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 56px; background: none; border: 0; border-bottom: 1px solid var(--hair);
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; padding: 6px 0; }
+.ta2-sessie > .ic { width: 18px; height: 18px; color: var(--muted); }
+.ta2-sessie-t { display: grid; gap: 2px; }
+.ta2-primair { min-height: 48px; border-radius: 24px; border: 0; background: var(--ink); color: var(--bg0); font: inherit; font-weight: 700; cursor: pointer; }
+.ta2-redenen { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--ink-2); }
+.ta2-redenen b { color: var(--ink); }
+.ta2-vorige { display: grid; gap: 6px; }
+.ta2-vorige-r { display: flex; justify-content: space-between; align-items: center; font-size: var(--t-klein); color: var(--ink-2); gap: 8px; flex-wrap: wrap; }
+.ta2-voorbeeldmelding { padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--serious); color: var(--ink); }
+/* iconenbalk: drie onderdelen, elk met eigen status */
+.ta3 { background: var(--bg1); border-radius: 18px; padding: 4px 8px 6px; margin-top: var(--sp3); animation: ta2In .18s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .ta3, .ta2-paneel { animation: none; } }
+.ta3--blauw { --ta-c: var(--accent); } .ta3--groen { --ta-c: var(--good); } .ta3--oranje { --ta-c: var(--serious); } .ta3--rood { --ta-c: var(--critical); } .ta3--grijs { --ta-c: #4a4d54; }
+.ta3-kop { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 44px; padding: 0 8px; background: none; border: 0; cursor: pointer; color: var(--muted); font: inherit; }
+.ta3-kop .ic { width: 18px; height: 18px; }
+.ta3-alg { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+.ta3-drie { display: grid; grid-template-columns: repeat(3, 1fr); }
+.ta3-drie > * + * { border-left: 1px solid var(--hair); }
+.ta3-deel { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 60px; padding: 6px 2px; background: none; border: 0; border-radius: 12px; cursor: pointer; color: var(--ink); font: inherit; }
+button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
+.ta3-kop:focus-visible, .ta3-deel:focus-visible, .ta3-rij:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ta3-ic { position: relative; line-height: 0; }
+.ta3-ic > .ic { width: 22px; height: 22px; }
+.ta3-naam { font-size: var(--t-klein); color: var(--ink-2); font-weight: 500; line-height: 1.2; }
+.ta3-badge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--ta-c); color: #000; flex: none; }
+.ta3--grijs .ta3-badge, .ta3--grijs.ta3-badge { color: var(--ink); }
+.ta3-ic .ta3-badge { position: absolute; right: -9px; top: -6px; box-shadow: 0 0 0 2px var(--bg1); }
+.ta3-badge svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ta3-alg .ta3-badge { width: 18px; height: 18px; }
+.ta3-status { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ta-c); }
+.ta3-status.ta3--grijs { color: var(--ink-2); }
+.ta3-status .ta3-badge { width: 22px; height: 22px; }
+.ta3-status .ta3-badge svg { width: 14px; height: 14px; }
+.ta3-rij { display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; width: 100%; min-height: 56px; padding: 6px 0; background: none; border: 0;
+  border-top: 1px solid var(--hair); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ta3-rij > .ic { width: 18px; height: 18px; color: var(--muted); }
+.ta3-rij b { display: block; font-weight: 600; }
+.ta3-rij small { display: block; color: var(--ink-2); font-size: var(--t-klein); }
+.ta3-vraag { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--hair); color: var(--ink); }
+.ta3-vraag > span { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ta3-legenda { display: grid; gap: 10px; }
+.ta3-legenda p { margin: 0 0 0 30px; color: var(--ink-2); font-size: var(--t-klein); }
+.ta3-vb { display: grid; gap: 4px; }
+.ta3-vb > .u-klein { color: var(--serious); margin: 0 4px; }
 .ws-naam { display: inline-flex; align-items: center; gap: 6px; }
 .ws-stip { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; align-items: center; justify-content: center; flex: none; }
 .ws-stip .ic { width: 11px; height: 11px; }
@@ -7240,9 +7305,10 @@ function activiteitKaart(a, plan) {
    Workoutsamenvatting
    ----------------------------------------------------------------------- */
 let ACT_GRAFIEK = null;
-function activiteitPaneel(id) {
+function activiteitPaneel(id, opties = {}) {
   const a = (DATA.activities || []).find(x => String(x.id) === String(id));
   if (!a) return;
+  const terugKnop = opties.terug ? `<button class="ta2-terug" data-ta2terug>${ic("vorige")}Terug</button>` : "";
   const plan = planVoorActiviteit(a);
   const r = Math.round;
   const stat = (w, l) => w == null ? "" : `<div class="as-stat"><b>${w}</b><span>${l}</span></div>`;
@@ -7261,7 +7327,8 @@ function activiteitPaneel(id) {
   const fe = CONDITIE_TYPE.test(a.type_key || "") ? sessieFeiten(a) : null;
   const inhoud = fe ? `<h4 class="as-sub">Inhoud van de training</h4><p><b>${hoofdletter(fe.soort)}</b> <span class="u-klein">(${fe.zeker === "bevestigd" ? "bevestigd" : fe.zeker === "afgeleid" ? "afgeleid, met beperkingen" : "niet vastgesteld"})</span></p>
     <ul class="u-lijst u-lijst--tekst">${feitenLabel(fe).map(x => `<li>${x}</li>`).join("")}</ul>${fe.ontbreekt.length ? `<p class="u-klein">Ontbreekt: ${fe.ontbreekt.join(", ")}.</p>` : ""}` : "";
-  uiPaneel(a.name || a.sport, kop + grafiek + trainingEffectHtml(a) + inhoud + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
+  uiPaneel(a.name || a.sport, terugKnop + kop + grafiek + trainingEffectHtml(a) + inhoud + zonesSamenvatting(a) + activiteitDetails(a, plan), box => {
+    if (opties.terug) box.querySelector("[data-ta2terug]").onclick = () => { if (ACT_GRAFIEK) { ACT_GRAFIEK.destroy(); ACT_GRAFIEK = null; } opties.terug(); };
     if (a.hr_reeks) activiteitGrafiek(a, box.querySelector("#chActiviteit"));
     box.querySelectorAll("[data-as]").forEach(b => b.onclick = e => {
       e.stopPropagation();
@@ -7885,7 +7952,8 @@ function weekMinuten() {
     anaVerwacht: items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && open(it))
       .map(it => ({iso: it.iso, p: prof[isoNaarPy(it.iso)]})).filter(x => x.p)};
   const kortActs = acts.filter(a => a.sport === "Handbal").concat(anaItems.filter(it => it.st.acts).flatMap(it => it.st.acts));
-  const hbBevestigd = items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && it.st.k === "gedaan" && !it.st.acts).length;
+  /* zelf bevestigde zaaltraining zonder Garmin-registratie: uitgevoerd (geen inhoud verzonnen) */
+  const hbBevestigd = items.filter(it => (it.soort === "handbal" || it.soort === "wedstrijd") && it.st.k === "gedaan" && !(it.st.acts || []).length).length;
   return {ma, zo, handbal, laag: {plan: laagPlan, optioneel: laagOptioneel, gedaan: laagGedaan, nog: laagNog, acts: laagActs, per: laagPer, onbekend: laagOnbekend,
            dagen: dagLijst(laagNog), optDagen: dagLijst(laagOptNog), nogMin: laagNog.reduce((t, it) => t + (it.min || 0), 0)},
     hoog: {plan: hoogPlan, gedaan: hoogGedaan, benaderd, bronnen: hoogBronnen, workouts: hoogWorkouts, nog: hoogNog, dagen: dagLijst(hoogNog), acts: hoogActs,
@@ -8146,8 +8214,7 @@ function renderBelFocus() {
       sub: [`${K.hbGedaan} handbal, ${K.anaGedaan} korte intervaltraining${K.anaGedaan === 1 ? "" : "en"} bevestigd`, K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : "", K.anaInhoudOnbekend ? `${K.anaInhoudOnbekend} uitgevoerd, inhoud niet bevestigd` : "",
         "korte acties binnen handbal worden niet apart gemeten"].filter(Boolean).join(" · "), status: status(kSt)})}
   </div>`;
-  host.insertAdjacentHTML("beforeend", `${adviesHtml(trainingsAdvies(m.ma), {kort: true})}<button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>`);
-  host.querySelector("[data-weekscore]").onclick = adviesPaneel;
+  host.insertAdjacentHTML("beforeend", adviesBalkHtml(trainingsAdvies(m.ma)));
   host.hidden = false;
   host.querySelectorAll("[data-meet]").forEach(b => b.onclick = () => belDetailOpen(b.dataset.meet));
 
@@ -12226,6 +12293,7 @@ function adviesHtml(a, opties = {}) {
       <p class="ta-reden">${a.reden}</p>
       <p class="ta-actie"><b>${a.actie}</b></p></div>`;
   if (opties.kort) return `<div class="ta ta--kort" role="button" tabindex="0" aria-label="Trainingsadvies: ${a.titel}, details">${kop}</div>`;
+  const kopTonen = !opties.zonderKop;
   const d = x => `${WEEKDAG_LANG[isoNaarPy(x)].slice(0, 2)} ${kortDatum(x)}`;
   const te = x => [x.aerobic_te != null ? `aeroob ${komma(x.aerobic_te.toFixed(1))}` : null, x.anaerobic_te != null ? `anaeroob ${komma(x.anaerobic_te.toFixed(1))}` : null].filter(Boolean).join(", ");
   const C = a.conditie, K = a.kracht, H = a.handbal, B = a.belasting;
@@ -12237,7 +12305,7 @@ function adviesHtml(a, opties = {}) {
     : a.status === "blauw" && ontbreekt ? ["zinvol", "zie de actie hierboven"] : ["niet nodig", "de prikkel is geleverd of staat nog gepland"];
   const condV = vervolg("conditie", !C.geleverd && !C.later.length), krV = vervolg("kracht", !K.geleverd && !K.later.length);
   const benenTekst = B.benen48 === undefined ? "lokale beenbelasting onbekend (geen krachtlog)" : B.benen48 ? `zwaar beenwerk op ${kortDatum(B.benen48)} (laatste 48 uur)` : "geen zwaar beenwerk in de laatste 48 uur";
-  return `<div class="ta">${kop}
+  return `<div class="ta">${kopTonen ? kop : ""}
     <h4 class="ws-sub">Conditie</h4>
     ${C.lijst.length ? `<ul class="u-lijst u-lijst--tekst">${C.lijst.map(x => `<li><b>${d(x.d)}</b> ${x.a.name || x.a.sport} · ${Math.round((x.a.duration_s || 0) / 60)} min · ${x.soort}<span class="u-klein"> (${x.bron}${x.steun.length ? `; ${x.steun.join("; ")}` : ""})</span>${x.vervangt ? ` · vervanging van ${x.vervangt.toLowerCase()}` : x.vraag ? ` · vervanging van ${x.vraag.toLowerCase()}? (bevestig bij Training)` : ""}</li>`).join("")}</ul>` : `<p class="u-klein">Nog geen loop-, fiets- of roeisessie deze week.</p>`}
     <p><b>Prikkel:</b> ${C.geleverd ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""}; langer aanhoudend intensief werk is wat je Coopertest en de Yo-Yo IR2 vragen.` : C.later.length ? `nog geen intensieve prikkel; gepland: ${zinLijst(C.later.map(x => `${x.i.titel.split(" · ")[0].toLowerCase()} ${dagWoord(x.d, dagVerschil(vandaagIso(), x.d))}`))}.` : "geen intensieve conditieprikkel deze week."}<br>
@@ -12273,12 +12341,16 @@ function adviesHtml(a, opties = {}) {
       ${plan.length ? `<ul class="u-lijst u-lijst--tekst">${plan.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
       <p class="u-klein">Ter informatie. Een extra training levert geen bonus op, een vervanging geen straf.</p></div></details>
     <p class="u-klein">Hoe het oordeel tot stand komt [modelkeuzes, geen universele grenzen]: groen alleen met een geleverde prikkel én herstel dat op je gegevens zonder afwijking is; binnen de verwachting van je plan blijven is daarvoor niet genoeg. Is je herstel onbekend, dan grijs: nog niet te beoordelen, zonder extra intensief werk. Oranje bij herstel dat om aandacht vraagt, of bij belasting duidelijk boven je gewone week én boven je plan, samen met 3 zware dagen op rij, een wedstrijd binnen 2 dagen of mindere prestatie. Blauw alleen met een geldige check-in (geen klachten ingevuld is niet hetzelfde als klachtenvrij) en als er nog ruimte is. Voor een voorgestelde aanvullende training: intensief conditiewerk niet binnen 3 dagen voor een wedstrijd, kracht niet binnen 2 (coachingsregels, geen herstelgrenzen). Dit geldt niet voor je geplande trainingen, zoals kracht na de zaal op donderdag.</p>
-    ${a.ma === maandagVan(vandaagIso()) ? (() => { const f = ((leerLees()[vandaagIso()] || {}).adviesFeedback || {}).gevolgd;
+    ${opties.zonderFeedback ? "" : adviesFeedbackHtml(a)}
+    <p class="u-klein">Blauw: aanvullende prikkel zinvol. Groen: prikkel passend, geen extra training nodig. Oranje: belasting begrenzen. Rood: training aanpassen (klachten, ziek of herstel duidelijk achteruit; geen diagnose overtraining). Grijs: nog niet te beoordelen.</p></div>`;
+}
+/* Heb je het advies opgevolgd? Alleen voor de lopende week. */
+function adviesFeedbackHtml(a) {
+  return `${a.ma === maandagVan(vandaagIso()) ? (() => { const f = ((leerLees()[vandaagIso()] || {}).adviesFeedback || {}).gevolgd;
       const r = (leerLees()[vandaagIso()] || {}).advies;
       return `<div class="hb-fb"><div class="hb-fb-rij"><span>Heb je het advies van vandaag opgevolgd?</span><span class="hb-fb-keus">${["ja", "deels", "nee"].map(o =>
         `<button class="u-keuze" aria-pressed="${f === o}" data-tafb="${o}">${o}</button>`).join("")}</span></div></div>
-        ${r ? `<p class="u-klein">Oorspronkelijk advies van vandaag (${r.t.slice(11, 16)}): ${r.titel}. Je antwoord wordt daaraan gekoppeld.</p>` : ""}`; })() : ""}
-    <p class="u-klein">Blauw: aanvullende prikkel zinvol. Groen: prikkel passend, geen extra training nodig. Oranje: belasting begrenzen. Rood: training aanpassen (klachten, ziek of herstel duidelijk achteruit; geen diagnose overtraining). Grijs: nog niet te beoordelen.</p></div>`;
+        ${r ? `<p class="u-klein">Oorspronkelijk advies van vandaag (${r.t.slice(11, 16)}): ${r.titel}. Je antwoord wordt daaraan gekoppeld.</p>` : ""}`; })() : ""}`;
 }
 function adviesFeedbackZet(waarde) {
   const v = vandaagIso(), log = leerLees(), rec = log[v] || {datum: v, alleenContext: true};
@@ -12288,6 +12360,223 @@ function adviesFeedbackZet(waarde) {
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-tafb]"); if (!b) return;
   adviesFeedbackZet(b.dataset.tafb); uiMelding("Bewaard"); document.querySelectorAll("[data-tafb]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+/* =======================================================================
+   Trainingsadvies: compacte presentatie
+   Drie vragen: wat leverde mijn training op, is extra conditie of kracht
+   verstandig, wat doe ik nu. De berekening (trainingsAdvies) is dezelfde;
+   hier verandert alleen wat je standaard ziet. Onderbouwing staat achter
+   "Waarom dit advies?" en "Berekeningen en bronnen".
+   ======================================================================= */
+function adviesKort(a) {
+  const C = a.conditie, K = a.kracht;
+  const onb = C.lijst.filter(x => x.soort === "inhoud niet vastgesteld").length;
+  const wed = a.wedstrijd != null && a.totWedstrijd <= 2;
+  const ontbreektC = /conditiewerk/.test(a.status === "blauw" ? a.reden : ""), ontbreektK = /krachtsessie/.test(a.status === "blauw" ? a.reden : "");
+  let actie, reden;
+  if (a.status === "groen") { actie = wed ? "Geen extra training; fris naar je wedstrijd" : "Geen extra training nodig"; reden = "Prikkel geleverd, herstel zonder afwijking."; }
+  else if (a.status === "grijs") { const niets = /nog niets geregistreerd/.test(a.reden);
+    actie = niets ? "Registreer of ververs je trainingen" : "Geen extra intensief werk"; reden = niets ? "Nog geen trainingen deze week." : a.herstel.niveau === "groen" ? "Nog te weinig gegevens." : "Herstel nog onbekend."; }
+  else if (a.status === "oranje") { actie = "Niets extra; houd het licht";
+    reden = a.herstel.niveau === "oranje" ? "Je herstel vraagt aandacht." : a.belasting.opRij >= 3 ? `${a.belasting.opRij} zware dagen op rij.` : wed ? "Zware week vlak voor je wedstrijd." : "Mindere prestatie bij gelijke taak."; }
+  else if (a.status === "rood") { actie = "Pas je training aan"; reden = "Klachten, ziekte of herstel duidelijk achteruit."; }
+  else { actie = ontbreektC && ontbreektK ? "Eén conditie- of krachtsessie erbij" : ontbreektC ? "Eén intensieve conditiesessie erbij" : "Eén krachtsessie erbij"; reden = "Er ontbreekt een prikkel en er is ruimte."; }
+  const conditie = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}${onb ? ` · ${onb} onbekend` : ""}` : onb ? "Inhoud onbekend" : C.lijst.length ? "Geen intensieve prikkel" : "Geen sessie";
+  const kracht = K.sessies ? `${K.sessies} sessie${K.sessies > 1 ? "s" : ""} · ${K.gelogd ? `${K.sets} sets` : "omvang onbekend"}` : "Geen sessie";
+  const vervolg = mist => a.status === "oranje" || a.status === "rood" ? "Niet aanvullen." : a.status === "grijs" ? "Eerst herstel beoordelen; niets extra intensiefs." : a.status === "blauw" && mist ? "Eén sessie erbij, zie het advies." : "Niet nodig.";
+  return {actie, reden, conditie, kracht,
+    prikkelC: C.intensief ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""} geleverd${onb ? `; ${onb} met onbekende inhoud` : ""}.` : onb ? "Inhoud van je conditiewerk niet vastgesteld." : C.later.length ? "Intensief werk staat nog gepland." : "Nog geen intensieve prikkel.",
+    prikkelK: K.sessies ? (K.gelogd ? `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}, ${K.sets} gelogde sets.` : `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}; omvang en prikkel onbekend.`) : K.later.length ? "Kracht staat nog gepland." : "Geen krachtsessie.",
+    vervolgC: vervolg(ontbreektC), vervolgK: vervolg(ontbreektK)};
+}
+/* Status per onderdeel. Leidt geen nieuwe beoordeling af: begrenzen en
+   onbekend komen uit het algemene advies, aanvullen alleen voor het onderdeel
+   dat het advies als ontbrekend noemt, en groen alleen met een vastgestelde
+   prikkel (intensief conditiewerk, of gelogde krachtsets). Uitgevoerd zonder
+   vastgestelde prikkel blijft grijs. Herstel volgt het herstelniveau; een
+   verwachte vermoeidheid of onvolledig beeld is geen stoplichtkleur. */
+const TA3_SYMBOOL = {blauw: '<path d="M12 6v12M6 12h12"/>', groen: '<path d="m6 12.5 4 4 8-9"/>', oranje: '<path d="M12 6v7M12 17.5h.01"/>',
+  rood: '<path d="M7 7l10 10M17 7 7 17"/>', grijs: '<path d="M9.2 9a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.4-2.8 4M12 17.8h.01"/>'};
+const TA3_HERSTEL = {groen: "Zonder afwijking", blauw: "Verwachte vermoeidheid", oranje: "Vraagt aandacht", rood: "Duidelijk achteruit", grijs: "Onvoldoende gegevens"};
+const ta3Badge = st => `<span class="ta3-badge ta3--${st}" aria-hidden="true"><svg viewBox="0 0 24 24">${TA3_SYMBOOL[st]}</svg></span>`;
+const ta3Status = (st, tekst = TA_STATUS[st]) => `<span class="ta3-status ta3--${st}">${ta3Badge(st)}<span>${tekst}</span></span>`;
+function adviesDelen(a, k = adviesKort(a)) {
+  const C = a.conditie, K = a.kracht, H = a.herstel;
+  const onb = C.lijst.filter(x => x.soort === "inhoud niet vastgesteld").length;
+  const mist = soort => a.status === "blauw" && (soort === "kracht" ? /krachtsessie/ : /conditiewerk/).test(a.reden);
+  const deel = (soort, vastgesteld) => a.status === "rood" || a.status === "oranje" ? "oranje" : a.status === "grijs" ? "grijs"
+    : mist(soort) ? "blauw" : vastgesteld ? "groen" : "grijs";
+  const cKort = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}` : onb ? "Inhoud onbekend" : C.later.length ? "Nog gepland" : "Geen intensieve prikkel";
+  const kKort = K.gelogd && K.sets ? `${K.sets} sets gelogd` : K.sessies ? "Omvang onbekend" : K.later.length ? "Nog gepland" : "Geen sessie";
+  const hSt = ["groen", "oranje", "rood"].includes(H.niveau) ? H.niveau : "grijs";
+  const kOntbreekt = K.sessies && !K.gelogd ? "Sets, gewichten en RIR in je krachtlog." : K.rirOnzeker || K.zonderRir ? "RIR bij een deel van je sets." : "";
+  return [
+    {k: "conditie", naam: "Conditie", icoon: "puls", s: deel("conditie", C.intensief > 0), kort: cKort, vast: k.prikkelC, volgende: k.vervolgC,
+      ontbreekt: onb ? `Inhoud van ${onb} conditiesessie${onb > 1 ? "s" : ""} (werkblokken of bevestiging).` : ""},
+    {k: "kracht", naam: "Kracht", icoon: "halter", s: deel("kracht", K.gelogd && K.sets > 0), kort: kKort, vast: k.prikkelK, volgende: k.vervolgK, ontbreekt: kOntbreekt},
+    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: TA3_HERSTEL[H.niveau] || TA3_HERSTEL.grijs,
+      vast: H.niveau === "grijs" ? "Geen geldige check-in of te weinig metingen." : `${HB_KORT_TITEL[H.niveau]}${H.oorzaak ? `: ${String(H.oorzaak).replace(/\.$/, "").toLowerCase()}` : ""}.`,
+      volgende: H.actie ? String(H.actie).replace(/\.?$/, ".") : H.niveau === "groen" ? "Geen beperking vanuit herstel." : "Eerst je herstel beoordelen; niets extra intensiefs.",
+      ontbreekt: H.niveau === "grijs" ? "Een geldige check-in van vandaag." : ""},
+  ];
+}
+/* De iconenbalk onder de drie hoofdgetallen: alleen titel, drie iconen en labels. */
+function adviesBalkHtml(a, delen = adviesDelen(a), opties = {}) {
+  const tag = opties.voorbeeld ? "div" : "button";
+  return `<div class="ta3"${opties.voorbeeld ? "" : " data-ta3"}>
+    <${tag} class="ta3-kop"${opties.voorbeeld ? "" : ` data-ta3open="overzicht"`} aria-label="Trainingsadvies: ${a.titel.toLowerCase()}${opties.voorbeeld ? "" : ". Openen"}"><span class="ta3-alg ta3--${a.status}">${ta3Badge(a.status)}<span>Trainingsadvies</span></span>${opties.voorbeeld ? "" : ic("volgende")}</${tag}>
+    <div class="ta3-drie">${delen.map(d => `<${tag} class="ta3-deel ta3--${d.s}"${opties.voorbeeld ? "" : ` data-ta3open="${d.k}"`} aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${TA_STATUS[d.s].toLowerCase()}">
+      <span class="ta3-ic">${ic(d.icoon)}${ta3Badge(d.s)}</span><span class="ta3-naam" aria-hidden="true">${d.naam}</span></${tag}>`).join("")}</div></div>`;
+}
+/* Sessies per dag voor de weekstrip: uitgevoerd, gepland, overgeslagen, onbekend. */
+function ta2Week(a) {
+  const v = vandaagIso(), uit = [];
+  for (let n = 0; n < 7; n++) {
+    const d = isoPlus(a.ma, n), items = dagRoute(d, {alleenLezen: d !== v}).items.filter(i => i.soort !== "rust" && !i.optioneel);
+    const sessies = [], gezien = new Set();
+    items.forEach(i => { const st = itemStatus(d, i);
+      const staat = st.k === "gedaan" ? "uitgevoerd" : st.k === "overgeslagen" ? "overgeslagen" : st.k === "onbekend" ? "onbekend" : "gepland";
+      (st.acts || []).forEach(x => gezien.add(String(x.id)));
+      sessies.push({d, staat, soort: i.soort, titel: titelVanItem(i), act: (st.acts || [])[0] ? String(st.acts[0].id) : null, item: i.id, zwaarteMist: staat === "uitgevoerd" && ["kracht", "handbal", "wedstrijd"].includes(i.soort) && rpeVan(d, i) == null}); });
+    if (d <= v) ongeplandOp(d).forEach(x => { if (x.act && gezien.has(String(x.act.id))) return;
+      sessies.push({d, staat: "uitgevoerd", soort: x.sport === "Kracht" ? "kracht" : x.sport === "Handbal" ? "handbal" : CONDITIE_TYPE.test((x.act || {}).type_key || "") || ["Hardlopen", "Fietsen"].includes(x.sport) ? "conditie" : "overig",
+        titel: x.act ? (x.act.name || x.sport) : x.wat, act: x.act ? String(x.act.id) : null, ongepland: true, vervangVraag: x.vervangVraag || null, extraSleutel: x.act ? x.act.id : null}); });
+    uit.push({d, sessies});
+  }
+  return uit;
+}
+const titelVanItem = i => i.titel.split(" · ")[0];
+const TA2_SPORT_IC = s => s === "kracht" ? "halter" : s === "handbal" || s === "wedstrijd" ? "bal" : s === "overig" ? "plus" : "puls";
+const TA2_STAAT = {uitgevoerd: "uitgevoerd", gepland: "gepland", overgeslagen: "overgeslagen", onbekend: "geen registratie"};
+/* Navigatie binnen één paneel: geen gestapelde vensters, scrollpositie terug. */
+const TA2 = {stapel: [], a: null, week: null};
+function ta2Scroll() { const up = document.querySelector("#uPaneel .up"); return up ? up.scrollTop : 0; }
+function ta2Ga(view, param) {
+  if (TA2.stapel.length) TA2.stapel[TA2.stapel.length - 1].scroll = ta2Scroll();
+  TA2.stapel.push({view, param, scroll: 0});
+  ta2Teken(0);
+}
+function ta2Terug() {
+  TA2.stapel.pop();
+  const top = TA2.stapel[TA2.stapel.length - 1];
+  if (!top) { uiPaneelSluit(); return; }
+  ta2Teken(top.scroll || 0);
+}
+function ta2Teken(scroll) {
+  const {view, param} = TA2.stapel[TA2.stapel.length - 1];
+  const a = TA2.a, k = adviesKort(a);
+  const terug = TA2.stapel.length > 1 ? `<button class="ta2-terug" data-ta2terug>${ic("vorige")}Terug</button>` : "";
+  const herstelScroll = () => { const up = document.querySelector("#uPaneel .up"); if (up) up.scrollTop = scroll; };
+  if (view === "sessie") {
+    const [d, i] = param.split("|"), x = TA2.week.find(w => w.d === d).sessies[Number(i)];
+    if (x.act) { activiteitPaneel(x.act, {terug: ta2Terug}); herstelScroll(); return; }
+    const item = dagRoute(d, {alleenLezen: d !== vandaagIso()}).items.find(it => it.id === x.item);
+    uiPaneel(`${hoofdletter(dagNaam(d))} ${kortDatum(d)}`, terug + (item ? trainingKaart(d, item) : `<p>${veiligeTekst(x.titel)}</p>`)
+      + `<p class="u-klein">${TA2_STAAT[x.staat]}${x.staat !== "uitgevoerd" ? "" : x.act ? "" : " zonder Garmin-registratie"}.</p>`, box => ta2Koppel(box));
+    herstelScroll(); return;
+  }
+  let titel = "Trainingsadvies", html = "";
+  const delen = adviesDelen(a, k);
+  const todo = ta2Todo();
+  const link = (nav, tekst) => `<button class="ta2-link" data-ta2nav="${nav}">${tekst}${ic("volgende")}</button>`;
+  if (view === "overzicht") {
+    html = `<div class="ta2-hoofd">${ta3Status(a.status)}<p class="ta2-actie">${k.actie}</p><p class="ta2-reden">${k.reden}</p></div>
+      <div>${delen.map(d => `<button class="ta3-rij" data-ta2deel="${d.k}" aria-label="${d.naam}: ${d.kort.toLowerCase()}, ${TA_STATUS[d.s].toLowerCase()}"><span class="ta3-ic ta3--${d.s}">${ic(d.icoon)}${ta3Badge(d.s)}</span>
+        <span><b>${d.naam}</b><small>${d.kort}</small></span>${ic("volgende")}</button>`).join("")}</div>
+      ${todo.length ? `<div class="ta2-todo">${todo.slice(0, 3).map(t => t.html).join("")}</div>` : ""}
+      <div>${link("waarom", "Waarom dit advies?")}${link("bronnen", "Berekeningen en bronnen")}${link("feedback", "Feedback en leerlus")}</div>`;
+  } else if (["conditie", "kracht", "herstel"].includes(view)) {
+    const d = delen.find(x => x.k === view);
+    titel = d.naam;
+    const sessies = ta2Sessies(view);
+    const knop = view === "kracht" && a.kracht.sessies && !a.kracht.gelogd ? `<button class="ta2-primair" data-ta2krachtlog>Krachtlog invullen</button>`
+      : view === "conditie" && todo.some(t => t.soort === "vervanging") ? todo.find(t => t.soort === "vervanging").html
+      : view === "herstel" && a.herstel.niveau === "grijs" ? `<button class="ta2-primair" data-ta2checkin>Check-in invullen</button>` : "";
+    html = `<div>${ta3Status(d.s)}</div>
+      <div class="ta3-vraag"><span>Vastgesteld</span>${d.vast}</div>
+      <div class="ta3-vraag"><span>Volgende training</span>${d.volgende}</div>
+      ${d.ontbreekt ? `<div class="ta3-vraag"><span>Ontbreekt</span>${d.ontbreekt}</div>` : ""}
+      ${knop}${sessies.length ? link(`trainingen|${view}`, "Trainingen bekijken") : ""}`;
+  } else if (view === "trainingen") {
+    titel = param === "kracht" ? "Krachttrainingen" : "Conditietrainingen";
+    const regel = x => { const c = param === "conditie" && x.act ? a.conditie.lijst.find(y => String(y.a.id) === x.act) : null;
+      return `<button class="ta2-sessie" data-ta2sessie="${x.d}|${x.idx}"><span class="ta2-sessie-t"><b>${kortDagNaam(x.d)} ${kortDatum(x.d)} · ${veiligeTekst(x.titel)}</b><span class="u-klein">${c ? `${c.soort}${c.zeker === "afgeleid" ? " (afgeleid)" : c.zeker === "bevestigd" ? " (bevestigd)" : ""}` : TA2_STAAT[x.staat]}${x.ongepland ? " · niet gepland" : ""}</span></span>${ic("volgende")}</button>`; };
+    html = `<div class="ta2-lijst">${ta2Sessies(param).map(regel).join("") || `<p class="u-klein">Geen sessies deze week.</p>`}</div>`;
+  } else if (view === "waarom") {
+    titel = "Waarom dit advies?";
+    const B = a.belasting, r = [];
+    r.push(`<b>Herstel:</b> ${HB_KORT_TITEL[a.herstel.niveau].toLowerCase()}${a.herstel.niveau !== "grijs" && a.herstel.oorzaak ? ` · ${String(a.herstel.oorzaak).replace(/\.$/, "").toLowerCase()}` : a.herstel.niveau === "grijs" ? " · geen geldige check-in" : ""}.`);
+    r.push(`<b>Prikkel:</b> ${delen[0].kort.toLowerCase()} conditie, ${delen[1].kort.toLowerCase()} kracht${a.handbal.gedaan ? `, ${a.handbal.gedaan}× handbal` : ""}.`);
+    r.push(a.wedstrijd != null && a.totWedstrijd <= 2 ? `<b>Wedstrijd:</b> ${dagWoord(a.wedstrijd, a.totWedstrijd)}.` : B.reeks && B.reeks.opRij >= 2 ? `<b>Zware dagen:</b> ${B.reeks.onzeker ? `minstens ${B.opRij}` : B.opRij} op rij.` : `<b>Belasting:</b> ${B.verhouding != null ? `${B.verhouding}% van je gewone week` : "gewone week onbekend"}.`);
+    const vorige = [1, 2, 3].map(n => isoPlus(a.ma, -7 * n)).filter(m => isoPlus(m, 6) >= (status().planStart || a.ma)).map(m => trainingsAdvies(m));
+    html = `<ul class="ta2-redenen">${r.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ul>
+      ${vorige.length ? `<div class="ta2-vorige">${vorige.map(w => `<span class="ta2-vorige-r"><span>${kortDatum(w.ma)} – ${kortDatum(w.zo)}</span>${hsChip(w.titel, w.status)}</span>`).join("")}</div>` : ""}
+      ${link("bronnen", "Berekeningen en bronnen")}`;
+  } else if (view === "bronnen") {
+    titel = "Berekeningen en bronnen";
+    html = adviesHtml(a, {zonderKop: true, zonderFeedback: true}) + link("feedback", "Feedback en leerlus");
+  } else if (view === "feedback") {
+    titel = "Feedback en leerlus";
+    html = adviesFeedbackHtml(a) + `<button class="ta2-link" data-ta2leer>Wat leert de app over mij?${ic("volgende")}</button>`;
+  }
+  uiPaneel(titel, `${terug}<div class="ta2-paneel">${html}</div>`, box => ta2Koppel(box), {breed: view === "bronnen"});
+  herstelScroll();
+}
+/* Sessies van één onderdeel deze week, voor "Trainingen bekijken". */
+function ta2Sessies(soort) {
+  if (soort === "herstel") return [];
+  return TA2.week.flatMap(dag => dag.sessies.map((x, idx) => ({...x, idx})))
+    .filter(x => soort === "kracht" ? x.soort === "kracht" : ["hoog", "ana", "laag", "test", "conditie"].includes(x.soort));
+}
+/* Wat jij kunt aanvullen, bij de sessie waar het om gaat. Niets wordt voor je ingevuld. */
+function ta2Todo() {
+  const uit = [];
+  TA2.week.forEach(dag => dag.sessies.forEach((x, i) => {
+    if (x.vervangVraag) uit.push({soort: "vervanging", html: `<div class="ta2-actie-rij"><span>${kortDagNaam(x.d)} ${veiligeTekst(x.titel)}: vervangt dit je ${x.vervangVraag.titel.toLowerCase()}?</span>
+      <span class="ta2-knoppen"><button class="ta2-chip" data-vv="${x.vervangVraag.sleutel}|${x.vervangVraag.item}|1">Ja</button><button class="ta2-chip ta2-chip--stil" data-vv="${x.vervangVraag.sleutel}|${x.vervangVraag.item}|0">Nee, extra</button></span></div>`});
+    if (x.zwaarteMist) uit.push({soort: "feedback", html: `<div class="ta2-actie-rij"><span>${kortDagNaam(x.d)} ${veiligeTekst(x.titel)}: zwaarte ontbreekt</span>
+      <span class="ta2-knoppen"><button class="ta2-chip" data-ta2fb="${x.d}|${x.item}">Feedback invullen</button></span></div>`});
+  }));
+  return uit;
+}
+function ta2Koppel(box) {
+  const t = box.querySelector("[data-ta2terug]"); if (t) t.onclick = ta2Terug;
+  box.querySelectorAll("[data-ta2deel]").forEach(b => b.onclick = () => ta2Ga(b.dataset.ta2deel));
+  box.querySelectorAll("[data-ta2nav]").forEach(b => b.onclick = () => { const [view, param] = b.dataset.ta2nav.split("|"); ta2Ga(view, param); });
+  box.querySelectorAll("[data-ta2sessie]").forEach(b => b.onclick = () => ta2Ga("sessie", b.dataset.ta2sessie));
+  box.querySelectorAll("[data-vv]").forEach(b => b.onclick = e => { e.stopPropagation();
+    const [d, id, item, ja] = b.dataset.vv.split("|"); const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.id === item);
+    vervangingZet(`${d}|${id}`, item, it ? titelVanItem(it) : item, ja === "1"); allesHertekenen();
+    TA2.a = trainingsAdvies(TA2.a.ma); TA2.week = ta2Week(TA2.a); ta2Teken(ta2Scroll()); });
+  box.querySelectorAll("[data-ta2fb]").forEach(b => b.onclick = () => { const [d, id] = b.dataset.ta2fb.split("|");
+    const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.id === id); if (it) sessieFeedback(d, it); });
+  const kl = box.querySelector("[data-ta2krachtlog]"); if (kl) kl.onclick = () => { uiPaneelSluit(); naarTab("training"); };
+  const leer = box.querySelector("[data-ta2leer]"); if (leer) leer.onclick = () => hbLeerPaneel();
+}
+function adviesPaneel2(start = "overzicht") {
+  try { renderBelFocus(); renderPlanNieuw(); } catch (e) { console.error(e); }
+  TA2.a = trainingsAdvies(maandagVan(vandaagIso())); TA2.week = ta2Week(TA2.a); TA2.stapel = [];
+  ta2Ga("overzicht");
+  if (start !== "overzicht") ta2Ga(start);
+}
+document.addEventListener("click", e => {
+  const ci = e.target.closest("[data-ta2checkin]"); if (ci) { e.stopPropagation(); checkInPaneel(); return; }
+  const o = e.target.closest("[data-ta3open]"); if (o && !o.closest("#uPaneel")) adviesPaneel2(o.dataset.ta3open);
+});
+/* Voorbeelden van de vijf statussen, alleen met ?voorbeelden in de adresbalk.
+   Duidelijk gemarkeerd; geen persoonlijke meetwaarden. */
+function adviesVoorbeelden() {
+  const uitleg = {blauw: "Plusteken. Er ontbreekt een prikkel en er is ruimte.", groen: "Vinkje. Passend, geen aanvulling nodig.", oranje: "Uitroepteken. Belasting begrenzen; niets extra.",
+    rood: "Stopkruis. Training aanpassen: klachten, ziekte of herstel duidelijk achteruit.", grijs: "Vraagteken, neutraal grijs. Geen stoplichtkleur; wordt nooit vanzelf groen of blauw."};
+  const vb = (label, alg, c, k, h) => `<div class="ta3-vb"><p class="u-klein">Ontwerpvoorbeeld · ${label}</p>${adviesBalkHtml({status: alg, titel: TA_STATUS[alg]},
+    [["Conditie", "puls", c], ["Kracht", "halter", k], ["Herstel", "maan", h]].map(([naam, icoon, st]) => ({k: naam.toLowerCase(), naam, icoon, s: st, kort: "voorbeeld"})), {voorbeeld: true})}</div>`;
+  uiPaneel("Ontwerpvoorbeelden: statussen", `<p class="ta2-voorbeeldmelding">Ontwerpvoorbeeld, geen echte gegevens.</p>
+    <div class="ta3-legenda">${["blauw", "groen", "oranje", "rood", "grijs"].map(st => `<div>${ta3Status(st)}<p>${uitleg[st]}</p></div>`).join("")}</div>
+    ${vb("conditie geleverd, kracht ontbreekt, herstel goed", "blauw", "groen", "blauw", "groen")}
+    ${vb("belasting te hoog: niets aanvullen", "oranje", "oranje", "oranje", "groen")}
+    ${vb("alles vastgesteld", "groen", "groen", "groen", "groen")}
+    ${vb("training aanpassen", "rood", "oranje", "oranje", "rood")}
+    ${vb("gegevens ontbreken", "grijs", "grijs", "grijs", "grijs")}`);
+}
 function adviesPaneel() {
   try { renderBelFocus(); renderPlanNieuw(); } catch (e) { console.error(e); }
   const ma = maandagVan(vandaagIso());
@@ -12409,15 +12698,14 @@ function renderPlanNieuw() {
   if (wv) {
     const m = weekMinuten();
     wv.innerHTML = `<div class="sectie-kop"><h3>Deze week</h3><button class="u-link" data-naar="belasting">Belasting</button></div>
-      ${adviesHtml(trainingsAdvies(maandagVan(v)), {kort: true})}
-      <button class="u-link ws-meer" data-weekscore>Waarom, en vorige weken</button>
+      ${adviesBalkHtml(trainingsAdvies(maandagVan(v)))}
       <div class="pl-cijfers">
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.laag}">${ic("golf")}</span><b>${(r => r.acts.length ? Math.round(r.z1 + r.z2) : "–")(rustWeek(m))}</b><span>rustig · min</span></div>
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.hoog}">${ic("klok")}</span><b>${m.hoog.gedaan}</b><span>intervallen · werkmin</span></div>
         <div><span class="u-meet-ic" style="--cat:${SOORT_KLEUR.ana}">${ic("bliksem")}</span><b>${m.kort.hbGedaan + m.kort.anaGedaan}</b><span>kort intensief · sessies</span></div>
       </div>`;
     wv.querySelector("[data-naar]").onclick = () => naarTab("belasting");
-    wv.querySelector("[data-weekscore]").onclick = adviesPaneel;
+
   }
 
   /* eerstvolgende meetmoment, prominent; de rest achter een knop */
@@ -14594,6 +14882,7 @@ function boot() {
     if (document.visibilityState === "visible") syncRonde();
   });
   window.addEventListener("online", () => syncRonde());
+  if (/[?&]voorbeelden\b/.test(location.search)) setTimeout(adviesVoorbeelden, 300);
   supaInit().then(ingelogd => {
     syncStatus(); renderSyncPaneel(); renderCoachSetup();
     if (ingelogd) { syncRonde(); supaStandDelen(); }
