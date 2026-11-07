@@ -836,6 +836,41 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .mt .lg-kop { min-height: 18px; }
 #herstelTegels:empty, #belTegels:empty { display: none; }
 #vormOverzicht.vlak { padding: 16px; }
+/* vorm als staafjes */
+.vs { padding: 6px 16px 12px; outline: none; touch-action: pan-y; }
+.vs:focus-visible { box-shadow: inset 0 0 0 2px var(--ink); border-radius: 12px; }
+.vs svg { display: block; width: 100%; height: 92px; margin-top: 10px; cursor: crosshair; }
+.vs .seg--klein button { min-height: 32px; }
+.vs-staaf { transition: opacity .12s ease-out; }
+.vs-staaf.uit { opacity: .45; }
+.vs-uitleg { margin: 6px 0 0; }
+@media (prefers-reduced-motion: reduce) { .vs-staaf { transition: none; } }
+/* Belasting: één vaste afstand tussen de blokken, boven en onder */
+#belSeg { margin-bottom: var(--sp3); }
+#belBlok { display: grid; gap: 12px; }
+#belBlok > :is(#belLees, .opbouw):empty, #belBlok > [hidden] { display: none; }
+#belBlok #belFocus:not([hidden]) { display: grid; gap: 12px; margin: 0; }
+#belFocus .ta3, #belFocus .ta3--meter { margin: 0; }
+#belBlok > details.verdieping { margin: 0; }
+#belTegels { margin: 0; }
+/* Herstel: vier compacte blokken, twee naast elkaar */
+#herstelGrafieken.mt-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#herstelGrafieken .mt { padding: 12px 0 0; border-radius: 18px; background: var(--bg1); min-width: 0; }
+#herstelGrafieken .mt + .mt { border-top: 0; }
+#herstelGrafieken .mt-kop { padding: 0 12px; gap: 6px; }
+#herstelGrafieken .mt-ic { width: 24px; height: 24px; border-radius: 8px; } #herstelGrafieken .mt-ic .ic { width: 15px; height: 15px; }
+#herstelGrafieken .mt-lab { font-size: 11px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#herstelGrafieken .mt-kop .u-link { min-height: 32px; font-size: 12px; }
+#herstelGrafieken .mt-w { padding: 4px 12px 0; font-size: 1.6rem; }
+#herstelGrafieken .mt-bij { margin: 2px 12px 0; font-size: 12px; line-height: 1.3; }
+#herstelGrafieken .lg { padding: 4px 12px 10px; }
+#herstelGrafieken .lg-kop { min-height: 16px; }
+#herstelGrafieken .lg-tip { font-size: 11px; }
+#herstelGrafieken .lg-tip i { display: none; }
+#herstelGrafieken .lg svg { height: 52px; }
+#herstelGrafieken .lg-vlak { margin-top: 4px; }
+#herstelGrafieken .lg-as { display: none; }
+#herstelGrafieken .lg-stippen span { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
 /* maandkalender */
 .mk-kal { display: grid; gap: 8px; }
 .mk-nav { display: flex; align-items: center; justify-content: space-between; }
@@ -862,7 +897,7 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
    grafieklijnen. Bewust geen gloed. Kleur alleen waar al kleur stond.
    ===================================================================== */
 :root[data-theme="dark"] body { background: radial-gradient(120% 45% at 50% -8%, #0d1424 0%, var(--bg0) 60%) fixed, var(--bg0); }
-:root[data-theme="dark"] :is(.vlak, .ta3, .up) {
+:root[data-theme="dark"] :is(.vlak, .ta3, .up, #herstelGrafieken .mt) {
   background: linear-gradient(180deg, rgba(255,255,255,.045) 0%, rgba(255,255,255,.012) 40%, rgba(255,255,255,.008) 100%), var(--bg1);
   border: 1px solid rgba(255,255,255,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
 :root[data-theme="dark"] .vlak .vlak { background: none; border: 0; box-shadow: none; }
@@ -2708,7 +2743,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
   <!-- Het compacte vormoverzicht staat helemaal onderaan: verdieping, geen
        hoofdboodschap. De uitgebreide grafiek klapt eronder open. -->
-  <div class="vlak" id="vormOverzicht"></div>
+
   <div class="card" id="tsbCard" style="display:none">
     <div class="card-head">
       <div><h2>Vorm (TSB)</h2>
@@ -2757,7 +2792,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
   <div class="opbouw" id="herstelOpbouw"></div>
 
   <div class="sectie-kop"><h3>Trends</h3><span class="u-klein">28 dagen · tik of schuif voor een dag</span></div>
-  <div class="vlak" id="herstelGrafieken"></div>
+  <div class="mt-raster" id="herstelGrafieken"></div>
   <div class="tegels" id="herstelTegels"><div class="tegeluit" id="herstelTegelUit"></div></div>
 
   <div id="hsNachten"></div>
@@ -6976,6 +7011,49 @@ function renderVormOverzicht() {
     <p class="rb-klein">${signaal} Rood is onder −25, blauw 0 tot −25, groen boven nul.</p>
     <button class="knop knop--secundair knop--klein" onclick="vormVerloop(this)">Uitgebreide grafiek</button>`;
   host.querySelectorAll("[data-vp]").forEach(b => b.onclick = () => { VORM_PERIODE = +b.dataset.vp; renderVormOverzicht(); });
+}
+
+/* Vorm per dag als staafjes vanaf nul: groen boven nul (uitgerust), blauw
+   tot −25 (normale trainingsdruk), rood daaronder (vermoeidheid loopt voor).
+   De lengte is de waarde. Tikken of schuiven kiest een dag. */
+const VORM_WOORD = {groen: "uitgerust", blauw: "normale trainingsdruk", rood: "vermoeidheid loopt voor", onbekend: "onbekend"};
+function vormStaafHtml(dagen) {
+  if (!dagen.length) return "";
+  dagen = dagen.map(d => ({...d, vlak: d.tsb == null ? "onbekend" : d.tsb >= 0 ? "groen" : d.tsb > -25 ? "blauw" : "rood"}));
+  const W = 300, H = 92, n = dagen.length, w = W / n;
+  const vals = dagen.map(d => d.tsb ?? 0), hoog = Math.max(0, ...vals), laag = Math.min(0, ...vals), bereik = (hoog - laag) || 1;
+  const y0 = H * hoog / bereik, tel = {rood: 0, blauw: 0, groen: 0, onbekend: 0};
+  dagen.forEach(d => tel[d.vlak]++);
+  VORM_STAAF = {dagen, n};
+  const staaf = (d, i) => { const h = Math.max(1.5, Math.abs(d.tsb ?? 0) / bereik * H), y = (d.tsb ?? 0) >= 0 ? y0 - h : y0;
+    return `<rect class="vs-staaf" data-i="${i}" x="${(i * w + w * .18).toFixed(1)}" y="${y.toFixed(1)}" width="${(w * .64).toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(3, w * .2).toFixed(1)}" fill="${d.vlak === "onbekend" ? "var(--bg3)" : VLAK_KLEUR[d.vlak]}"/>`; };
+  return `<div class="vs" tabindex="0" role="img" aria-label="Vorm per dag, ${n} dagen: ${tel.rood} rood, ${tel.blauw} blauw, ${tel.groen} groen. Pijltjestoetsen kiezen een dag.">
+    <div class="lg-kop"><div class="seg seg--klein" role="group" aria-label="periode">
+        <button data-vp="14" aria-pressed="${VORM_PERIODE === 14}" aria-label="14 dagen">14 d</button><button data-vp="28" aria-pressed="${VORM_PERIODE === 28}" aria-label="28 dagen">28 d</button></div>
+      <div class="lg-tip" aria-live="polite"></div></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      ${dagen.map(staaf).join("")}</svg>
+    <div class="lg-as"><span>${kortDagNaam(dagen[0].date)} ${short(dagen[0].date)}</span><span>${tel.rood} rood · ${tel.blauw} blauw · ${tel.groen} groen</span><span>vandaag</span></div>
+    <p class="u-klein vs-uitleg">Groen boven nul, blauw 0 tot −25, rood onder −25.</p></div>`;
+}
+let VORM_STAAF = {dagen: [], n: 0};
+function vormStaafKies(el, i) {
+  const {dagen, n} = VORM_STAAF; if (!n) return;
+  i = Math.max(0, Math.min(n - 1, i)); el.dataset.i = i;
+  el.querySelectorAll(".vs-staaf").forEach(r => r.classList.toggle("uit", +r.dataset.i !== i));
+  const d = dagen[i];
+  el.querySelector(".lg-tip").innerHTML = `${kortDagNaam(d.date)} ${short(d.date)} <span><em>${d.tsb == null ? "–" : komma(Math.round(d.tsb)).replace("-", "−")}</em> ${VORM_WOORD[d.vlak]}</span>`;
+}
+function vormStaafKoppel(root) {
+  const el = root.querySelector(".vs"); if (!el) return;
+  const opX = e => { const r = el.querySelector("svg").getBoundingClientRect(); vormStaafKies(el, Math.floor((e.clientX - r.left) / r.width * VORM_STAAF.n)); };
+  const svg = el.querySelector("svg");
+  svg.addEventListener("pointermove", opX); svg.addEventListener("pointerdown", opX);
+  el.addEventListener("pointerleave", () => vormStaafKies(el, VORM_STAAF.n - 1));
+  el.addEventListener("keydown", e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); vormStaafKies(el, +el.dataset.i + (e.key === "ArrowLeft" ? -1 : 1)); } });
+  el.querySelectorAll("[data-vp]").forEach(b => b.onclick = e => { e.stopPropagation(); VORM_PERIODE = +b.dataset.vp; renderBelDials(); });
+  vormStaafKies(el, VORM_STAAF.n - 1);
 }
 
 function vormVerloop(knop) {
@@ -13198,14 +13276,13 @@ function renderBelDials() {
   host.innerHTML = `<div class="vorm-hero">
       <div class="vorm-kop"><span class="vorm-getal" aria-label="Vorm ${vorm.num ?? "onbekend"}">${vorm.num ?? "–"}</span>
         <span><span class="vorm-lab">Vorm</span><p><b>${hoofdletter(vorm.subt)}</b></p>${stand.ctl != null ? `<p>Fitheid ${Math.round(stand.ctl)} · vermoeidheid ${Math.round(stand.atl)}</p>` : ""}</span></div>
-      ${lgHtml({periode: "28 dagen", labels: f28.map(x => `${kortDagNaam(x.date)} ${short(x.date)}`), series: [
-        {naam: "fitheid", pts: f28.map(x => x.ctl == null ? null : Math.round(x.ctl)), kleur: "var(--ink)"},
-        {naam: "vermoeidheid", pts: f28.map(x => x.atl == null ? null : Math.round(x.atl)), kleur: "var(--c-kracht)", stip: true}]})}
+      ${vormStaafHtml(vormDagen(VORM_PERIODE))}
       <div class="te-strip">${[aeroob, anaeroob].map(x => `<div><b>${x.num ?? "–"}${x.eenheid && x.num != null ? `<small style="display:inline;font-size:var(--t-klein)">${x.eenheid}</small>` : ""}</b>
         <small>${x.cap.toLowerCase()} · ${x.subt}</small></div>`).join("")}</div>
       <p class="u-klein" style="margin:0;padding:0 16px 14px">${bron === "te" ? "Hoogste Training Effect van de laatste 7 dagen (0–5)." : "Aandeel van je weekminuten in zone 1–3 en 4–5."}</p>
     </div>`;
   lgKoppel(host);
+  vormStaafKoppel(host);
 
   /* De leesregel: het interessante zit in de verhouding tussen de twee. */
   const uitZone = bron === "zone";
@@ -13970,7 +14047,7 @@ function renderHerstelTegels() {
         grafiek: lgHtml({eenheid: "bpm", band: bandVanB(rhrB), periode: "28 dagen", labels: r.labels, series: [{naam: "Rusthartslag", pts: r.pts, kleur: "var(--critical)"}]})}) +
       metriekHtml({icoon: "maan", kleur: "var(--sl-licht)", label: "Slaap", waarde: slNu == null ? null : uurMin(slNu),
         bij: (scoreNu != null ? `score <b>${scoreNu}</b> · ` : "") + (slGem ? `gemiddeld <b>${uurMin(slGem)}</b> per nacht` : ""),
-        knop: `<button class="u-link" data-slaapnacht>Nacht openen</button>`,
+        knop: `<button class="u-link" data-slaapnacht aria-label="Nacht openen">Nacht</button>`,
         grafiek: lgHtml({periode: "28 dagen", labels: sl.labels, series: [{naam: "Slaap", pts: sl.pts, kleur: "var(--sl-licht)", fmt: uurMin}]})}) +
       metriekHtml({icoon: "wolk", kleur: "var(--good)", label: "Stress overdag", waarde: strNu, bij: "schaal <b>0–100</b>, continu gemeten via je HRV",
         grafiek: lgHtml({periode: "28 dagen", labels: st.labels, series: [{naam: "Stress", pts: st.pts, kleur: "var(--good)", fmt: Math.round}]})});

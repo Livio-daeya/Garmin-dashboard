@@ -178,14 +178,15 @@
     return {ok: /\.up/.test(regels) && /u-melding/.test(regels), detail: /\.up/.test(regels) ? "paneel, melding en kaarten zonder overgang" : "ontbreekt"};
   });
 
-  await test("Belasting: vorm bovenaan met fitheid en vermoeidheid, prikkel als twee getallen, geen dubbel advies", async () => {
+  await test("Belasting: vorm bovenaan als staafjes per dag (één variant), prikkel als twee getallen, geen dubbel advies", async () => {
     naarTab("belasting"); renderBelDials();
     const h = document.getElementById("belDials");
-    const vorm = h.querySelector(".vorm-getal"), lg = h.querySelector(".lg"), te = h.querySelectorAll(".te-strip > div").length;
-    const reeksen = lg ? LG[lg.id].series.map(x => x.naam).join("/") : "";
+    const vorm = h.querySelector(".vorm-getal"), te = h.querySelectorAll(".te-strip > div").length;
+    const staven = h.querySelectorAll(".vs-staaf").length, kleuren = new Set([...h.querySelectorAll(".vs-staaf")].map(r => r.getAttribute("fill")));
+    const reeksen = staven === VORM_PERIODE && !document.getElementById("vormOverzicht") ? "staafjes" : "";
     const lees = document.getElementById("belLees").textContent.trim();
-    return {ok: !!vorm && reeksen === "fitheid/vermoeidheid" && te === 2 && !h.querySelector(".dial") && lees === "",
-      detail: `vorm ${vorm && vorm.textContent}; grafiek ${reeksen}; prikkel ${te}; advies op Belasting "${lees}"`};
+    return {ok: !!vorm && reeksen === "staafjes" && kleuren.size >= 1 && te === 2 && !h.querySelector(".dial") && lees === "",
+      detail: `vorm ${vorm && vorm.textContent}; ${staven} staafjes in ${kleuren.size} kleuren; prikkel ${te}; advies op Belasting "${lees}"`};
   });
 
   await test("Workoutsamenvatting sluit aan op de brongegevens (do zaal, wo 4 × 4)", async () => {
