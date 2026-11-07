@@ -782,6 +782,74 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 /* Belasting: de drie kaarten in de gedeelde meetrij, niet in het oude raster */
 #belFocus.focus { display: block; }
 #belFocus .ta3--meter { margin-top: 0; }
+/* =====================================================================
+   Verfijning: platte vlakken, compacte rijen, drukfeedback, grafieken met
+   je eigen band en een hulplijn. Kleur alleen voor status of afwijking.
+   ===================================================================== */
+.vlak { background: var(--bg1); border-radius: 18px; }
+.vlak:empty { display: none; }
+.vd-tr, .vd-rij { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; width: 100%; min-height: 60px; padding: 10px 16px;
+  border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color .12s ease-out; -webkit-tap-highlight-color: transparent; }
+.vd-tr + .vd-tr, .vd-rij + .vd-rij { border-top: 1px solid var(--hair); }
+.vd-tr:first-child, .vd-rij:first-child { border-radius: 18px 18px 0 0; } .vd-tr:last-child, .vd-rij:last-child { border-radius: 0 0 18px 18px; }
+.vd-tr:only-child, .vd-rij:only-child { border-radius: 18px; }
+.vd-tr:hover, .vd-rij:hover, .ta3-deel:hover, .ta3-kop:hover, .ta3-rij:hover { background: rgba(255,255,255,.03); }
+.vd-tr:active, .vd-rij:active, .ta3-deel:active, .ta3-kop:active, .ta3-rij:active, .nb-staaf:active { background: var(--bg2); }
+.vd-tr:focus-visible, .vd-rij:focus-visible, .lg:focus-visible, .nb-staaf:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.vd-sport { width: 40px; height: 40px; border-radius: 12px; background: var(--bg2); display: grid; place-items: center; color: var(--cat, var(--ink-2)); }
+.vd-sport .ic { width: 20px; height: 20px; }
+.vd-tr b, .vd-rij b { display: block; font-weight: 600; }
+.vd-tr small, .vd-rij small { display: block; color: var(--ink-2); font-size: var(--t-klein); }
+.vd-tr .ta3-status { font-size: var(--t-klein); }
+.vd-tr .ta3-status .ta3-badge { width: 16px; height: 16px; } .vd-tr .ta3-status .ta3-badge svg { width: 11px; height: 11px; }
+.vd-rij .vd-w { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; text-align: right; }
+#vdAdviesBalk:empty { display: none; }
+#vdTraining { display: grid; gap: var(--sp2); }
+
+/* grafiek met band, scherpe laatste stip en hulplijn */
+.lg { position: relative; padding: 12px 16px 14px; touch-action: pan-y; cursor: crosshair; border-radius: 18px; }
+.lg + .lg { border-top: 1px solid var(--hair); border-radius: 0 0 18px 18px; }
+.lg-kop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-height: 22px; }
+.lg-kop b { font-weight: 600; }
+.lg-tip { font-size: var(--t-klein); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.lg-tip span { white-space: nowrap; margin-left: 10px; }
+.lg-tip i { display: inline-block; width: 12px; vertical-align: middle; margin-right: 4px; border-top: 2px solid var(--k); }
+.lg-tip i.stip { border-top-style: dashed; }
+.lg-tip em { font-style: normal; color: var(--ink); font-weight: 600; }
+.lg-vlak { position: relative; margin-top: 8px; }
+.lg svg { display: block; width: 100%; height: 96px; overflow: visible; }
+.lg-stippen { position: absolute; inset: 0; pointer-events: none; }
+.lg-stippen span { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--bg1); pointer-events: none; }
+.lg-as { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-label); color: var(--muted); margin-top: 6px; }
+.lg-leeg { padding: 14px 16px; color: var(--muted); font-size: var(--t-klein); }
+
+/* nachten als staafjes */
+.nb { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 124px; padding: 14px 12px 6px; }
+.nb-staaf { display: grid; justify-items: center; align-content: end; gap: 4px; height: 100%; background: none; border: 0; border-radius: 10px; cursor: pointer; padding: 0; color: var(--muted); font: inherit; }
+.nb-staaf i { display: block; width: 18px; border-radius: 6px 6px 3px 3px; background: var(--sl-licht); opacity: .8; }
+.nb-staaf i.leeg { background: none; border: 1.5px dashed var(--hair-strong); height: 28px; opacity: 1; }
+.nb-staaf.kort i { background: var(--warning); }
+.nb-staaf span { font-size: var(--t-label); }
+.nb-staaf[aria-pressed="true"] i { opacity: 1; box-shadow: 0 0 0 2px var(--bg1), 0 0 0 3.5px var(--ink); }
+.nb-staaf[aria-pressed="true"] span { color: var(--ink); font-weight: 600; }
+.nb-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 16px 10px; border-top: 1px solid var(--hair); font-size: var(--t-klein); color: var(--ink-2); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.nb-info b { color: var(--ink); font-weight: 600; }
+.nb-info .u-link { min-height: 44px; }
+
+/* vorm bovenaan Belasting */
+.vorm-hero { padding: 16px 0 0; }
+.vorm-kop { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; padding: 0 16px; }
+.vorm-getal { font-size: 3rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.vorm-lab { font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.vorm-kop p { margin: 2px 0 0; color: var(--ink-2); font-size: var(--t-klein); }
+.vorm-kop p b { color: var(--ink); font-size: var(--t-body); }
+.vorm-hero .lg { padding-top: 6px; }
+.te-strip { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--hair); }
+.te-strip > div { padding: 12px 16px; }
+.te-strip > div + div { border-left: 1px solid var(--hair); }
+.te-strip b { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.te-strip small { display: block; color: var(--ink-2); font-size: var(--t-klein); }
+#belDials.vlak { display: block; }
 
 /* ---- Plan ---- */
 .pl-twee { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp3); }
@@ -2449,12 +2517,13 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
   <!-- Eén hoofdadvies, passend bij het moment: vooraf, tussen twee sessies
        of na afronding. Daaronder de trainingen van vandaag. -->
   <div id="vdAdvies"></div>
-  <div class="card" id="vdTraining"></div>
+  <div id="vdTraining"></div>
+  <div id="vdAdviesBalk"></div>
 
 
 
-  <div class="sectie-kop"><h3>Dagelijkse beweging</h3><span class="u-klein">tik voor 28 dagen</span></div>
-  <div class="tegels" id="vandaagTegels"><div class="tegeluit" id="vandaagTegelUit"></div></div>
+  <div class="sectie-kop"><h3>Beweging</h3><span class="u-klein">tik voor 28 dagen</span></div>
+  <div class="vlak" id="vandaagTegels"></div>
   <div class="card" id="vdKomend"></div>
 
   <details class="verdieping">
@@ -2628,15 +2697,16 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 
 <section class="panel" id="tab-herstel">
   <h1 class="pg-vraag">Wat zegt mijn herstel en welke informatie ontbreekt?</h1>
-  <div id="hsSamen"></div>
   <div class="dials" id="herstelTriple"></div>
+  <div id="hsSamen"></div>
   <div id="hsVermoeid"></div>
   <div class="opbouw" id="herstelOpbouw"></div>
 
-  <div class="sectie-kop"><h3>Trends</h3><span class="u-klein">28 dagen · tik voor de grafiek</span></div>
+  <div class="sectie-kop"><h3>Trends</h3><span class="u-klein">28 dagen · tik of schuif voor een dag</span></div>
+  <div class="vlak" id="herstelGrafieken"></div>
   <div class="tegels" id="herstelTegels"><div class="tegeluit" id="herstelTegelUit"></div></div>
 
-  <div class="card" id="hsNachten"></div>
+  <div id="hsNachten"></div>
   <div class="card" id="fasesCard" style="display:none">
     <div class="card-head">
       <div><h2>Slaap vannacht per fase</h2>
@@ -6589,6 +6659,18 @@ const kortDag = iso => {
 const BAND = v => v == null ? "n" : v >= 67 ? "g" : v >= 34 ? "a" : "r";
 const BANDVAR = {g: "var(--good)", a: "var(--warning)", r: "var(--critical)", n: "var(--muted)"};
 
+/* Voor een waarde met een eigen normaal: het lichte boogje is je band, de
+   stip is de meting. Geen "vol is goed"; buiten je band kleurt de stip. */
+function bandBoogSvg(b, groot) {
+  const size = groot ? 116 : 84, r = groot ? 50 : 36, w = groot ? 9 : 7, c = size / 2;
+  const omtrek = 2 * Math.PI * r, f = x => Math.max(0, Math.min(1, x));
+  const a = f(b.lo), z = f(b.hi), hoek = f(b.punt) * 2 * Math.PI;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--bg3)" stroke-width="${w}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="${w}"
+            stroke-dasharray="${(omtrek * (z - a)).toFixed(1)} ${omtrek.toFixed(1)}" stroke-dashoffset="${(-omtrek * a).toFixed(1)}"/>
+    <circle cx="${(c + r * Math.cos(hoek)).toFixed(1)}" cy="${(c + r * Math.sin(hoek)).toFixed(1)}" r="${groot ? 7 : 6}" fill="${b.kleur}" stroke="var(--bg0)" stroke-width="2.5"/></svg>`;
+}
 function ringSvg(deel, kleur, groot) {
   const size = groot ? 116 : 84, r = groot ? 50 : 36, w = groot ? 9 : 7;
   const omtrek = 2 * Math.PI * r;
@@ -6625,6 +6707,7 @@ function dialHtml(d) {
     ? `<span class="dlt ${d.delta.klasse}" title="verschil met gisteren">${d.delta.tekst}</span>` : "";
   const teken = d.gauge
     ? gaugeSvg(d.gaugeDeel, kleur, d.groot)
+    : d.bandBoog ? bandBoogSvg(d.bandBoog, d.groot)
     : ringSvg(d.deel, kleur, d.groot);
   return `<button class="dial ${d.groot ? "b" : "s"}" data-ga="${d.ga || ""}"
             style="--krimp:${krimp}"
@@ -7293,6 +7376,21 @@ function hrVonk(a) {
   return `<svg class="act-vonk" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`;
 }
 
+function vdTrainingRij({a, plan, iso, i}) {
+  if (a) {
+    const sub = [startTijd(a), a.duration_s ? `${Math.round(a.duration_s / 60)} min` : "", plan ? (a.name || a.sport) : "niet gepland"].filter(Boolean).join(" · ");
+    return `<button class="vd-tr" data-act="${a.id}" style="--cat:${ACT_KLEUR[a.sport] || "var(--ink-2)"}" aria-label="${veiligeTekst(plan ? titelVanItem(plan) : a.name || a.sport)}: afgerond. Workout openen">
+      <span class="vd-sport">${ic(ACT_IC[a.sport] || "puls")}</span><span><b>${veiligeTekst(plan ? titelVanItem(plan) : a.name || a.sport)}</b><small>${sub}</small></span>
+      ${ta3Status("groen", "Afgerond")}</button>`;
+  }
+  const st = itemStatus(iso, i).k;
+  const [kleur, tekst] = st === "gedaan" ? ["groen", "Afgerond"] : ["gepland", "vandaag"].includes(st) ? ["grijs", "Gepland"] : st === "onbekend" ? ["grijs", "Geen registratie"] : ["grijs", hoofdletter(st)];
+  const symbool = st === "gedaan" ? "uitgevoerd" : ["gepland", "vandaag"].includes(st) ? "gepland" : "onbekend";
+  const sub = (i.titel.split(" · ").slice(1).join(" · ") || i.uitleg || "").replace(/<[^>]+>/g, "");
+  return `<button class="vd-tr" data-vdplan="${iso}|${i.id}" style="--cat:${SOORT_KLEUR[i.soort] || "var(--ink-2)"}" aria-label="${veiligeTekst(titelVanItem(i))}: ${tekst.toLowerCase()}. Openen">
+    <span class="vd-sport">${ic(SOORT_IC[i.soort] || "puls")}</span><span><b>${veiligeTekst(titelVanItem(i))}</b>${sub ? `<small>${veiligeTekst(sub.slice(0, 80))}</small>` : ""}</span>
+    <span class="ta3-status ta3--${kleur}">${meetBadge(symbool)}<span>${tekst}</span></span></button>`;
+}
 function activiteitKaart(a, plan) {
   const r = Math.round;
   const cijfers = [`<span><b>${mmss(a.duration_s || 0)}</b> duur</span>`];
@@ -7488,15 +7586,22 @@ function renderVandaagNieuw() {
     items.forEach(i => (itemStatus(v, i).acts || []).forEach(a => gekoppeld.set(String(a.id), i)));
     const metAct = new Set([...gekoppeld.values()].map(i => i.id));
     const plan = items.filter(i => !metAct.has(i.id)).filter(nietOvergeslagen(v));
-    tr.innerHTML = (acts.length ? `<div class="sectie-kop sectie-kop--eerst"><h3>Gedaan</h3></div>
-        <div class="act-lijst">${acts.map(a => activiteitKaart(a, gekoppeld.get(String(a.id)))).join("")}</div>` : "") +
-      (plan.length ? `<div class="sectie-kop${acts.length ? "" : " sectie-kop--eerst"}"><h3>${plan.every(i => ["gedaan", "overgeslagen"].includes(itemStatus(v, i).k)) ? "Gepland" : "Nog gepland"}</h3></div>
-        <div class="tk-lijst">${plan.map(i => trainingKaart(v, i, {compact: true})).join("")}</div>` : "") ||
-      (items.length ? "" : `<p class="u-leeg">${ic("bed")}Geen training vandaag.</p>`);
+    /* Gedaan en gepland in dezelfde compacte rij: sporticoon, naam, status.
+       Een tik opent direct de workoutsamenvatting, of de plankaart met
+       Afronden als er nog niets geregistreerd is. */
+    const rijen = [...acts.map(a => vdTrainingRij({a, plan: gekoppeld.get(String(a.id))})), ...plan.map(i => vdTrainingRij({iso: v, i}))];
+    tr.innerHTML = `<div class="sectie-kop sectie-kop--eerst"><h3>Trainingen vandaag</h3></div>` +
+      (rijen.length ? `<div class="vlak">${rijen.join("")}</div>` : items.length ? "" : `<p class="u-leeg">${ic("bed")}Geen training vandaag.</p>`);
     tr.innerHTML += overgeslagenRegel(v, items) + verborgenRegel(v);
     tr.querySelectorAll("[data-act]").forEach(b => b.onclick = () => activiteitPaneel(b.dataset.act));
+    tr.querySelectorAll("[data-vdplan]").forEach(b => b.onclick = () => { const [iso, it] = sessieZoek(b.dataset.vdplan);
+      if (it) uiPaneel(titelVanItem(it), trainingKaart(iso, it)); });
     overgeslagenKoppel(tr); verborgenKoppel(tr);
   }
+
+  /* Het trainingsadvies onder de trainingen, dezelfde balk als op Belasting. */
+  const ab = document.getElementById("vdAdviesBalk");
+  if (ab) { try { ab.innerHTML = adviesBalkHtml(trainingsAdvies(maandagVan(v))); } catch (e) { console.error(e); ab.innerHTML = ""; } }
 
   /* peilmoment van de drie bollen: ze komen niet allemaal van hetzelfde moment */
   const pl = document.getElementById("vdPeil");
@@ -8230,13 +8335,10 @@ function renderBelFocus() {
   host.querySelectorAll("[data-meet]").forEach(b => b.onclick = () => belDetailOpen(b.dataset.meet));
 
   /* Eén advies, dezelfde als op Vandaag. De onderbouwing klapt uit. */
-  const a = routeAdvies();
+  /* Het advies staat één keer: in de balk hierboven. De dagregel van Vandaag
+     ("volg je plan") hoort op Vandaag, niet nog eens hier. */
   const lees = document.getElementById("belLees");
-  lees.className = "";
-  lees.innerHTML = uiAdvies({label: a.label, actie: a.kop.replace(/\.$/, ""), reden: a.zin.split(". ")[0].replace(/\.$/, ""),
-      soort: a.status === "critical" ? "fout" : a.status === "warning" ? "let" : a.moment === "na" ? "ok" : "open"}) +
-    `<button class="u-link vd-waarom" data-waarom>Waarom dit advies?</button>`;
-  lees.querySelector("[data-waarom]").onclick = () => uiPaneel("Waarom dit advies?", `<ul class="u-lijst u-lijst--tekst">${a.waarom.map(w => `<li>${w}</li>`).join("")}</ul>`);
+  if (lees) { lees.className = ""; lees.innerHTML = ""; }
   return true;
 }
 
@@ -9422,6 +9524,61 @@ function uiBalk({gedaan = 0, verwacht = 0, doel, eenheid = "", label, doelWoord 
 
 /* Meetkaart: titel, één groot getal met eenheid (of een eerlijke status),
    een korte regel eronder. Aanklikbaar als er details zijn. */
+/* Lijngrafiek met optioneel je eigen band, een scherpe stip op de gekozen dag
+   (standaard de laatste meting) en één verticale hulplijn waarop alle reeksen
+   hun waarde tonen. Tikken, schuiven of de pijltjestoetsen kiezen een dag. */
+const LG = {};
+let LG_N = 0;
+function lgHtml({titel = "", eenheid = "", band = null, series, labels, periode = ""}) {
+  const n = labels.length, alle = series.flatMap(x => x.pts).filter(w => w != null).concat(band || []);
+  if (n < 2 || !alle.length) return `<div class="lg-leeg">${titel ? `<b>${titel}</b> · ` : ""}nog te weinig metingen</div>`;
+  const id = "lg" + (++LG_N), lo = Math.min(...alle), hi = Math.max(...alle), pad = (hi - lo) * .15 || 1, min = lo - pad, max = hi + pad;
+  const W = 300, H = 96, x = i => i / (n - 1) * W, y = w => H - (w - min) / (max - min) * H;
+  LG[id] = {series, eenheid, x, y, n, W, H, labels};
+  const pad_ = pts => { let d = "", open = false; pts.forEach((w, i) => { if (w == null) { open = false; return; } d += `${open ? "L" : "M"}${x(i).toFixed(1)} ${y(w).toFixed(1)} `; open = true; }); return d; };
+  return `<div class="lg" id="${id}" tabindex="0" role="img" aria-label="${titel || series.map(z => z.naam).join(" en ")}${periode ? ", " + periode : ""}. Pijltjestoetsen kiezen een dag.">
+    <div class="lg-kop">${titel ? `<b>${titel}</b>` : "<span></span>"}<div class="lg-tip" aria-live="polite"></div></div>
+    <div class="lg-vlak"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      ${band ? `<rect x="0" y="${y(band[1]).toFixed(1)}" width="${W}" height="${(y(band[0]) - y(band[1])).toFixed(1)}" fill="rgba(255,255,255,.07)" rx="3"/>` : ""}
+      ${series.map(z => `<path d="${pad_(z.pts)}" fill="none" stroke="${z.kleur}" stroke-width="2" ${z.stip ? 'stroke-dasharray="4 4"' : ""} vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`).join("")}
+      <line class="hulp" x1="0" x2="0" y1="0" y2="${H}" stroke="rgba(255,255,255,.35)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    </svg><div class="lg-stippen" aria-hidden="true"></div></div>
+    <div class="lg-as"><span>${labels[0]}</span>${band ? `<span>jouw band ${Math.round(band[0])}–${Math.round(band[1])}${eenheid ? " " + eenheid : ""}</span>` : ""}<span>${labels[n - 1]}</span></div></div>`;
+}
+function lgKies(el, i) {
+  const g = LG[el.id]; if (!g) return;
+  /* naar de dichtstbijzijnde dag met een meting */
+  i = Math.max(0, Math.min(g.n - 1, i));
+  const heeft = j => g.series.some(z => z.pts[j] != null);
+  if (!heeft(i)) { for (let d = 1; d < g.n; d++) { if (heeft(i - d)) { i -= d; break; } if (heeft(i + d)) { i += d; break; } } }
+  el.dataset.i = i;
+  const svg = el.querySelector("svg");
+  const hulp = svg.querySelector(".hulp"); hulp.setAttribute("x1", g.x(i)); hulp.setAttribute("x2", g.x(i));
+  el.querySelector(".lg-stippen").innerHTML = g.series.filter(z => z.pts[i] != null).map(z =>
+    `<span style="left:${(g.x(i) / g.W * 100).toFixed(2)}%;top:${(g.y(z.pts[i]) / g.H * 100).toFixed(2)}%;background:${z.kleur}"></span>`).join("");
+  const fmt = z => z.fmt ? z.fmt(z.pts[i]) : komma(Math.round(z.pts[i] * 10) / 10);
+  el.querySelector(".lg-tip").innerHTML = `${g.labels[i]}${g.series.filter(z => z.pts[i] != null).map(z => `<span style="--k:${z.kleur}"><i class="${z.stip ? "stip" : ""}"></i>${g.series.length > 1 ? z.naam + " " : ""}<em>${fmt(z)}</em>${g.eenheid ? " " + g.eenheid : ""}</span>`).join("")}`;
+}
+function lgKoppel(root, wacht = 0) {
+  (root || document).querySelectorAll(".lg").forEach(el => {
+    const g = LG[el.id]; if (!g) return;
+    if (!el.dataset.k) {
+      el.dataset.k = 1;
+      const opX = e => { const r = el.querySelector("svg").getBoundingClientRect(); lgKies(el, Math.round((e.clientX - r.left) / r.width * (g.n - 1))); };
+      el.addEventListener("pointermove", opX); el.addEventListener("pointerdown", opX);
+      el.addEventListener("pointerleave", () => lgKies(el, g.n - 1));
+      el.addEventListener("keydown", e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); lgKies(el, +el.dataset.i + (e.key === "ArrowLeft" ? -1 : 1)); } });
+    }
+    const zet = () => lgKies(el, el.dataset.i != null ? +el.dataset.i : g.n - 1);
+    wacht ? setTimeout(zet, wacht) : zet();
+  });
+}
+/* Een dagreeks uit DATA.daily: labels en waarden op dezelfde dagen. */
+function lgDagen(veld, aantal = 28, om = w => w) {
+  const d = (DATA.daily || []).slice(-aantal);
+  return {labels: d.map(x => `${kortDagNaam(x.date)} ${short(x.date)}`), pts: d.map(x => x[veld] == null ? null : om(x[veld]))};
+}
+
 /* Meterbalk: drie iconen met statusrondje, hoofdgetal en label. De status is
    uitvoering tegenover je plan, met eigen symbolen; "nog gepland" is neutraal,
    zodat het niet lijkt op het blauw van het trainingsadvies. */
@@ -12888,8 +13045,24 @@ function renderBelDials() {
   const aeroob = effect("Aeroob", "aerobic_te", [1, 2, 3], "aandeel zone 1-3");
   const anaeroob = effect("Anaeroob", "anaerobic_te", [4, 5], "aandeel zone 4-5");
 
-  host.innerHTML = [aeroob, vorm, anaeroob].map(dialHtml).join("");
-  wijzersBedraden("#belDials", "belOpbouw");
+  /* Vorm is het hoofdpunt: één getal, fitheid en vermoeidheid in dezelfde
+     grafiek met één hulplijn, en de hoogste prikkel als twee getallen.
+     Aeroob en anaeroob zijn geen score van 0-100, dus geen ringen. */
+  const stand = reeks.length >= 2 ? reeks[reeks.length - 2] : laatst;
+  /* de grafiek eindigt op hetzelfde peilmoment als de getallen erboven */
+  const tot = reeks.indexOf(stand) + 1, f28 = reeks.slice(Math.max(0, tot - 28), tot);
+  host.className = "vlak";
+  host.innerHTML = `<div class="vorm-hero">
+      <div class="vorm-kop"><span class="vorm-getal" aria-label="Vorm ${vorm.num ?? "onbekend"}">${vorm.num ?? "–"}</span>
+        <span><span class="vorm-lab">Vorm</span><p><b>${hoofdletter(vorm.subt)}</b></p>${stand.ctl != null ? `<p>Fitheid ${Math.round(stand.ctl)} · vermoeidheid ${Math.round(stand.atl)}</p>` : ""}</span></div>
+      ${lgHtml({periode: "28 dagen", labels: f28.map(x => `${kortDagNaam(x.date)} ${short(x.date)}`), series: [
+        {naam: "fitheid", pts: f28.map(x => x.ctl == null ? null : Math.round(x.ctl)), kleur: "var(--ink)"},
+        {naam: "vermoeidheid", pts: f28.map(x => x.atl == null ? null : Math.round(x.atl)), kleur: "var(--c-kracht)", stip: true}]})}
+      <div class="te-strip">${[aeroob, anaeroob].map(x => `<div><b>${x.num ?? "–"}${x.eenheid && x.num != null ? `<small style="display:inline;font-size:var(--t-klein)">${x.eenheid}</small>` : ""}</b>
+        <small>${x.cap.toLowerCase()} · ${x.subt}</small></div>`).join("")}</div>
+      <p class="u-klein" style="margin:0;padding:0 16px 14px">${bron === "te" ? "Hoogste Training Effect van de laatste 7 dagen (0–5)." : "Aandeel van je weekminuten in zone 1–3 en 4–5."}</p>
+    </div>`;
+  lgKoppel(host);
 
   /* De leesregel: het interessante zit in de verhouding tussen de twee. */
   const uitZone = bron === "zone";
@@ -12994,7 +13167,7 @@ function renderBelTegels() {
   /* Fitheid en vermoeidheid in één onderdeel: twee lijnen op dezelfde
      tijdas, beide op hetzelfde peilmoment (eind van gisteren). */
   const defs = [
-    {id: "ontwikkeling", label: "Belastingontwikkeling", icoon: "belasting",
+    {id: "ontwikkeling", weg: true, label: "Belastingontwikkeling", icoon: "belasting",
      waarde: stand.ctl == null ? null : `${Math.round(stand.ctl)}<small> fit</small> · ${Math.round(stand.atl)}<small> moe</small>`,
      reeks: ctlR, dagen, kleur: "var(--c-int)",
      bij: `Fitheid en vermoeidheid · peil eind ${short(stand.date || "")}` +
@@ -13039,8 +13212,9 @@ function renderBelTegels() {
 
   ];
 
-  host.innerHTML = defs.map(t => tegelHtml(t)).join("");
-  tegelsWireOp(host, uit, defs);
+  const zichtbaar = defs.filter(t => !t.weg);
+  host.innerHTML = zichtbaar.map(t => tegelHtml(t)).join("");
+  tegelsWireOp(host, uit, zichtbaar);
   const sh = document.getElementById("sesTegels"), su = document.getElementById("sesTegelUit");
   if (sh && su) { sh.innerHTML = sesDefs.map(t => tegelHtml({...t, breed: true})).join(""); tegelsWireOp(sh, su, sesDefs); }
 }
@@ -13143,8 +13317,7 @@ function tegelsWireOp(host, uithost, defs) {
    stonden tot nu toe nergens in de app, terwijl ze elke dag gevuld zijn. */
 function renderVandaagTegels() {
   const host = document.getElementById("vandaagTegels");
-  const uit = document.getElementById("vandaagTegelUit");
-  if (!host || !uit) return;
+  if (!host) return;
   const d = DATA.daily || [];
   const reeks = veld => d.map(x => x[veld]).filter(v => v != null).slice(-28);
   const nu = veld => { const r = reeks(veld); return r.length ? r[r.length - 1] : null; };
@@ -13183,9 +13356,15 @@ function renderVandaagTegels() {
      teken: () => tegelLijn("chKcal", reeks("calories"), "--s4", 0, null)},
   ];
 
-  host.innerHTML = defs.map((t, i) =>
-    tegelHtml(defs.length % 2 && i === defs.length - 1 ? {...t, breed: true} : t)).join("");
-  tegelsWireOp(host, uit, defs);
+  host.innerHTML = defs.map(t => `<button class="vd-rij" data-beweging="${t.id}" aria-label="${t.label}: ${t.waarde ?? "geen meting"}. 28 dagen openen">
+      <span class="vd-sport" style="--cat:var(--ink-2)">${ic(t.icoon)}</span><span><b>${t.label}</b><small>${String(t.bij || "").replace(/<[^>]+>/g, "")}</small></span>
+      <span class="vd-w">${t.waarde ?? "–"}</span></button>`).join("");
+  host.querySelectorAll("[data-beweging]").forEach(b => b.onclick = () => {
+    const t = defs.find(x => x.id === b.dataset.beweging), veld = {stappen: "steps", intens: "intensity_min", kcal: "calories"}[t.id];
+    const r = lgDagen(veld, 28);
+    uiPaneel(t.titel, lgHtml({titel: t.label, periode: "28 dagen", labels: r.labels, series: [{naam: t.label, pts: r.pts, kleur: "var(--ink)", fmt: w => Math.round(w).toLocaleString("nl-NL")}]}) +
+      `<p class="u-klein">${t.uitleg}</p>`, box => lgKoppel(box, 260));
+  });
 }
 
 /* =======================================================================
@@ -13278,8 +13457,17 @@ function renderHerstelKop() {
      st: {tekst: ({EXCELLENT:"uitstekend", GOOD:"goed", FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten",
           klasse: sl.sleep_score == null ? "norm" : sl.sleep_score >= 67 ? "high" : sl.sleep_score >= 34 ? "norm" : "low"}},
   ];
+  /* Rusthartslag en HRV als bandrondje: de schaal loopt twee halve
+     bandbreedtes voorbij je band, net als de oude vulling. */
+  const boog = (w, b, band) => {
+    if (w == null || !b || !b.genoeg || b.onder == null || b.boven == null) return null;
+    const half = Math.max((b.boven - b.onder) / 2, 1e-6), min = b.onder - 2 * half, max = b.boven + 2 * half, f = x => (x - min) / (max - min);
+    return {lo: f(b.onder), hi: f(b.boven), punt: f(w), kleur: band === "g" ? "var(--ink)" : BANDVAR[band]};
+  };
+  kolommen[0].bandBoog = boog(rhrW, rhrB, kolommen[0].band);
+  kolommen[1].bandBoog = boog(hrvW, hrvB, kolommen[1].band);
   host.innerHTML = kolommen.map(k => dialHtml({
-      cap: k.l, num: k.v, deel: k.deel, band: k.band, delta: k.delta, groot: k.groot, ga: k.ga,
+      cap: k.l, num: k.v, deel: k.deel, band: k.bandBoog && k.band === "g" ? "n" : k.band, delta: k.delta, groot: k.groot, ga: k.ga, bandBoog: k.bandBoog,
       subt: k.v == null ? "geen meting" : k.st.tekst,
     })).join("");
   wijzersBedraden("#herstelTriple", "herstelOpbouw");
@@ -13507,18 +13695,29 @@ function renderNachten() {
   if (!host) return;
   const b = bandVan("hrv");
   const rijen = (DATA.daily || []).slice(-7).reverse();
-  host.innerHTML = `<div class="sectie-kop"><h3>Afgelopen nachten</h3></div>
-    <div class="hs-nachten">${rijen.map(d => {
-      const st = d.hrv == null ? null : statusTegenBand(d.hrv, b);
-      const geen = d.sleep_h == null && d.hrv == null;
-      return `<button class="hs-nacht" data-nacht="${d.date}" ${geen ? "disabled" : ""}>
-        <span class="hs-wd">${WEEKDAG_LANG[isoNaarPy(d.date)].slice(0, 2)}<b>${Number(d.date.slice(8))}</b></span>
-        <span class="hs-w">${geen ? "niet gedragen" : d.sleep_h != null ? uurMin(d.sleep_h) : "–"}</span>
-        <span class="hs-w">${d.hrv != null ? `${d.hrv}<small> ms</small>` : ""}</span>
-        <span class="hs-st">${st ? uiStatus(st.tekst.replace(" je normaal", ""), st.tekst === "band in opbouw" ? "mis" : st.klasse === "low" ? "let" : st.klasse === "high" ? "info" : "ok") : ""}</span></button>`;
-    }).join("")}</div>
-    <details class="verdieping verdieping--binnen" id="hsNachtDetail"><summary>Bekijk je nacht</summary><div id="hsNachtPlek"></div></details>`;
-  host.querySelectorAll("[data-nacht]").forEach(k => k.onclick = () => nachtPaneel(k.dataset.nacht));
+  /* Zeven staafjes voor slaapduur, oud naar nieuw. Alleen een duidelijk
+     kortere nacht krijgt kleur; een tik toont duur en afwijking van je
+     gewoonte, de details staan achter één knop. */
+  const zeven = (DATA.daily || []).slice(-7);
+  const gewoon = (a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null)((DATA.daily || []).map(x => x.sleep_h).filter(x => x != null).slice(-28));
+  const kort = d => d.sleep_h != null && gewoon != null && d.sleep_h < gewoon - 1.25;
+  host.innerHTML = `<div class="sectie-kop"><h3>Afgelopen 7 nachten</h3>${gewoon != null ? `<span class="u-klein">gewoonlijk ${uurMin(gewoon)}</span>` : ""}</div>
+    <div class="vlak"><div class="nb">${zeven.map(d => `<button class="nb-staaf${kort(d) ? " kort" : ""}" data-nachtkies="${d.date}" aria-pressed="false"
+        aria-label="${dagNaam(d.date)} ${kortDatum(d.date)}: ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${kort(d) ? ", korter dan gewoonlijk" : ""}">
+        <i class="${d.sleep_h != null ? "" : "leeg"}" style="${d.sleep_h != null ? `height:${Math.round(Math.min(d.sleep_h, 11) / 11 * 88)}px` : ""}"></i><span>${WEEKDAG_LANG[isoNaarPy(d.date)].slice(0, 2)}</span></button>`).join("")}</div>
+      <div class="nb-info" aria-live="polite"></div></div>
+    <details class="verdieping verdieping--binnen" id="hsNachtDetail"><summary>Slaapfasen en nachtelijke hartslag</summary><div id="hsNachtPlek"></div></details>`;
+  const kies = iso => {
+    host.querySelectorAll("[data-nachtkies]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.nachtkies === iso)));
+    const d = zeven.find(x => x.date === iso) || {}, verschil = d.sleep_h != null && gewoon != null ? d.sleep_h - gewoon : null;
+    host.querySelector(".nb-info").innerHTML = `<span><b>${hoofdletter(kortDagNaam(iso))} ${kortDatum(iso)}</b> · ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${verschil == null ? ""
+        : ` · <span style="color:${kort(d) ? "var(--warning)" : "inherit"}">${Math.abs(verschil) < .25 ? "zoals gewoonlijk" : `${uurMin(Math.abs(verschil))} ${verschil > 0 ? "langer" : "korter"} dan gewoonlijk`}</span>`}</span>
+      ${d.sleep_h != null || d.hrv != null ? `<button class="u-link" data-nacht="${iso}">Details</button>` : ""}`;
+    const k = host.querySelector("[data-nacht]"); if (k) k.onclick = () => nachtPaneel(k.dataset.nacht);
+  };
+  host.querySelectorAll("[data-nachtkies]").forEach(b => b.onclick = () => kies(b.dataset.nachtkies));
+  const laatste = [...zeven].reverse().find(d => d.sleep_h != null) || zeven[zeven.length - 1];
+  if (laatste) kies(laatste.date);
   /* fasen en nachtelijke hartslag verhuizen naar achter de uitklap */
   const plek = document.getElementById("hsNachtPlek");
   ["fasesCard", "nachtCard"].forEach(id => { const el = document.getElementById(id); if (el && plek) plek.appendChild(el); });
@@ -13593,6 +13792,14 @@ function renderHerstelTegels() {
   const hrvNu = nu("hrv"), rhrNu = nu("rhr"), slNu = nu("sleep_h");
   const strNu = nu("stress_avg"), vo2Nu = nu("vo2max"), scoreNu = nu("sleep_score");
 
+  const graf = document.getElementById("herstelGrafieken");
+  if (graf) {
+    const h = lgDagen("hrv"), r = lgDagen("rhr", 28, Math.round);
+    const bandVanB = b => b && b.genoeg && b.onder != null ? [b.onder, b.boven] : null;
+    graf.innerHTML = lgHtml({titel: "HRV", eenheid: "ms", band: bandVanB(hrvB), periode: "28 dagen", labels: h.labels, series: [{naam: "HRV", pts: h.pts, kleur: "var(--ink)"}]}) +
+      lgHtml({titel: "Rusthartslag", eenheid: "bpm", band: bandVanB(rhrB), periode: "28 dagen", labels: r.labels, series: [{naam: "Rusthartslag", pts: r.pts, kleur: "var(--ink)"}]});
+    lgKoppel(graf);
+  }
   const defs = [
     {id: "hrv", label: "HRV", icoon: "puls", waarde: hrvNu, eenheid: "ms",
      reeks: laatste28("hrv"), dagen,
@@ -13604,7 +13811,7 @@ function renderHerstelTegels() {
      uitleg: "Nachtelijk gemiddelde met je 7-daags gemiddelde.",
      legenda: `<span><i class="swatch" style="background:var(--s1)"></i>per nacht</span>
                <span><i class="swatch" style="background:var(--s2)"></i>7-daags gemiddelde</span>`,
-     teken: tegelGrafiekHrv},
+     teken: tegelGrafiekHrv, weg: true},
 
     {id: "rhr", label: "Rusthartslag", icoon: "hart", waarde: rhrNu == null ? null : Math.round(rhrNu),
      reeks: laatste28("rhr"), dagen,
@@ -13614,7 +13821,7 @@ function renderHerstelTegels() {
        : "band nog in opbouw",
      titel: "Rusthartslag", canvas: "chRhr",
      uitleg: "Per dag, met je 7-daags gemiddelde.",
-     teken: tegelGrafiekRhr},
+     teken: tegelGrafiekRhr, weg: true},
 
     {id: "slaap", label: "Slaap", icoon: "maan",
      waarde: slNu == null ? null : uurMin(slNu), reeks: laatste28("sleep_h"), dagen,
@@ -13637,10 +13844,9 @@ function renderHerstelTegels() {
      uitleg: "Garmin meet dit de hele dag door uit je hartslagvariabiliteit.",
      teken: tegelGrafiekStress},
     // VO2max staat sinds november op Belasting, naast fitheid.
-  ];
+  ].filter(t => !t.weg);
 
-  host.innerHTML = defs.map((t, i) =>
-    tegelHtml(defs.length % 2 && i === defs.length - 1 ? {...t, breed: true} : t)).join("");
+  host.innerHTML = defs.map(t => tegelHtml({...t, breed: true})).join("");
   tegelsWireOp(host, uit, defs);
 }
 

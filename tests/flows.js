@@ -178,11 +178,14 @@
     return {ok: /\.up/.test(regels) && /u-melding/.test(regels), detail: /\.up/.test(regels) ? "paneel, melding en kaarten zonder overgang" : "ontbreekt"};
   });
 
-  await test("Drie bollen op Belasting, Vorm in het midden en groter", async () => {
-    const d = [...document.querySelectorAll("#belDials > *")];
-    const namen = d.map(x => x.textContent.replace(/\s+/g, " ").trim().split(" ").find(w => /AEROOB|VORM|ANAEROOB/i.test(w)));
-    const groot = d[1] && d[1].getBoundingClientRect().width >= d[0].getBoundingClientRect().width;
-    return {ok: d.length === 3 && groot, detail: `${d.length} bollen; ${namen.join(", ")}; midden groter ${groot}`};
+  await test("Belasting: vorm bovenaan met fitheid en vermoeidheid, prikkel als twee getallen, geen dubbel advies", async () => {
+    naarTab("belasting"); renderBelDials();
+    const h = document.getElementById("belDials");
+    const vorm = h.querySelector(".vorm-getal"), lg = h.querySelector(".lg"), te = h.querySelectorAll(".te-strip > div").length;
+    const reeksen = lg ? LG[lg.id].series.map(x => x.naam).join("/") : "";
+    const lees = document.getElementById("belLees").textContent.trim();
+    return {ok: !!vorm && reeksen === "fitheid/vermoeidheid" && te === 2 && !h.querySelector(".dial") && lees === "",
+      detail: `vorm ${vorm && vorm.textContent}; grafiek ${reeksen}; prikkel ${te}; advies op Belasting "${lees}"`};
   });
 
   await test("Workoutsamenvatting sluit aan op de brongegevens (do zaal, wo 4 × 4)", async () => {
@@ -207,8 +210,8 @@
 
   await test("Vandaag: één kaart per activiteit, geplande sessie niet dubbel", async () => {
     DATA.planbasis.vandaag = V; renderVandaagNieuw();
-    const kaarten = [...document.querySelectorAll("#vdTraining .act-kaart")].map(k => k.dataset.act);
-    const plan = [...document.querySelectorAll("#vdTraining .tk .tk-titel b")].map(b => b.textContent);
+    const kaarten = [...document.querySelectorAll("#vdTraining .vd-tr[data-act]")].map(k => k.dataset.act);
+    const plan = [...document.querySelectorAll("#vdTraining .vd-tr[data-vdplan] b")].map(b => b.textContent);
     return {ok: kaarten.length === new Set(kaarten).size && kaarten.includes("24978867411") && !plan.includes("Zaaltraining"),
       detail: `activiteiten: ${kaarten.join(", ")}; plankaarten: ${plan.join(", ") || "geen"}`};
   });
