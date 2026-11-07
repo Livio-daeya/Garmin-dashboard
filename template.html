@@ -836,6 +836,25 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .mt .lg-kop { min-height: 18px; }
 #herstelTegels:empty, #belTegels:empty { display: none; }
 #vormOverzicht.vlak { padding: 16px; }
+/* =====================================================================
+   Verfijnde stijl (donker thema): licht op de vlakken, een zweem blauw
+   bovenin, kleurverloop in ringen en staafjes, een vervagende vulling onder
+   grafieklijnen. Bewust geen gloed. Kleur alleen waar al kleur stond.
+   ===================================================================== */
+:root[data-theme="dark"] body { background: radial-gradient(120% 45% at 50% -8%, #0d1424 0%, var(--bg0) 60%) fixed, var(--bg0); }
+:root[data-theme="dark"] :is(.vlak, .ta3, .up) {
+  background: linear-gradient(180deg, rgba(255,255,255,.045) 0%, rgba(255,255,255,.012) 40%, rgba(255,255,255,.008) 100%), var(--bg1);
+  border: 1px solid rgba(255,255,255,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+:root[data-theme="dark"] .vlak .vlak { background: none; border: 0; box-shadow: none; }
+:root[data-theme="dark"] :is(.mt-w, .vorm-getal, .ta3-getal, .dial .num) {
+  background: linear-gradient(180deg, #ffffff 30%, #c9ced8 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+:root[data-theme="dark"] :is(.mt-w, .vorm-getal, .ta3-getal, .dial .num) :is(small, .eh) { -webkit-text-fill-color: var(--ink-2); }
+.mt-ic { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--cat) 16%, transparent); }
+.vd-sport { background: color-mix(in srgb, var(--cat, var(--ink-2)) 14%, var(--bg2)); }
+.nb-staaf i { background: linear-gradient(180deg, color-mix(in srgb, var(--sl-licht) 55%, #fff), var(--sl-licht)); }
+.nb-staaf.kort i { background: linear-gradient(180deg, color-mix(in srgb, var(--warning) 55%, #fff), var(--warning)); }
+.nb-staaf i.leeg { background: none; }
+:root[data-theme="dark"] .tabbar { background: rgba(5,5,6,.72); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top-color: rgba(255,255,255,.07); }
 
 /* nachten als staafjes */
 .nb { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 124px; padding: 14px 12px 6px; }
@@ -6682,17 +6701,20 @@ function bandBoogSvg(b, groot) {
   const a = f(b.lo), z = f(b.hi), hoek = f(b.punt) * 2 * Math.PI;
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
     <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--bg3)" stroke-width="${w}"/>
-    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="${w}"
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${b.tint ? `color-mix(in srgb, ${b.tint} 50%, transparent)` : "rgba(255,255,255,.28)"}" stroke-width="${w}"
             stroke-dasharray="${(omtrek * (z - a)).toFixed(1)} ${omtrek.toFixed(1)}" stroke-dashoffset="${(-omtrek * a).toFixed(1)}"/>
     <circle cx="${(c + r * Math.cos(hoek)).toFixed(1)}" cy="${(c + r * Math.sin(hoek)).toFixed(1)}" r="${groot ? 7 : 6}" fill="${b.kleur}" stroke="var(--bg0)" stroke-width="2.5"/></svg>`;
 }
+let RING_N = 0;
 function ringSvg(deel, kleur, groot) {
   const size = groot ? 116 : 84, r = groot ? 50 : 36, w = groot ? 9 : 7;
   const omtrek = 2 * Math.PI * r;
   const off = omtrek * (1 - Math.max(0, Math.min(1, deel || 0)));
+  const gid = "rv" + (++RING_N);
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:color-mix(in srgb, ${kleur} 45%, #fff)"/><stop offset=".5" style="stop-color:${kleur}"/></linearGradient></defs>
     <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--bg3)" stroke-width="${w}"/>
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${kleur}" stroke-width="${w}"
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="url(#${gid})" stroke-width="${w}"
             stroke-linecap="round" stroke-dasharray="${omtrek.toFixed(1)}"
             stroke-dashoffset="${off.toFixed(1)}"
             style="--omtrek:${omtrek.toFixed(1)}"/></svg>`;
@@ -9551,11 +9573,16 @@ function lgHtml({titel = "", eenheid = "", band = null, series, labels, periode 
   const id = "lg" + (++LG_N), lo = Math.min(...alle), hi = Math.max(...alle), pad = (hi - lo) * .15 || 1, min = lo - pad, max = hi + pad;
   const W = 300, H = 96, x = i => i / (n - 1) * W, y = w => H - (w - min) / (max - min) * H;
   LG[id] = {series, eenheid, x, y, n, W, H, labels};
+  /* per aaneengesloten stuk een vlak tot de onderrand; gaten blijven gaten */
+  const vul = pts => { let d = "", stuk = []; const sluit = () => { if (stuk.length > 1) d += `M${x(stuk[0]).toFixed(1)} ${H} ` + stuk.map(i => `L${x(i).toFixed(1)} ${y(pts[i]).toFixed(1)}`).join(" ") + ` L${x(stuk[stuk.length - 1]).toFixed(1)} ${H} Z `; stuk = []; };
+    pts.forEach((w, i) => w == null ? sluit() : stuk.push(i)); sluit(); return d; };
   const pad_ = pts => { let d = "", open = false; pts.forEach((w, i) => { if (w == null) { open = false; return; } d += `${open ? "L" : "M"}${x(i).toFixed(1)} ${y(w).toFixed(1)} `; open = true; }); return d; };
   return `<div class="lg" id="${id}" tabindex="0" role="img" aria-label="${titel || series.map(z => z.naam).join(" en ")}${periode ? ", " + periode : ""}. Pijltjestoetsen kiezen een dag.">
     <div class="lg-kop">${titel ? `<b>${titel}</b>` : "<span></span>"}<div class="lg-tip" aria-live="polite"></div></div>
     <div class="lg-vlak"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
       ${band ? `<rect x="0" y="${y(band[1]).toFixed(1)}" width="${W}" height="${(y(band[0]) - y(band[1])).toFixed(1)}" fill="rgba(255,255,255,.07)" rx="3"/>` : ""}
+      ${series.map((z, zi) => z.stip ? "" : `<defs><linearGradient id="${id}v${zi}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${z.kleur};stop-opacity:.28"/><stop offset="1" style="stop-color:${z.kleur};stop-opacity:0"/></linearGradient></defs>
+        <path d="${vul(z.pts)}" fill="url(#${id}v${zi})" stroke="none"/>`).join("")}
       ${series.map(z => `<path d="${pad_(z.pts)}" fill="none" stroke="${z.kleur}" stroke-width="2" ${z.stip ? 'stroke-dasharray="4 4"' : ""} vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`).join("")}
       <line class="hulp" x1="0" x2="0" y1="0" y2="${H}" stroke="rgba(255,255,255,.35)" stroke-width="1" vector-effect="non-scaling-stroke"/>
     </svg><div class="lg-stippen" aria-hidden="true"></div></div>
@@ -13492,13 +13519,14 @@ function renderHerstelKop() {
   ];
   /* Rusthartslag en HRV als bandrondje: de schaal loopt twee halve
      bandbreedtes voorbij je band, net als de oude vulling. */
-  const boog = (w, b, band) => {
+  const boog = (w, b, band, tint) => {
     if (w == null || !b || !b.genoeg || b.onder == null || b.boven == null) return null;
     const half = Math.max((b.boven - b.onder) / 2, 1e-6), min = b.onder - 2 * half, max = b.boven + 2 * half, f = x => (x - min) / (max - min);
-    return {lo: f(b.onder), hi: f(b.boven), punt: f(w), kleur: band === "g" ? "var(--ink)" : BANDVAR[band]};
+    return {lo: f(b.onder), hi: f(b.boven), punt: f(w), tint, kleur: band === "g" ? tint : BANDVAR[band]};
   };
-  kolommen[0].bandBoog = boog(rhrW, rhrB, kolommen[0].band);
-  kolommen[1].bandBoog = boog(hrvW, hrvB, kolommen[1].band);
+  /* dezelfde kleur als hun grafiek bij Trends */
+  kolommen[0].bandBoog = boog(rhrW, rhrB, kolommen[0].band, "var(--critical)");
+  kolommen[1].bandBoog = boog(hrvW, hrvB, kolommen[1].band, "var(--accent)");
   host.innerHTML = kolommen.map(k => dialHtml({
       cap: k.l, num: k.v, deel: k.deel, band: k.bandBoog && k.band === "g" ? "n" : k.band, delta: k.delta, groot: k.groot, ga: k.ga, bandBoog: k.bandBoog,
       subt: k.v == null ? "geen meting" : k.st.tekst,
