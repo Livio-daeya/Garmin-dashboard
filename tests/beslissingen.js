@@ -218,9 +218,9 @@
   test("Rustige duur via handbal is niet groen op verwachting alleen", () => {
     DATA.planbasis.vandaag = "2026-11-05";
     renderBelFocus();
-    const chip = document.querySelector('[data-meet="laag"] .u-status').className;
+    const chip = document.querySelector('[data-meet="laag"]').dataset.status;
     const m = weekMinuten();
-    return {ok: m.handbal.z2 >= 60 || !/u-status--ok/.test(chip), detail: `zone 2 gedaan ${m.handbal.z2}, verwacht ${m.handbal.verwZ2}; ${chip}`};
+    return {ok: m.handbal.z2 >= 60 || chip !== "ok", detail: `zone 2 gedaan ${m.handbal.z2}, verwacht ${m.handbal.verwZ2}; ${chip}`};
   });
 
 
@@ -253,24 +253,24 @@
     DATA.planbasis.vandaag = "2026-11-05"; uitgevoerdBijwerken(); renderBelFocus();
     const k = document.querySelector('[data-meet="hoog"]');
     const getal = +k.querySelector(".u-meet-getal").childNodes[0].textContent;
-    const st = k.querySelector(".u-status");
-    return {ok: getal === 16 && /u-status--ok/.test(st.className) && !/19/.test(k.textContent),
-            detail: `${getal} werkmin, label "${st.textContent.trim()}"`};
+    const st = k.dataset.status;
+    return {ok: getal === 16 && st === "ok" && !/19/.test(k.textContent),
+            detail: `${getal} werkmin, status "${st}"`};
   });
 
   test("Geen doel en onvoldoende gegevens zijn verschillende labels", () => {
     DATA.planbasis.vandaag = "2026-11-05"; renderBelFocus();
-    const laag = document.querySelector('[data-meet="laag"] .u-status').textContent.trim().toLowerCase();
+    const laag = document.querySelector('[data-meet="laag"]').getAttribute("aria-label").toLowerCase();
     DATA.planbasis.vandaag = "2026-11-09";   // na de week: zaalsessies zonder registratie
     const items = routeWeek("2026-11-02").dagen.flatMap(d => d.items.map(it => ({...it, iso: d.iso})));
     const wk = blokStatus(items, ["handbal", "wedstrijd", "ana"], 0, null).w;
-    return {ok: laag === "geen doel" && wk === "onvoldoende gegevens", detail: `rustig: ${laag}; korte inspanningen week 2/11 achteraf: ${wk}`};
+    return {ok: /, geen doel$/.test(laag) && wk === "onvoldoende gegevens", detail: `rustig: ${laag}; korte inspanningen week 2/11 achteraf: ${wk}`};
   });
 
 
   test("Advies en tempoblok spreken elkaar niet tegen", () => {
     DATA.planbasis.vandaag = "2026-11-05"; uitgevoerdBijwerken(); renderBelFocus();
-    const groen = /u-status--ok/.test(document.querySelector('[data-meet="hoog"] .u-status').className);
+    const groen = document.querySelector('[data-meet="hoog"]').dataset.status === "ok";
     const a = routeAdvies();
     return {ok: !(groen && /weinig aandacht/.test(a.zin)), detail: `${a.kop} ${a.zin}`};
   });

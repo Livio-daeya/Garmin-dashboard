@@ -751,6 +751,15 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .ta3-legenda p { margin: 0 0 0 30px; color: var(--ink-2); font-size: var(--t-klein); }
 .ta3-vb { display: grid; gap: 4px; }
 .ta3-vb > .u-klein { color: var(--serious); margin: 0 4px; }
+/* meterbalk op Belasting: zelfde vorm, met het hoofdgetal */
+.ta3-titel { display: flex; align-items: center; min-height: 40px; padding: 0 8px; font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.ta3--meter .ta3-deel { gap: 4px; }
+.ta3--meter .ta3-ic { color: var(--cat); }
+.ta3-getal { font-size: 1.35rem; font-weight: 800; line-height: 1.1; letter-spacing: -.01em; color: var(--ink); }
+.ta3-getal small { font-size: var(--t-label); font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+.mk-kop { display: grid; gap: 10px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--hair); }
+.mk-getal { font-size: 2.2rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.mk-getal small { font-size: var(--t-body); font-weight: 500; color: var(--ink-2); margin-left: 4px; }
 .ws-naam { display: inline-flex; align-items: center; gap: 6px; }
 .ws-stip { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; align-items: center; justify-content: center; flex: none; }
 .ws-stip .ic { width: 11px; height: 11px; }
@@ -772,7 +781,7 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 
 /* Belasting: de drie kaarten in de gedeelde meetrij, niet in het oude raster */
 #belFocus.focus { display: block; }
-#belFocus .u-meetrij { margin-bottom: var(--sp4); }
+#belFocus .ta3--meter { margin-top: 0; }
 
 /* ---- Plan ---- */
 .pl-twee { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp3); }
@@ -8200,20 +8209,22 @@ function renderBelFocus() {
         <button class="u-knop u-knop--stil u-knop--klein" data-bevestig="${it.iso}|${it.id}">Wel gedaan</button></div>`).join("") +
       zin(`Sessies, geen minuten: hoe vaak je sprint meet je band niet. Een gewone handbalweek geeft ±${hbHoogGewoon} min hoge hartslag, vooral bij de wedstrijd.`) + handbalTabel()],
   };
-  host.innerHTML = `<div class="u-meetrij">
-    ${uiMeet({sleutel: "laag", icoon: "golf", kleur: SOORT_KLEUR.laag, titel: "Rustige inspanning",
+  const meters = [
+    {sleutel: "laag", icoon: "golf", kleur: SOORT_KLEUR.laag, titel: "Rustige inspanning",
       waarde: rustActs.length ? `${Math.round(z1 + z2)}` : null, eenheid: "min", sub: rustActs.length ? "zone 1–2 opgeteld, niet per se aaneengesloten duurtraining" : "Geen registratie",
-      status: status(lSt)})}
-    ${uiMeet({sleutel: "hoog", icoon: "klok", kleur: SOORT_KLEUR.hoog, titel: "Langere intervallen",
+      st: lSt, naam: "Rustig"},
+    {sleutel: "hoog", icoon: "klok", kleur: SOORT_KLEUR.hoog, titel: "Langere intervallen",
       waarde: `${H.gedaan}`, eenheid: "werkmin",
       sub: H.onbevestigd.length ? `${H.onbevestigd.length} sessie${H.onbevestigd.length === 1 ? "" : "s"} zonder bevestigde werkminuten${H.onbevestigdZ34 ? ` · ${H.onbevestigdZ34} min hartslag in zone 3–4 (geen werkmin)` : ""}` : null,
-      balk: uiBalk({gedaan: H.gedaan, verwacht: H.nogWerk, doel: hPlanWerk, eenheid: "werkmin", doelWoord: "gepland"}), status: status(hSt)})}
-    ${uiMeet({sleutel: "kort", icoon: "bliksem", kleur: SOORT_KLEUR.ana, titel: "Korte intensieve prikkels",
+      balk: uiBalk({gedaan: H.gedaan, verwacht: H.nogWerk, doel: hPlanWerk, eenheid: "werkmin", doelWoord: "gepland"}), st: hSt, naam: "Intervallen"},
+    {sleutel: "kort", icoon: "bliksem", kleur: SOORT_KLEUR.ana, titel: "Korte intensieve prikkels",
       waarde: `${K.hbGedaan + K.anaGedaan}`, eenheid: K.hbGedaan + K.anaGedaan === 1 ? "sessie" : "sessies",
       balk: uiBalk({gedaan: K.hbGedaan + K.anaGedaan, verwacht: nogTeDoen.length, doel: kortGepland, eenheid: "sessies", doelWoord: "gepland"}),
       sub: [`${K.hbGedaan} handbal, ${K.anaGedaan} korte intervaltraining${K.anaGedaan === 1 ? "" : "en"} bevestigd`, K.hbOnbekend ? `${K.hbOnbekend} zonder registratie` : "", K.anaInhoudOnbekend ? `${K.anaInhoudOnbekend} uitgevoerd, inhoud niet bevestigd` : "",
-        "korte acties binnen handbal worden niet apart gemeten"].filter(Boolean).join(" · "), status: status(kSt)})}
-  </div>`;
+        "korte acties binnen handbal worden niet apart gemeten"].filter(Boolean).join(" · "), st: kSt, naam: "Kort intensief"},
+  ].map(x => ({...x, status: ST(x.st)}));
+  meters.forEach(x => { BEL_DETAIL[x.sleutel][1] = meetKopHtml(x) + BEL_DETAIL[x.sleutel][1]; });
+  host.innerHTML = meetBalkHtml(meters);
   host.insertAdjacentHTML("beforeend", adviesBalkHtml(trainingsAdvies(m.ma)));
   host.hidden = false;
   host.querySelectorAll("[data-meet]").forEach(b => b.onclick = () => belDetailOpen(b.dataset.meet));
@@ -9411,18 +9422,28 @@ function uiBalk({gedaan = 0, verwacht = 0, doel, eenheid = "", label, doelWoord 
 
 /* Meetkaart: titel, één groot getal met eenheid (of een eerlijke status),
    een korte regel eronder. Aanklikbaar als er details zijn. */
-function uiMeet({sleutel, icoon, kleur, titel, waarde, eenheid, sub, status, balk, attr = ""}) {
-  const tag = sleutel ? "button" : "div";
-  return `<${tag} class="u-meet" ${sleutel ? `data-meet="${sleutel}"` : ""} ${attr} style="--cat:${kleur || "var(--ink-2)"}">
-      <span class="u-meet-kop">${icoon ? `<span class="u-meet-ic">${ic(icoon)}</span>` : ""}<span>${titel}</span></span>
-      ${waarde != null ? `<span class="u-meet-getal">${waarde}${eenheid ? `<small>${eenheid}</small>` : ""}</span>`
-        : `<span class="u-meet-leeg">${sub || "Onbekend"}</span>`}
-      ${balk || ""}
-      ${waarde != null && sub ? `<span class="u-meet-sub">${sub}</span>` : ""}
-      ${status || ""}
-    </${tag}>`;
+/* Meterbalk: drie iconen met statusrondje, hoofdgetal en label. De status is
+   uitvoering tegenover je plan, met eigen symbolen; "nog gepland" is neutraal,
+   zodat het niet lijkt op het blauw van het trainingsadvies. */
+const MEET_SYMBOOL = {uitgevoerd: '<path d="m6 12.5 4 4 8-9"/>', gepland: '<circle cx="12" cy="12" r="5.5"/><path d="M12 9.5V12l1.6 1"/>', geendoel: '<path d="M7 12h10"/>',
+  meer: '<path d="M12 6v7M12 17.5h.01"/>', minder: '<path d="M7 7l10 10M17 7 7 17"/>', onbekend: '<path d="M9.2 9a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.4-2.8 4M12 17.8h.01"/>'};
+const MEET_KLEUR = {uitgevoerd: "groen", gepland: "grijs", geendoel: "grijs", meer: "oranje", minder: "rood", onbekend: "grijs"};
+const meetSoort = st => st.k === "groen" ? "uitgevoerd" : st.k === "blauw" ? "gepland" : st.k === "oranje" ? "meer" : st.k === "rood" ? "minder" : st.w === "geen doel" ? "geendoel" : "onbekend";
+const meetBadge = soort => `<span class="ta3-badge ta3--${MEET_KLEUR[soort]}" aria-hidden="true"><svg viewBox="0 0 24 24">${MEET_SYMBOOL[soort]}</svg></span>`;
+function meetBalkHtml(meters) {
+  return `<div class="ta3 ta3--meter"><div class="ta3-titel">Deze week</div><div class="ta3-drie">${meters.map(m => { const soort = meetSoort(m.st);
+    return `<button class="ta3-deel" data-meet="${m.sleutel}" data-status="${m.status[1]}" style="--cat:${m.kleur}"
+      aria-label="${m.titel}: ${m.waarde != null ? `${m.waarde} ${m.eenheid}` : (m.sub || "onbekend").toLowerCase()}, ${String(m.status[0]).toLowerCase()}">
+      <span class="ta3-ic">${ic(m.icoon)}${meetBadge(soort)}</span>
+      <span class="ta3-getal u-meet-getal" aria-hidden="true">${m.waarde != null ? `${m.waarde}<small>${m.eenheid}</small>` : "–"}</span>
+      <span class="ta3-naam" aria-hidden="true">${m.naam}</span></button>`; }).join("")}</div></div>`;
 }
-
+function meetKopHtml(m) {
+  const soort = meetSoort(m.st);
+  return `<div class="mk-kop" style="--cat:${m.kleur}"><span class="ta3-status ta3--${MEET_KLEUR[soort]}">${meetBadge(soort)}<span>${m.status[0]}</span></span>
+    <span class="mk-getal">${m.waarde != null ? `${m.waarde}<small>${m.eenheid}</small>` : `<small>${m.sub || "Onbekend"}</small>`}</span>
+    ${m.balk || ""}${m.waarde != null && m.sub ? `<span class="u-klein">${m.sub}</span>` : ""}</div>`;
+}
 /* Weekstrook: zeven dagen, per dag datum, sporticonen, aantal sessies en
    een uitvoeringsstatus met icoon. */
 function uiWeekstrook(dagen, gekozen, attr = "data-dag") {
