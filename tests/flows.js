@@ -135,7 +135,7 @@
       detail: Object.entries(soorten).map(([k, v]) => `${k}: ${v}`).join(" · ") + (conditie ? ` · interval: ${interval}` : "")};
   });
 
-  await test("Workoutmodus: alleen afgeronde sets gelogd, niets verzonnen", async () => {
+  await test("Workoutmodus: ingevulde sets gelogd, ook zonder vinkje; lege sets niet, niets verzonnen", async () => {
     localStorage.removeItem(WK_CONCEPT_KEY);
     const it = dagRoute(V).items.find(i => i.soort === "kracht");
     const voor = logLees().length;
@@ -143,13 +143,14 @@
     const o = WKM.oef.find(x => x.soort === "kracht");
     WKM.actief = WKM.oef.indexOf(o);
     o.sets[0] = {a: "8", b: "40", klaar: true}; o.sets[1] = {a: "8", b: "40", klaar: false};
+    o.sets.slice(2).forEach(x => Object.assign(x, {a: "", b: "", klaar: false}));
     workoutBewaarConcept();
     const concept = JSON.parse(localStorage.getItem(WK_CONCEPT_KEY));
     workoutAfronden(); await wacht(20);
     const log = logLees().find(x => x.datum === V && x.type === it.wk);
     const keys = Object.keys(log ? log.oefeningen : {});
     uiPaneelSluit(); await wacht(300);
-    return {ok: !!concept && keys.length === 1 && log.oefeningen[keys[0]].sets === 1 && log.oefeningen[keys[0]].kg === 40,
+    return {ok: !!concept && keys.length === 1 && log.oefeningen[keys[0]].sets === 2 && log.oefeningen[keys[0]].kg === 40,
       detail: `concept bewaard ${!!concept}; gelogd: ${keys.map(k => `${k} ${log.oefeningen[k].sets} set(s) ${log.oefeningen[k].kg} kg`).join(", ")}; logregels ${voor} → ${logLees().length}`};
   });
 

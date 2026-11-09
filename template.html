@@ -9980,7 +9980,7 @@ function trainingKaart(iso, i, opties = {}) {
       <div class="tk-titel"><b>${i.titel}</b><span class="tk-meta">${sessieStatusLabel(iso, s)}<span>${korteDatum(iso)}${i.plek ? ` · ${PLEK_KORT[i.plek] || i.plek}` : ""}</span></span></div>
       <div class="tk-menuwrap"><button class="u-icoonknop" data-menu="${sl}" aria-haspopup="menu" aria-expanded="false" aria-label="Status en acties">${ic("meer")}</button></div>
     </div>`;
-  if (opties.compact && s.k === "gedaan") {
+  if (opties.compact && s.k === "gedaan" && i.id !== "hef") {
     /* uitgevoerd op Vandaag: één regel kerncijfers en de vervolgstap */
     const hp = hb ? handbalPrikkel(iso, i) : null;
     return `<article class="tk tk--compact">${kop}${kerncijfers(iso, i, hp)}
@@ -9989,6 +9989,34 @@ function trainingKaart(iso, i, opties = {}) {
   }
   return `<article class="tk${achteraf ? "" : " tk--open"}">${kop}${achteraf ? kaartAchteraf(iso, i, s) : kaartVooraf(iso, i, s)}</article>`;
 }
+
+/* Hefhoogte: links en rechts in cm, zoals je fysio meet. Bewaard bij je
+   instellingen (gesynchroniseerd), per sessie. */
+const metingVan = sl => ((instelLees().metingen || {})[sl]) || null;
+function hefTekst(m) {
+  const verschil = m.links && m.rechts ? Math.round((m.links - m.rechts) / m.links * 100) : null;
+  return `Rechts ${komma(m.rechts)} cm · links ${komma(m.links)} cm${verschil != null ? ` · rechts ${verschil > 0 ? `${verschil}% lager` : verschil < 0 ? `${-verschil}% hoger` : "gelijk"}` : ""}`;
+}
+function metingPaneel(sl) {
+  const [iso, i] = sessieZoek(sl); if (!i) return;
+  const m = metingVan(sl) || {};
+  const vorige = Object.entries(instelLees().metingen || {}).filter(([k, x]) => k !== sl && k.endsWith("|hef") && x.rechts).sort().pop();
+  uiPaneel(`${i.titel} · ${kortDatum(iso)}`, `<p class="u-klein">Hoogte van je hielheffing op één been, in centimeters, zoals je fysio meet.</p>
+    <div class="u-dl" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Rechts (cm)<input class="u-invul" id="hefR" type="number" inputmode="decimal" step="0.1" min="0" max="40" value="${m.rechts ?? ""}"></label>
+      <label>Links (cm)<input class="u-invul" id="hefL" type="number" inputmode="decimal" step="0.1" min="0" max="40" value="${m.links ?? ""}"></label></div>
+    ${vorige ? `<p class="u-klein">Vorige meting ${kortDatum(vorige[0].split("|")[0])}: ${hefTekst(vorige[1])}.</p>` : ""}
+    <button class="u-knop u-knop--vol" id="hefBewaar">Bewaren</button>`, box => {
+    box.querySelector("#hefBewaar").onclick = () => {
+      const r = parseFloat(String(box.querySelector("#hefR").value).replace(",", ".")), l = parseFloat(String(box.querySelector("#hefL").value).replace(",", "."));
+      if (!(r > 0) || !(l > 0)) { uiMelding("Vul links en rechts in", "fout"); return; }
+      const I = bewaardLees(INSTEL_KEY, {});
+      instelZet({...I, metingen: {...(I.metingen || {}), [sl]: {rechts: r, links: l, t: new Date().toISOString()}}});
+      planStatusZet(iso, i.id, "gedaan"); uiPaneelSluit(); allesNaInvoer(); uiMelding("Meting bewaard");
+    };
+  });
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-meting]"); if (!b) return; e.stopPropagation(); metingPaneel(b.dataset.meting); });
 
 function kerncijfers(iso, i, hp) {
   const hb = i.soort === "handbal" || i.soort === "wedstrijd";
@@ -10009,7 +10037,8 @@ function kaartVooraf(iso, i, s) {
         `<li><span>${o.naam}</span><span>${o.sets} × ${o.reps}${o.kg ? ` · ${komma(o.kg)} kg` : ""}</span></li>`).join("")}</ul></details>`
     : i.voorschrift ? `<p class="tk-voorschrift">${i.voorschrift}</p>` : "";
   let knop = "";
-  if (iso <= vandaagIso() || iso === isoPlus(vandaagIso(), 1)) {
+  if (i.id === "hef" && iso <= vandaagIso()) knop = `<button class="u-knop" data-meting="${sl}">${ic("meter")}Meting invullen</button>`;
+  else if (iso <= vandaagIso() || iso === isoPlus(vandaagIso(), 1)) {
     if (i.soort === "kracht" && i.wk && WORKOUTS[i.wk]) knop = `<button class="u-knop" data-start="${sl}">${ic("halter")}Start workout</button>`;
     else if (["hoog", "laag", "ana", "check"].includes(i.soort)) knop = `<button class="u-knop" data-start="${sl}">${ic("puls")}Start workout</button>`;
     else if (hb && iso <= vandaagIso()) knop = `<button class="u-knop" data-afronden="${sl}">${ic("goed")}Afronden</button>`;
@@ -10028,6 +10057,13 @@ function kaartAchteraf(iso, i, s) {
   if (s.k === "onbekend") return `<p class="tk-volgt">Garmin heeft geen registratie. Was het gedaan, overgeslagen of later?</p>
     <div class="tk-knoppen"><button class="u-knop" data-ps="gedaan" data-id="${i.id}">Gedaan</button>
       <button class="u-knop u-knop--stil" data-ps="overgeslagen" data-id="${i.id}">Overgeslagen</button></div>`;
+  /* een meting: de uitslag, geen duur of zwaarte */
+  if (i.id === "hef") {
+    const m = metingVan(sl);
+    return `${m ? `<p class="tk-volgt">${ic("meter")}${hefTekst(m)}</p>` : `<p class="tk-volgt">${ic("info")}Nog geen meting ingevuld.</p>`}
+      <div class="tk-knoppen"><button class="u-knop${m ? " u-knop--stil" : ""}" data-meting="${sl}">${m ? "Meting wijzigen" : "Meting invullen"}</button>
+        <button class="u-knop u-knop--stil" data-coach="${sl}">Bespreek met coach</button></div>`;
+  }
   const hp = hb ? handbalPrikkel(iso, i) : null;
   const fb = feedbackVan(iso, i);
   let midden = "";
@@ -10045,10 +10081,15 @@ function kaartAchteraf(iso, i, s) {
   } else if (i.soort === "kracht") {
     const log = krachtLogOp(iso, i.wk);
     const sets = log ? Object.values(log.oefeningen || {}).reduce((t, o) => t + (o.sets || 0), 0) : 0;
+    /* een gestarte maar niet afgeronde workout staat als concept op dit apparaat */
+    const concept = (() => { try { const c = JSON.parse(localStorage.getItem(WK_CONCEPT_KEY) || "null"); return c && c.sl === sl ? c : null; } catch (e) { return null; } })();
+    const ingevuld = concept ? concept.oef.flatMap(o => o.sets).filter(x => parseFloat(x.a) > 0).length : 0;
     midden = log
       ? `<p class="tk-volgt">${ic("halter")}${Object.keys(log.oefeningen || {}).length} oefeningen · ${sets} sets gelogd</p>`
+      : concept && ingevuld
+      ? `<p class="tk-noot">${ic("letop")}Workout niet afgerond: ${ingevuld} sets ingevuld op dit apparaat, nog niet bewaard.</p>`
       : `<p class="tk-volgt">${ic("info")}Sets niet gelogd. Gedaan zetten verzint geen sets of gewichten.</p>`;
-    if (!log) midden += `<div class="tk-knoppen"><button class="u-knop u-knop--stil" data-start="${sl}">Sets invullen</button></div>`;
+    if (!log) midden += `<div class="tk-knoppen"><button class="u-knop${concept && ingevuld ? "" : " u-knop--stil"}" data-start="${sl}">${concept && ingevuld ? "Hervatten en afronden" : "Sets invullen"}</button></div>`;
   } else {
     const l = (instelLees().conditielog || {})[sl] || {};
     midden = l.werk != null || l.herh != null
@@ -10571,14 +10612,16 @@ function workoutAfronden() {
   if (W.soort === "kracht") {
     const oefeningen = {};
     W.oef.forEach(o => {
-      const reeksen = o.sets.filter(s => s.klaar).map(s => ({reps: parseFloat(s.a), kg: o.soort === "kracht" || o.soort === "carry" ? parseFloat(s.b) : null}))
+      /* een ingevulde set telt, ook als het vinkje vergeten is: het vinkje
+         is voor de rusttimer, niet voor wat je deed */
+      const reeksen = o.sets.filter(s => s.klaar || parseFloat(s.a) > 0).map(s => ({reps: parseFloat(s.a), kg: o.soort === "kracht" || o.soort === "carry" ? parseFloat(s.b) : null}))
         .filter(r => Number.isFinite(r.reps) && r.reps > 0).map(r => ({reps: r.reps, kg: Number.isFinite(r.kg) ? r.kg : null}));
       if (!reeksen.length) return;
       const top = reeksen.slice().sort((a, b) => (b.kg || 0) - (a.kg || 0) || b.reps - a.reps)[0];
       oefeningen[o.k] = {kg: top.kg, reps: Math.min(...reeksen.map(r => r.reps)), sets: reeksen.length, rir: o.rir,
         voorschrift: {sets: o.voorschrift.sets, reps: o.voorschrift.reps, rir: o.voorschrift.rir}, eenheid: (OEF[o.k] || {}).eenheid || null, reeksen};
     });
-    if (!Object.keys(oefeningen).length) { uiMelding("Nog geen afgeronde sets; rond minstens één set af", "fout"); return; }
+    if (!Object.keys(oefeningen).length) { uiMelding("Nog geen sets ingevuld; vul bij minstens één set de herhalingen in", "fout"); return; }
     const log = logLees();
     const idx = log.findIndex(x => x.type === W.wk && x.datum === W.iso);
     /* vaste id per sessie: niet de positie in de lijst, want die verschilt
