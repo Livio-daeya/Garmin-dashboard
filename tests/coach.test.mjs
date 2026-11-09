@@ -101,6 +101,19 @@ await test("Eerder gesprek gaat mee, om en om en beginnend bij de gebruiker", as
   const laatste = verzoeken[0].messages[verzoeken[0].messages.length - 1].content;
   return {ok: rollen === "user,assistant,user" && laatste === "nieuwe vraag", detail: `${rollen}; laatste "${laatste}"`};
 });
+await test("Elke dag een nieuw gesprek: berichten van gisteren gaan niet mee", async () => {
+  const nu = Date.parse("2026-11-09T09:00:00+01:00");
+  const db = nepDb({coach_berichten: [
+    {id: 1, t: "2026-11-08T20:00:00+01:00", rol: "user", tekst: "vraag van gisteren"},
+    {id: 2, t: "2026-11-08T20:00:05+01:00", rol: "assistant", tekst: "antwoord van gisteren"},
+    {id: 3, t: "2026-11-09T08:55:00+01:00", rol: "user", tekst: "vraag van vandaag"},
+    {id: 4, t: "2026-11-09T08:55:05+01:00", rol: "assistant", tekst: "antwoord van vandaag"},
+    {id: 5, t: "2026-11-09T09:00:00+01:00", rol: "user", tekst: "nieuwe vraag"}]});
+  const {client, verzoeken} = nepClient([{stop: "end_turn", content: [{type: "text", text: "ok"}]}]);
+  await coachRonde({client, db, vraag: "nieuwe vraag", nu});
+  const tekst = verzoeken[0].messages.map(m => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join(" | ");
+  return {ok: !/gisteren/.test(tekst) && /vraag van vandaag/.test(tekst) && /nieuwe vraag/.test(tekst), detail: tekst};
+});
 await test("Zonder inlogtoken geen toegang", async () => {
   process.env.SUPABASE_URL = "https://x.supabase.co"; process.env.SUPABASE_PUBLISHABLE_KEY = "sb_publishable_x"; process.env.ANTHROPIC_API_KEY = "x";
   const r = await POST(new Request("https://coach.example/api/coach", {method: "POST", body: JSON.stringify({vraag: "hoi"})}));

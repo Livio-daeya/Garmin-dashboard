@@ -16311,13 +16311,19 @@ const coachServerUrl = () => {
 const coachServer = () => !!(SUPA.sessie && coachServerUrl());
 const notitiesLees = () => kaartLees(NOTITIE_KEY);
 
+/* Elke dag een nieuw gesprek: je ziet alleen de berichten van vandaag.
+   Eerdere gesprekken blijven in Supabase staan; wat ertoe doet, heeft de coach
+   al in je dashboard vastgelegd (notities, sessies, check-ins). */
+const coachDagStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 async function coachServerHerlaad(forceer = false) {
   if (!coachServer() || COACH_BEZIG) return;
-  const {data, error} = await SUPA.client.from("coach_berichten").select("id,rol,tekst,acties").order("id", {ascending: false}).limit(30);
+  const start = coachDagStart();
+  if (COACH_GESPREK.some(b => b.t && b.t < start)) forceer = true;   // nieuwe dag terwijl de pagina openstond
+  const {data, error} = await SUPA.client.from("coach_berichten").select("id,t,rol,tekst,acties").gte("t", start).order("id", {ascending: false}).limit(30);
   if (error || !data) return;
   const bekend = Math.max(0, ...COACH_GESPREK.map(b => b.serverId || 0));
   if (!forceer && data.length && data[0].id <= bekend) return;
-  COACH_GESPREK = data.reverse().map(b => ({rol: b.rol === "user" ? "jij" : "coach", tekst: b.tekst, acties: b.acties || null, serverId: b.id}));
+  COACH_GESPREK = data.reverse().map(b => ({rol: b.rol === "user" ? "jij" : "coach", tekst: b.tekst, acties: b.acties || null, serverId: b.id, t: b.t}));
   coachTeken();
 }
 
@@ -16400,7 +16406,8 @@ function renderCoachSetup() {
     host.innerHTML = `<details class="verdieping verdieping--binnen"><summary>Coach-instellingen</summary>
       <p class="u-klein">Je coach draait op je eigen server en kijkt zelf in je Garmin-gegevens, je planning, je belasting en je invoer.
         Wat je hem vertelt over zwaarte, klachten of afspraken legt hij vast in je dashboard, met herkomst "coach-chat".
-        Planwijzigingen en workouts voor je krachtlog neem je zelf over. Het gesprek is op al je apparaten hetzelfde.</p>
+        Planwijzigingen en workouts voor je krachtlog neem je zelf over. Het gesprek is op al je apparaten hetzelfde en begint elke dag opnieuw;
+        eerdere gesprekken blijven bewaard en wat ertoe doet, heeft de coach vastgelegd.</p>
       <div class="planbar knoprij--ruim"><button class="knop knop--secundair knop--klein" id="coachWis">Gesprek wissen</button></div></details>
       ${not.length ? `<details class="verdieping verdieping--binnen"><summary>Vastgelegd door je coach (${not.length})</summary><ul class="u-lijst">${not.map(n =>
         `<li><b>${kortDatum(n.datum)}</b>${n.onderwerp ? ` · ${veiligeTekst(n.onderwerp)}` : ""}: ${veiligeTekst(n.tekst)}</li>`).join("")}</ul></details>` : ""}`;
@@ -16425,7 +16432,7 @@ function renderCoachSetup() {
         <button class="knop knop--secundair knop--klein" id="coachUit">Sleutel verwijderen</button>
       </div></details>`;
     wrap.style.display = "";
-    if (!COACH_GESPREK.length && Array.isArray(c.gesprek) && c.gesprek.length) { COACH_GESPREK = c.gesprek.slice(); coachTeken(); }
+    if (!COACH_GESPREK.length && Array.isArray(c.gesprek) && c.gesprek.length && c.gesprekDag === echteDatum()) { COACH_GESPREK = c.gesprek.slice(); coachTeken(); }
     coachWeetTonen(); coachContextTonen();
     document.getElementById("coachWissel").onclick = () => coachModellen(c.sleutel);
     document.getElementById("coachWis").onclick = () => {
@@ -16650,7 +16657,7 @@ function coachTeken() {
   });
   /* gesprek bewaren op dit apparaat (niet gesynchroniseerd, net als je sleutel) */
   const c0 = coachLees();
-  if (c0.sleutel) coachZet({...c0, gesprek: COACH_GESPREK.filter(b => !b.bezig && b.tekst).slice(-30)});
+  if (c0.sleutel) coachZet({...c0, gesprekDag: echteDatum(), gesprek: COACH_GESPREK.filter(b => !b.bezig && b.tekst).slice(-30)});
   log.scrollIntoView({block: "end", behavior: "smooth"});
 }
 

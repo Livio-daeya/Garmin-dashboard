@@ -186,7 +186,11 @@ export async function voerUit(db, naam, invoer, nu = Date.now()) {
 export async function coachRonde({client, db, vraag, over, nu = Date.now(), model = MODEL}) {
   const [ctx] = await db.lees("records", "select=data&vak=eq.context&sleutel=eq.actueel");
   const stand = ctx ? ctx.data : null;
-  const eerder = (await db.lees("coach_berichten", "select=rol,tekst&order=id.desc&limit=30")).reverse();
+  /* elke dag een nieuw gesprek: alleen de berichten van vandaag (Nederlandse tijd)
+     gaan mee; eerdere dagen staan in zijn notities, sessies en check-ins */
+  const nlDag = x => new Date(x).toLocaleDateString("sv-SE", {timeZone: "Europe/Amsterdam"});
+  const eerder = (await db.lees("coach_berichten", "select=rol,tekst,t&order=id.desc&limit=30"))
+    .filter(b => !b.t || nlDag(b.t) === nlDag(nu)).reverse().map(({rol, tekst}) => ({rol, tekst}));
   /* de vraag zelf staat al opgeslagen; niet dubbel meesturen */
   if (eerder.length && eerder[eerder.length - 1].rol === "user" && eerder[eerder.length - 1].tekst === vraag) eerder.pop();
   const vandaag = (stand && stand.vandaag) || new Date(nu).toISOString().slice(0, 10);
