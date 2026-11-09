@@ -220,14 +220,21 @@ def main() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import naar_supabase                      # noqa: E402
     try:
-        naar_supabase.schrijf(payload, alleen_recent=snel)
+        gelukt = naar_supabase.schrijf(payload, alleen_recent=snel)
+        reden = "" if gelukt else "Supabase is niet ingesteld: SUPABASE_URL (variable) of SUPABASE_SECRET_KEY (secret) ontbreekt"
     except SystemExit as fout:
+        gelukt, reden = False, str(fout)
         print(f"! {fout}")
-        # In de snelle ronde is Supabase de enige weg naar je dashboard: dan
-        # moet een mislukking zichtbaar zijn als mislukte run.
-        if snel:
-            cache_wegschrijven(token, gist, cache)
-            sys.exit(f"Snelle sync: de cijfers konden niet naar Supabase. {fout}")
+    if not gelukt:
+        # zichtbaar als waarschuwing bij de run op GitHub
+        print(f"::warning title=Supabase niet bijgewerkt::{reden}")
+    if snel and not gelukt:
+        # In de snelle ronde is Supabase de weg naar je dashboard. Lukt dat
+        # niet, dan toch de pagina bouwen: dan komen je cijfers alsnog binnen.
+        print("Snel: Supabase lukte niet; de pagina wordt alsnog gebouwd.")
+        D.PUBLISH_DIR = WORTEL
+        D.publish(payload, passphrase=wachtwoordzin)
+        (WORTEL / ".nojekyll").write_text("", encoding="utf-8")
 
     # ---- bewaren wat we volgende keer nodig hebben ------------------------
     cache_wegschrijven(token, gist, cache)

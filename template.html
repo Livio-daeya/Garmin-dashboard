@@ -15915,9 +15915,12 @@ async function wolkVerversen() {
         if (/geen nieuwere/.test(PAKKET_REDEN) && i >= 1) break;
         await new Promise(r => setTimeout(r, 2000));
       }
-      syncbarToon({pct: 0, fase: 2, titel: /geen nieuwere/.test(PAKKET_REDEN) ? "Al bijgewerkt" : "Cijfers niet overgenomen",
-        staat: /geen nieuwere/.test(PAKKET_REDEN) ? "klaar" : "fout", sub: PAKKET_REDEN || "onbekende reden"});
-      return;
+      if (/geen nieuwere/.test(PAKKET_REDEN)) {
+        syncbarToon({pct: 100, fase: 3, titel: "Al bijgewerkt", staat: "klaar", sub: "Er waren geen nieuwere cijfers."});
+        return;
+      }
+      /* geen pakket: de run bouwt dan alsnog de pagina; daarop wachten */
+      syncbarToon({pct: 80, fase: 2, titel: "Cijfers komen via de pagina", sub: PAKKET_REDEN || "geen pakket in Supabase"});
     }
     if (SUPA.sessie && await garminPakketLaden(true)) {
       syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar", sub: "De nieuwe cijfers staan erin."});
