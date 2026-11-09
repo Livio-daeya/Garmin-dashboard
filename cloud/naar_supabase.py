@@ -89,15 +89,39 @@ def _post(url: str, sleutel: str, tabel: str, rijen: list[dict]) -> None:
             raise SystemExit(f"Supabase weigerde {tabel}: HTTP {e.code} {e.read()[:300]!r}") from None
 
 
-def schrijf(payload: dict, url: str | None = None, sleutel: str | None = None) -> bool:
+# Wat nooit mee mag in het pakket: de synchronisatietoken en de koppeling
+# zelf. Die staan al in de pagina en horen niet in een databaserij.
+PAKKET_WEG = {"sync", "supabase", "demo"}
+
+
+def pakket(payload: dict) -> tuple[list[dict], list[dict]]:
+    """De hele berekende stand, zodat het dashboard nieuwe cijfers kan
+    overnemen zonder een nieuwe pagina. Eerst het pakket, dan de stand: een
+    apparaat dat de stand ziet, vindt het pakket dus altijd al klaar."""
+    data = {k: v for k, v in payload.items() if k not in PAKKET_WEG}
+    stand = {"pakket": payload.get("_pakket"), "generated": payload.get("generated")}
+    return [{"sleutel": "pakket", "data": data}], [{"sleutel": "pakket_stand", "data": stand}]
+
+
+def schrijf(payload: dict, url: str | None = None, sleutel: str | None = None, alleen_recent: bool = False) -> bool:
     url = (url or os.environ.get("SUPABASE_URL") or "").rstrip("/")
     sleutel = sleutel or os.environ.get("SUPABASE_SECRET_KEY") or ""
     if not url or not sleutel:
         print("  Supabase: niet ingesteld, overgeslagen.")
         return False
     d, a, o = dagen(payload), activiteiten(payload), overzicht(payload)
+    if alleen_recent:
+        # snelle ronde: alleen wat kan zijn veranderd
+        from datetime import date, timedelta
+        grens = (date.today() - timedelta(days=4)).isoformat()
+        d = [x for x in d if x["datum"] >= grens]
+        a = [x for x in a if x["datum"] >= grens]
     _post(url, sleutel, "garmin_dag", d)
     _post(url, sleutel, "garmin_activiteit", a)
     _post(url, sleutel, "garmin_overzicht", o)
-    print(f"  Supabase: {len(d)} dagen, {len(a)} activiteiten, {len(o)} overzichten bijgewerkt.")
+    rij, stand = pakket(payload)
+    _post(url, sleutel, "garmin_overzicht", rij)
+    _post(url, sleutel, "garmin_overzicht", stand)
+    kb = len(json.dumps(rij[0]["data"], default=str)) / 1024
+    print(f"  Supabase: {len(d)} dagen, {len(a)} activiteiten, {len(o)} overzichten, pakket {kb:.0f} kB bijgewerkt.")
     return True

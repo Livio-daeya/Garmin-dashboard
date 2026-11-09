@@ -292,15 +292,19 @@ def samenvatting_reeks(details: dict[str, Any], floors: dict[int, int]) -> dict[
 
 
 def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
-              force: bool = False, activity_weeks: int | None = None) -> dict[str, Any]:
+              force: bool = False, activity_weeks: int | None = None, snel: bool = False) -> dict[str, Any]:
     """Haal activiteiten + dagelijkse metrics op. Gebruikt de cache waar mogelijk.
 
     activity_weeks mag groter zijn dan weeks: het dashboard heeft extra
     aanlooptijd nodig om CTL/ATL te laten inregelen.
+
+    snel: alleen vandaag en gisteren, en activiteiten van de laatste drie
+    dagen. Geen zone-instelling en geen steekproef op lege endpoints; dat doet
+    de volledige ronde 's ochtends. Wat al in de cache staat, blijft staan.
     """
     today = date.today()
-    start = today - timedelta(weeks=weeks)
-    act_start = today - timedelta(weeks=activity_weeks or weeks)
+    start = today - timedelta(days=1) if snel else today - timedelta(weeks=weeks)
+    act_start = today - timedelta(days=3) if snel else today - timedelta(weeks=activity_weeks or weeks)
 
     # ---- activiteiten -----------------------------------------------------
     print(f"  → activiteiten {act_start} t/m {today}")
@@ -321,7 +325,7 @@ def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
     if nieuw:
         print(f"  → hartslagzones: {len(nieuw)} activiteiten")
     # De zone-instelling zelf: methode, gebruikte maximale hartslag, per sport.
-    inst = fetcher.call("connectapi", "/biometric-service/heartRateZones")
+    inst = None if snel else fetcher.call("connectapi", "/biometric-service/heartRateZones")
     if isinstance(inst, list) and inst:
         cache.setdefault("meta", {})["hr_instelling"] = inst
     for aid in nieuw[:200]:
@@ -399,6 +403,8 @@ def fetch_all(fetcher: Fetcher, weeks: int, cache: dict[str, Any],
                if fetcher.support.get(m) == "leeg" and m not in bewezen]
     if bewezen:
         print(f"  → altijd ophalen (gaven eerder data): {', '.join(sorted(bewezen))}")
+    if snel:
+        suspect = []          # de steekproef hoort bij de volledige ronde
     if suspect:
         print("  → steekproef op endpoints die gisteren leeg waren")
         for method in suspect:

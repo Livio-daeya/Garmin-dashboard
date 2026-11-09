@@ -5,11 +5,15 @@ name: Dashboard bijwerken
 # training staat de nieuwe data online -- zonder dat je iets hoeft aan te zetten.
 #
 # Wanneer hij draait:
-#   * elke 20 minuten in het avondvenster, dus rond en na je trainingen
-#   * elke ochtend, zodat je slaap en HRV van die nacht erbij komen
-#   * en zodra jij op de verversknop in het dashboard tikt (workflow_dispatch)
-#   * en zodra er nieuwe code naar GitHub gaat, zodat een wijziging meteen
-#     zichtbaar wordt zonder dat je zelf een bouw hoeft te starten
+#   * elke ochtend VOLLEDIG: alles testen, de hele historie bijwerken, de
+#     pagina opnieuw bouwen en alles naar Supabase
+#   * elke 20 minuten in het avondvenster SNEL: alleen vandaag, gisteren en
+#     nieuwe activiteiten; geen nieuwe pagina, de cijfers gaan als één pakket
+#     naar Supabase en het dashboard neemt ze over zonder herladen
+#   * zodra jij op de verversknop tikt: snel (of volledig als dat apparaat
+#     niet bij Supabase is ingelogd)
+#   * zodra er nieuwe code naar GitHub gaat: volledig, zodat de wijziging
+#     meteen zichtbaar wordt
 #
 # De tijden staan in UTC; dat schrijft GitHub voor. In de zomer is dat twee uur
 # eerder dan de klok in Nederland, in de winter een uur.
@@ -21,6 +25,11 @@ on:
     # 05:10 UTC = 07:10 zomertijd, 06:10 wintertijd
     - cron: "10 5 * * *"
   workflow_dispatch:
+    inputs:
+      modus:
+        description: "snel (alleen nieuwe cijfers) of volledig (ook de pagina)"
+        required: false
+        default: "snel"
   # Duw je nieuwe code naar GitHub, dan bouwt hij meteen een keer. Zonder dit
   # moest je daarna zelf op 'Run workflow' klikken. index.html staat erbuiten:
   # dat bestand schrijft de bouw zelf, en dat hoeft niet nog een bouw te
@@ -72,6 +81,8 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_SECRET_KEY:      ${{ secrets.SUPABASE_SECRET_KEY }}
           COACH_URL:                ${{ vars.COACH_URL }}
+          # volledig: ochtend, nieuwe code of op verzoek; anders snel
+          MODUS: ${{ (github.event_name == 'push' || github.event.schedule == '10 5 * * *' || inputs.modus == 'volledig') && 'volledig' || 'snel' }}
         run: python cloud/bouw.py
 
       - name: Sporen wissen

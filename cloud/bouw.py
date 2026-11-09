@@ -133,6 +133,10 @@ def main() -> None:
     repo = env("GITHUB_REPOSITORY")
     wachtwoordzin = env("DASHBOARD_PW")
     weken = int(os.environ.get("WEKEN") or 12)
+    # volledig: alles testen, hele historie, nieuwe pagina. snel: alleen de
+    # nieuwste cijfers, als pakket naar Supabase; de pagina blijft staan.
+    snel = (os.environ.get("MODUS") or "volledig").strip().lower() == "snel"
+    print(f"Modus: {'snel' if snel else 'volledig'}")
 
     # ---- tokens klaarzetten ----------------------------------------------
     TOKENMAP.mkdir(parents=True, exist_ok=True)
@@ -185,19 +189,30 @@ def main() -> None:
                  f"~/.garminconnect/garmin_tokens.json in het secret. Zie DELEN.md, stap 2.")
 
     fetcher = F.Fetcher(client)
-    F.probe(fetcher)
+    if snel:
+        # wat de ochtendronde over de endpoints leerde, geldt nog steeds
+        fetcher.support = dict((cache.get("meta") or {}).get("support") or {})
+    else:
+        F.probe(fetcher)
     # Dagwaarden over de langere historie voor de persoonlijke referenties;
     # al gecachte dagen worden niet opnieuw opgehaald.
-    cache = F.fetch_all(fetcher, max(weken, D.HISTORIE_WEKEN), cache, activity_weeks=weken + D.RAMP_WEEKS)
+    cache = F.fetch_all(fetcher, max(weken, D.HISTORIE_WEKEN), cache, activity_weeks=weken + D.RAMP_WEEKS, snel=snel)
 
     print("Berekenen...")
     payload = D.build_payload(cache, weken)
+    # Volgnummer van dit pakket: het dashboard neemt een pakket uit Supabase
+    # alleen over als het nieuwer is dan wat het al heeft.
+    import time
+    payload["_pakket"] = int(time.time())
 
-    # De pagina komt in de repository zelf terecht; de workflow zet hem daarna
-    # online. De wachtwoordzin komt uit een secret en wordt niet weggeschreven.
-    D.PUBLISH_DIR = WORTEL
-    D.publish(payload, passphrase=wachtwoordzin)
-    (WORTEL / ".nojekyll").write_text("", encoding="utf-8")
+    if snel:
+        print("Snel: geen nieuwe pagina; de cijfers gaan als pakket naar Supabase.")
+    else:
+        # De pagina komt in de repository zelf terecht; de workflow zet hem
+        # daarna online. De wachtwoordzin komt uit een secret.
+        D.PUBLISH_DIR = WORTEL
+        D.publish(payload, passphrase=wachtwoordzin)
+        (WORTEL / ".nojekyll").write_text("", encoding="utf-8")
     print(f"Klaar. {fetcher.calls} API-calls gedaan.")
 
     # Garmin-data ook naar Supabase, zodat de coach hem kan lezen. Mislukt
@@ -205,7 +220,7 @@ def main() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import naar_supabase                      # noqa: E402
     try:
-        naar_supabase.schrijf(payload)
+        naar_supabase.schrijf(payload, alleen_recent=snel)
     except SystemExit as fout:
         print(f"! {fout}")
 

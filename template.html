@@ -15313,6 +15313,20 @@ function themaIcoon() {
   t.title = donker ? "Naar het lichte thema" : "Naar het donkere thema";
 }
 
+/* Alles wat uit DATA wordt getekend. Bij het opstarten, en opnieuw als er
+   een nieuwer pakket uit Supabase binnenkomt. */
+function gegevensTekenen() {
+  doelenBijwerken();
+  uitgevoerdBijwerken();
+  belastingHerberekenen();
+  planOverlay();
+  renderCheckRegel(); renderVandaag(); renderAlcohol(); renderGedaan();
+  renderVandaagTegels();
+  renderBelDials(); renderBelTegels(); renderBelasting(); renderRichting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
+  renderPlanner(); renderPlan(); renderUitleg(); renderRouteAlles();
+  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout();
+  renderExplain(); renderInsights(); langeTekstInklappen();
+}
 function boot() {
   actsFilteren();
   applyDefaults();
@@ -15325,16 +15339,7 @@ function boot() {
   const bi = document.getElementById("bronInfo");
   if (bi) bi.textContent = `Garmin-gegevens bijgewerkt ${bouwtijd(true)} · ${DATA.weeks} weken historie · ${DATA.activities.length} activiteiten.`;
   if (DATA.demo) document.getElementById("demoBanner").style.display = "";
-  doelenBijwerken();
-  uitgevoerdBijwerken();
-  belastingHerberekenen();
-  planOverlay();
-  renderCheckRegel(); renderVandaag(); renderAlcohol(); renderGedaan();
-  renderVandaagTegels();
-  renderBelDials(); renderBelTegels(); renderBelasting(); renderRichting(); renderHerstel(); renderHerstelNieuw(); renderNachtcurve(); renderHardlopen(); renderActiviteiten();
-  renderPlanner(); renderPlan(); renderUitleg(); renderRouteAlles();
-  renderInstellingen(); renderSyncPaneel(); renderDoelen(); renderWorkout();
-  renderExplain(); renderInsights(); langeTekstInklappen();
+  gegevensTekenen();
   planKnoppen();
   const zm = document.getElementById("zesminAdd");
   if (zm) { if (!zm.querySelector("svg")) zm.insertAdjacentHTML("afterbegin", ic("sprong"));
@@ -15376,8 +15381,12 @@ function boot() {
   if (/[?&]voorbeelden\b/.test(location.search)) setTimeout(adviesVoorbeelden, 300);
   supaInit().then(ingelogd => {
     syncStatus(); renderSyncPaneel(); renderCoachSetup();
-    if (ingelogd) { syncRonde(); supaStandDelen(); }
+    if (ingelogd) { syncRonde(); supaStandDelen(); garminPakketLaden(true); }
   }).catch(e => { SUPA.fout = e.message; renderSyncPaneel(); });
+  /* nieuwe Garmin-cijfers van de snelle sync: bij terugkomen en elke paar
+     minuten zolang de pagina open en zichtbaar is */
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") garminPakketLaden(); });
+  setInterval(() => { if (document.visibilityState === "visible") garminPakketLaden(); }, 3 * 60 * 1000);
 }
 
 /* ---- klikken op een dag, en de knoppen boven de planner ---- */
@@ -15828,8 +15837,11 @@ async function wolkVerversen() {
     const voor = await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?per_page=3`);
     const lopend = (voor.workflow_runs || []).find(r => r.status !== "completed");
     const vorigeId = lopend ? lopend.id - 1 : ((voor.workflow_runs || [])[0] || {}).id || 0;
+    /* ingelogd: snel (alleen nieuwe cijfers, via Supabase); anders volledig,
+       want zonder inlog kan deze pagina het pakket niet lezen */
+    const snel = !!SUPA.sessie;
     if (!lopend) await ghApi(`/repos/${repo}/actions/workflows/${WORKFLOW}/dispatches`,
-                {method: "POST", body: JSON.stringify({ref: "main"})});
+                {method: "POST", body: JSON.stringify({ref: "main", inputs: {modus: snel ? "snel" : "volledig"}})});
 
     const run = await wachtOpRun(repo, vorigeId);
     if (!run) {
@@ -15849,6 +15861,11 @@ async function wolkVerversen() {
       return;
     }
 
+    /* Snelle sync: de cijfers staan in Supabase; overnemen en klaar. */
+    if (SUPA.sessie && await garminPakketLaden(true)) {
+      syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar", sub: "De nieuwe cijfers staan erin."});
+      return;
+    }
     /* Derde fase: GitHub Pages moet de nieuwe pagina nog uitserveren. Dat
        duurt meestal een halve tot anderhalve minuut. We wachten tot de pagina
        echt verandert in plaats van een vast aantal seconden te gokken. */
@@ -15877,6 +15894,35 @@ async function wolkVerversen() {
    die vanaf de schijf draait -- dan valt er niets te vergelijken en wachten we
    een vaste minuut. Dat is de oude situatie, maar nu alleen als er geen
    betere te krijgen is. */
+/* De snelle sync bouwt geen nieuwe pagina maar zet de nieuwe cijfers als
+   één pakket in Supabase (achter je inlog). Is dat pakket nieuwer dan wat
+   deze pagina heeft, dan nemen we het over en tekenen we opnieuw, zonder
+   herladen. Eerst de kleine stand, pas bij iets nieuws het hele pakket. */
+let PAKKET_BEZIG = false, PAKKET_LAATST = 0;
+async function garminPakketLaden(forceer = false) {
+  if (!SUPA.sessie || !SUPA.client || PAKKET_BEZIG) return false;
+  if (!forceer && Date.now() - PAKKET_LAATST < 60 * 1000) return false;
+  PAKKET_BEZIG = true; PAKKET_LAATST = Date.now();
+  try {
+    const {data: st} = await SUPA.client.from("garmin_overzicht").select("data").eq("sleutel", "pakket_stand").maybeSingle();
+    const nr = st && st.data && st.data.pakket;
+    if (!nr || nr <= (DATA._pakket || 0)) return false;
+    const {data: rij, error} = await SUPA.client.from("garmin_overzicht").select("data").eq("sleutel", "pakket").maybeSingle();
+    if (error || !rij || !rij.data || !(rij.data._pakket > (DATA._pakket || 0))) return false;
+    DATA = {...rij.data, sync: DATA.sync, supabase: DATA.supabase};
+    HB_CACHE.clear();
+    /* bestaande grafieken eerst opruimen; Chart.js tekent niet over een
+       canvas dat nog in gebruik is */
+    document.querySelectorAll("canvas").forEach(c => { const g = window.Chart && Chart.getChart(c); if (g) g.destroy(); });
+    Object.keys(CHARTS).forEach(k => delete CHARTS[k]);
+    gegevensTekenen();
+    document.getElementById("meta").textContent = `bijgewerkt ${bouwtijd()}`;
+    try { supaStandDelen(); } catch (e) { /* coach-stand volgt bij de volgende sync */ }
+    return true;
+  } catch (e) { console.warn("pakket laden mislukt", e); return false; }
+  finally { PAKKET_BEZIG = false; }
+}
+
 async function wachtOpNieuwePagina(voorAfdruk) {
   if (!voorAfdruk) {
     await new Promise(r => setTimeout(r, 60000));
