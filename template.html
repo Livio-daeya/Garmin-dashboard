@@ -4950,6 +4950,11 @@ const OEF = {
                spieren: {kuit: 1}},
   fysiocore:  {naam: "Core fysio: side plank + rotatie, pulley raise, buik-elevatie", rol: "core", geenKg: true,
                spieren: {romp: 1}},
+  /* de core van je fysio zoals je hem thuis op maandag doet (november 2026) */
+  kbsideopen: {naam: "Side plank met kabel, open draaien", rol: "core", spieren: {romp: 1}},
+  kbsidepl:   {naam: "Side plank met kabel (zijwaarts)", rol: "core", spieren: {romp: 1}},
+  kbplankvw:  {naam: "Plank met kabel (voorwaarts)", rol: "core", spieren: {romp: 1}},
+  situphold:  {naam: "Sit-up hold met halterschijf (wegduwen)", rol: "core", spieren: {romp: 1}},
   ohtricep:   {naam: "Overhead triceps extension (dumbbell)", rol: "isolatie", db: true,
                spieren: {triceps: 1}},
   csrow:      {naam: "Chest-supported row (dumbbells, schuine bank)", rol: "tweede", db: true,
@@ -5050,7 +5055,7 @@ const OEF_MAT = {
   suitcase: ["kettlebell"], sbcurl: ["swissball"],
   boxsquat: ["squatrack", "halterstang"], bss: ["dumbbells"], squatlunge: ["dumbbells|halterstang"],
   stepup: ["dumbbells"], slhipthrust: ["dumbbells|halterstang"], calfecc: ["dumbbells|halterstang"],
-  fysiocore: ["kabel_laag"], ohtricep: ["dumbbells"], csrow: ["bank_verstelbaar", "dumbbells"],
+  fysiocore: ["kabel_laag"], kbsideopen: ["kabel_laag"], kbsidepl: ["kabel_laag"], kbplankvw: ["kabel_laag"], situphold: [], ohtricep: ["dumbbells"], csrow: ["bank_verstelbaar", "dumbbells"],
   inclinecurl: ["bank_verstelbaar", "dumbbells"],
 };
 
@@ -5105,9 +5110,9 @@ const WORKOUTS = {
             inclinecurl: {sets: 2, laag: 10, hoog: 12, rir: "1 RIR", accessoire: true, noot: "superset met triceps"},
             ohtricep: {sets: 2, laag: 10, hoog: 12, rir: "1 RIR", accessoire: true, noot: "60 s rust na elke ronde"},
           }},
-  fysioMa: {naam: "Thuis maandag · beendag fysio", ondertitel: "60–75 min; benen nog zwaar van zaterdag, dan naar woensdag",
-          plek: "thuis", min: 70,
-          oefeningen: ["boxsquat", "bss", "squatlunge", "stepup", "slhipthrust", "calfecc", "fysiocore"],
+  fysioMa: {naam: "Thuis maandag · beendag fysio", ondertitel: "±2 uur; benen nog zwaar van zaterdag, dan naar woensdag",
+          plek: "thuis", min: 120,
+          oefeningen: ["boxsquat", "bss", "squatlunge", "stepup", "slhipthrust", "calfecc", "kbsideopen", "kbsidepl", "kbplankvw", "situphold"],
           voorschrift: {
             boxsquat: {sets: 4, laag: 6, hoog: 6, rir: "1,0–1,05 m/s", kg: 50, noot: "snelheid 1,0–1,05 m/s; zithoogte box of bank"},
             bss: {sets: 3, laag: 6, hoog: 6, rir: "0,75–1,1 m/s", kg: 17.5, noot: "per been"},
@@ -5115,7 +5120,10 @@ const WORKOUTS = {
             stepup: {sets: 3, laag: 6, hoog: 6, rir: "0,6–0,7 m/s", kg: 7.5, noot: "per been; je hebt een opstap nodig (thuis niet in je inventaris)"},
             slhipthrust: {sets: 3, laag: 6, hoog: 6, rir: "0,65–0,8 m/s", kg: 17.5, noot: "per been"},
             calfecc: {sets: 3, laag: 6, hoog: 6, rir: "volle hefhoogte", kg: 30, noot: "30 → 35 → 40 kg; pauze bovenin"},
-            fysiocore: {sets: 2, laag: 2, hoog: 3, rir: "beheerst", noot: "2–3 rondes"},
+            kbsideopen: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            kbsidepl: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            kbplankvw: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            situphold: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 10, noot: "5 per kant; halterschijf wegduwen"},
           }},
   /* Thuis op woensdag, optioneel: verticaal trekken staat in de hal niet
      tot je beschikking, thuis wel. Benen alleen als ze fris zijn. */
