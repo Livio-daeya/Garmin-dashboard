@@ -5114,16 +5114,16 @@ const WORKOUTS = {
           plek: "thuis", min: 120,
           oefeningen: ["boxsquat", "bss", "squatlunge", "stepup", "slhipthrust", "calfecc", "kbsideopen", "kbsidepl", "kbplankvw", "situphold"],
           voorschrift: {
-            boxsquat: {sets: 4, laag: 6, hoog: 6, rir: "1,0–1,05 m/s", kg: 50, noot: "snelheid 1,0–1,05 m/s; zithoogte box of bank"},
-            bss: {sets: 3, laag: 6, hoog: 6, rir: "0,75–1,1 m/s", kg: 17.5, noot: "per been"},
-            squatlunge: {sets: 3, laag: 6, hoog: 6, rir: "0,7–0,8 m/s", kg: 20, noot: "per been. Je fysioblad zegt 30 kg; nog bevestigen"},
-            stepup: {sets: 3, laag: 6, hoog: 6, rir: "0,6–0,7 m/s", kg: 7.5, noot: "per been; je hebt een opstap nodig (thuis niet in je inventaris)"},
-            slhipthrust: {sets: 3, laag: 6, hoog: 6, rir: "0,65–0,8 m/s", kg: 17.5, noot: "per been"},
-            calfecc: {sets: 3, laag: 6, hoog: 6, rir: "volle hefhoogte", kg: 30, noot: "30 → 35 → 40 kg; pauze bovenin"},
-            kbsideopen: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
-            kbsidepl: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
-            kbplankvw: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
-            situphold: {sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 10, noot: "5 per kant; halterschijf wegduwen"},
+            boxsquat: {vast: true, sets: 4, laag: 6, hoog: 6, rir: "1,0–1,05 m/s", kg: 50, noot: "snelheid 1,0–1,05 m/s; zithoogte box of bank"},
+            bss: {vast: true, sets: 3, laag: 6, hoog: 6, rir: "0,75–1,1 m/s", kg: 17.5, noot: "per been"},
+            squatlunge: {vast: true, sets: 3, laag: 6, hoog: 6, rir: "0,7–0,8 m/s", kg: 20, noot: "per been. Je fysioblad zegt 30 kg; nog bevestigen"},
+            stepup: {vast: true, sets: 3, laag: 6, hoog: 6, rir: "0,6–0,7 m/s", kg: 7.5, noot: "per been; je hebt een opstap nodig (thuis niet in je inventaris)"},
+            slhipthrust: {vast: true, sets: 3, laag: 6, hoog: 6, rir: "0,65–0,8 m/s", kg: 17.5, noot: "per been"},
+            calfecc: {vast: true, sets: 3, laag: 6, hoog: 6, rir: "volle hefhoogte", kg: 30, noot: "30 → 35 → 40 kg; pauze bovenin"},
+            kbsideopen: {vast: true, sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            kbsidepl: {vast: true, sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            kbplankvw: {vast: true, sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 5, noot: "5 per kant"},
+            situphold: {vast: true, sets: 3, laag: 5, hoog: 5, rir: "beheerst", kg: 10, noot: "5 per kant; halterschijf wegduwen"},
           }},
   /* Thuis op woensdag, optioneel: verticaal trekken staat in de hal niet
      tot je beschikking, thuis wel. Benen alleen als ze fris zijn. */
@@ -5334,6 +5334,15 @@ function volgendeSet(sleutel, ctx, presc, plek) {
     ? `${sch.rirMin + ctx.rirExtra}+ RIR`
     : presc ? sch.rir : `${sch.rir} RIR`;
   const basis = {sleutel, oef, sets, laag: sch.laag, hoog: sch.hoog, rir: rirTekst, ...extra};
+
+  /* Vast voorschrift (de maandag van je fysio): het gewicht blijft wat er
+     staat, want je moet de voorgeschreven snelheid kunnen vasthouden. Ophogen
+     gebeurt alleen als jij het zegt. Wat je vorige keer deed staat erbij. */
+  if (presc && presc.vast) {
+    const w = vorige.length ? vorige[0].oefeningen[sleutel] : null;
+    return {...basis, kg: presc.kg != null ? presc.kg : null, vorige: w || null,
+            reden: `vast gewicht van je fysio; alleen ophogen als jij het zegt${w ? ` · vorige keer ${w.kg} kg × ${w.reps}` : ""}`};
+  }
 
   if (!vorige.length && !oef.geenKg && !oef.eenheid)
     return {...basis, kg: presc && presc.kg != null ? presc.kg : null,
