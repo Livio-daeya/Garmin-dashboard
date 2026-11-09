@@ -98,9 +98,14 @@ def pakket(payload: dict) -> tuple[list[dict], list[dict]]:
     """De hele berekende stand, zodat het dashboard nieuwe cijfers kan
     overnemen zonder een nieuwe pagina. Eerst het pakket, dan de stand: een
     apparaat dat de stand ziet, vindt het pakket dus altijd al klaar."""
+    import base64, gzip
     data = {k: v for k, v in payload.items() if k not in PAKKET_WEG}
-    stand = {"pakket": payload.get("_pakket"), "generated": payload.get("generated")}
-    return [{"sleutel": "pakket", "data": data}], [{"sleutel": "pakket_stand", "data": stand}]
+    rauw = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+    # ingepakt: een paar honderd kB in plaats van bijna twee MB, voor de
+    # database en voor je telefoon
+    gz = base64.b64encode(gzip.compress(rauw, 9)).decode("ascii")
+    stand = {"pakket": payload.get("_pakket"), "generated": payload.get("generated"), "kb": round(len(gz) / 1024)}
+    return [{"sleutel": "pakket", "data": {"gz": gz, "pakket": payload.get("_pakket")}}], [{"sleutel": "pakket_stand", "data": stand}]
 
 
 def schrijf(payload: dict, url: str | None = None, sleutel: str | None = None, alleen_recent: bool = False) -> bool:
@@ -122,6 +127,5 @@ def schrijf(payload: dict, url: str | None = None, sleutel: str | None = None, a
     rij, stand = pakket(payload)
     _post(url, sleutel, "garmin_overzicht", rij)
     _post(url, sleutel, "garmin_overzicht", stand)
-    kb = len(json.dumps(rij[0]["data"], default=str)) / 1024
-    print(f"  Supabase: {len(d)} dagen, {len(a)} activiteiten, {len(o)} overzichten, pakket {kb:.0f} kB bijgewerkt.")
+    print(f"  Supabase: {len(d)} dagen, {len(a)} activiteiten, {len(o)} overzichten, pakket {stand[0]['data']['kb']} kB bijgewerkt.")
     return True

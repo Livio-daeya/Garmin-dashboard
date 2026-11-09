@@ -15861,7 +15861,21 @@ async function wolkVerversen() {
       return;
     }
 
-    /* Snelle sync: de cijfers staan in Supabase; overnemen en klaar. */
+    /* Snelle sync: de cijfers staan in Supabase; overnemen en klaar. Een
+       snelle run bouwt geen pagina, dus daar wachten we nooit op. */
+    if (snel && !lopend) {
+      for (let i = 0; i < 4; i++) {
+        if (await garminPakketLaden(true)) {
+          syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar", sub: "De nieuwe cijfers staan erin."});
+          return;
+        }
+        if (/geen nieuwere/.test(PAKKET_REDEN) && i >= 1) break;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      syncbarToon({pct: 0, fase: 2, titel: /geen nieuwere/.test(PAKKET_REDEN) ? "Al bijgewerkt" : "Cijfers niet overgenomen",
+        staat: /geen nieuwere/.test(PAKKET_REDEN) ? "klaar" : "fout", sub: PAKKET_REDEN || "onbekende reden"});
+      return;
+    }
     if (SUPA.sessie && await garminPakketLaden(true)) {
       syncbarToon({pct: 100, fase: 3, titel: "Bijgewerkt", staat: "klaar", sub: "De nieuwe cijfers staan erin."});
       return;
@@ -15898,18 +15912,36 @@ async function wolkVerversen() {
    één pakket in Supabase (achter je inlog). Is dat pakket nieuwer dan wat
    deze pagina heeft, dan nemen we het over en tekenen we opnieuw, zonder
    herladen. Eerst de kleine stand, pas bij iets nieuws het hele pakket. */
-let PAKKET_BEZIG = false, PAKKET_LAATST = 0;
+let PAKKET_BEZIG = null, PAKKET_LAATST = 0, PAKKET_REDEN = "";
+/* Het pakket staat ingepakt (gzip, base64) in Supabase; de browser pakt het uit. */
+async function pakketUitpakken(d) {
+  if (!d || !d.gz) return d;
+  const bytes = Uint8Array.from(atob(d.gz), c => c.charCodeAt(0));
+  const stroom = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return JSON.parse(await new Response(stroom).text());
+}
 async function garminPakketLaden(forceer = false) {
-  if (!SUPA.sessie || !SUPA.client || PAKKET_BEZIG) return false;
+  if (!SUPA.sessie || !SUPA.client) { PAKKET_REDEN = "niet ingelogd bij Supabase"; return false; }
+  /* loopt er al een ronde, wacht daarop in plaats van op te geven */
+  if (PAKKET_BEZIG) { const r = await PAKKET_BEZIG; if (r || !forceer) return r; }
   if (!forceer && Date.now() - PAKKET_LAATST < 60 * 1000) return false;
-  PAKKET_BEZIG = true; PAKKET_LAATST = Date.now();
+  PAKKET_LAATST = Date.now();
+  PAKKET_BEZIG = pakketRonde().finally(() => { PAKKET_BEZIG = null; });
+  return PAKKET_BEZIG;
+}
+async function pakketRonde() {
   try {
-    const {data: st} = await SUPA.client.from("garmin_overzicht").select("data").eq("sleutel", "pakket_stand").maybeSingle();
+    const {data: st, error: f1} = await SUPA.client.from("garmin_overzicht").select("data").eq("sleutel", "pakket_stand").maybeSingle();
+    if (f1) { PAKKET_REDEN = `stand niet leesbaar: ${f1.message}`; return false; }
     const nr = st && st.data && st.data.pakket;
-    if (!nr || nr <= (DATA._pakket || 0)) return false;
+    if (!nr) { PAKKET_REDEN = "nog geen pakket in Supabase"; return false; }
+    if (nr <= (DATA._pakket || 0)) { PAKKET_REDEN = "geen nieuwere cijfers dan op deze pagina"; return false; }
     const {data: rij, error} = await SUPA.client.from("garmin_overzicht").select("data").eq("sleutel", "pakket").maybeSingle();
-    if (error || !rij || !rij.data || !(rij.data._pakket > (DATA._pakket || 0))) return false;
-    DATA = {...rij.data, sync: DATA.sync, supabase: DATA.supabase};
+    if (error || !rij || !rij.data) { PAKKET_REDEN = `pakket niet leesbaar${error ? ": " + error.message : ""}`; return false; }
+    const nieuw = await pakketUitpakken(rij.data);
+    if (!(nieuw && nieuw._pakket > (DATA._pakket || 0))) { PAKKET_REDEN = "pakket nog niet bijgewerkt"; return false; }
+    PAKKET_REDEN = "";
+    DATA = {...nieuw, sync: DATA.sync, supabase: DATA.supabase};
     HB_CACHE.clear();
     /* bestaande grafieken eerst opruimen; Chart.js tekent niet over een
        canvas dat nog in gebruik is */
@@ -15919,8 +15951,7 @@ async function garminPakketLaden(forceer = false) {
     document.getElementById("meta").textContent = `bijgewerkt ${bouwtijd()}`;
     try { supaStandDelen(); } catch (e) { /* coach-stand volgt bij de volgende sync */ }
     return true;
-  } catch (e) { console.warn("pakket laden mislukt", e); return false; }
-  finally { PAKKET_BEZIG = false; }
+  } catch (e) { console.warn("pakket laden mislukt", e); PAKKET_REDEN = String(e.message || e).slice(0, 120); return false; }
 }
 
 async function wachtOpNieuwePagina(voorAfdruk) {

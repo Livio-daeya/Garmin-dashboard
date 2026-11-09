@@ -223,6 +223,11 @@ def main() -> None:
         naar_supabase.schrijf(payload, alleen_recent=snel)
     except SystemExit as fout:
         print(f"! {fout}")
+        # In de snelle ronde is Supabase de enige weg naar je dashboard: dan
+        # moet een mislukking zichtbaar zijn als mislukte run.
+        if snel:
+            cache_wegschrijven(token, gist, cache)
+            sys.exit(f"Snelle sync: de cijfers konden niet naar Supabase. {fout}")
 
     # ---- bewaren wat we volgende keer nodig hebben ------------------------
     cache_wegschrijven(token, gist, cache)
