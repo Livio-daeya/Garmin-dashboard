@@ -12711,7 +12711,10 @@ function adviesKort(a) {
   let actie, reden;
   if (a.status === "groen") { actie = wed ? "Geen extra training; fris naar je wedstrijd" : "Geen extra training nodig"; reden = "Prikkel geleverd, herstel zonder afwijking."; }
   else if (a.status === "grijs") { const niets = /nog niets geregistreerd/.test(a.reden);
-    actie = niets ? "Registreer of ververs je trainingen" : "Geen extra intensief werk"; reden = niets ? "Nog geen trainingen deze week." : a.herstel.niveau === "groen" ? "Nog te weinig gegevens." : "Herstel nog onbekend."; }
+    /* begin van de week: nog niets gedaan, dus je plan is het advies */
+    const vandaagPlan = niets ? dagRoute(vandaagIso(), {alleenLezen: true}).items.filter(i => i.soort !== "rust" && !i.optioneel && itemStatus(vandaagIso(), i).k !== "overgeslagen").map(i => titelVanItem(i)) : [];
+    actie = niets ? (vandaagPlan.length ? `Vandaag: ${vandaagPlan.join(" + ")}` : "Volg je plan; vandaag rust") : "Geen extra intensief werk";
+    reden = niets ? "Nog geen trainingen deze week; je planning bepaalt wat je doet." : a.herstel.niveau === "groen" ? "Nog te weinig gegevens." : "Herstel nog onbekend."; }
   else if (a.status === "oranje") { actie = "Niets extra; houd het licht";
     reden = a.herstel.niveau === "oranje" ? "Je herstel vraagt aandacht." : a.belasting.opRij >= 3 ? `${a.belasting.opRij} zware dagen op rij.` : wed ? "Zware week vlak voor je wedstrijd." : "Mindere prestatie bij gelijke taak."; }
   else if (a.status === "rood") { actie = "Pas je training aan"; reden = "Klachten, ziekte of herstel duidelijk achteruit."; }
@@ -12740,8 +12743,9 @@ const ta3Status = (st, tekst = TA_STATUS[st]) => `<span class="ta3-status ta3--$
    In beeld is dat oranje, met de reden erbij, zodat je weet wat je doet. */
 function taWeergave(a) {
   if (a.status !== "grijs") return {s: a.status, label: TA_STATUS[a.status]};
-  return {s: "oranje", label: /nog niets geregistreerd/.test(a.reden) ? "Nog geen trainingen: niets extra"
-    : a.herstel && a.herstel.niveau === "blauw" ? "Lichte vermoeidheid: niets extra" : "Check-in ontbreekt: niets extra"};
+  /* begin van de week: er is nog niets om te beoordelen, dus volg je plan */
+  if (/nog niets geregistreerd/.test(a.reden)) return {s: "groen", label: "Volg je plan"};
+  return {s: "oranje", label: a.herstel && a.herstel.niveau === "blauw" ? "Lichte vermoeidheid: niets extra" : "Check-in ontbreekt: niets extra"};
 }
 function adviesDelen(a, k = adviesKort(a)) {
   const C = a.conditie, K = a.kracht, H = a.herstel;
