@@ -871,6 +871,9 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 #herstelGrafieken .lg-vlak { margin-top: 4px; }
 #herstelGrafieken .lg-as { display: none; }
 #herstelGrafieken .lg-stippen span { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
+/* dubbele registratie op de kaart */
+.tk-dubbel { display: grid; gap: 6px; margin: 6px 0; }
+.tk-dubbel-r { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--t-klein); color: var(--ink-2); }
 /* maandkalender */
 .mk-kal { display: grid; gap: 8px; }
 .mk-nav { display: flex; align-items: center; justify-content: space-between; }
@@ -4870,6 +4873,22 @@ function rirHerkomst(r) {
 }
 const logLees     = () => lijstLees(LOG_KEY).map(rirHerkomst);
 const logZet      = a => lijstZet(LOG_KEY, a);
+/* Dezelfde workout twee keer vastgelegd (bijvoorbeeld in de workoutmodus én
+   via de coach) is één sessie: op dezelfde dag, met grotendeels dezelfde
+   oefeningen. Dan telt alleen de nieuwste. Twee echt verschillende workouts
+   op één dag tellen allebei. */
+const logTijd = x => Date.parse(x.opgeslagen || "") || x._t || 0;
+function logDubbel(a, b) {
+  if (a.datum !== b.datum) return false;
+  const ka = Object.keys(a.oefeningen || {}), kb = Object.keys(b.oefeningen || {});
+  const zelfde = ka.filter(k => kb.includes(k)).length;
+  return zelfde > 0 && zelfde >= Math.min(ka.length, kb.length) / 2;
+}
+function logZonderDubbel(lijst) {
+  const uit = [];
+  [...lijst].sort((a, b) => logTijd(b) - logTijd(a)).forEach(x => { if (!uit.some(y => logDubbel(x, y))) uit.push(x); });
+  return uit.sort((a, b) => a.datum < b.datum ? -1 : 1);
+}
 
 /* -----------------------------------------------------------------------
    Geschat 1RM
@@ -5593,7 +5612,7 @@ function weekVolume() {
   if (!vandaag) return {};
   const grens = isoPlus(vandaag, -6);
   const uit = {};
-  logLees().filter(x => x.datum >= grens && x.datum <= vandaag).forEach(s => {
+  logZonderDubbel(logLees().filter(x => x.datum >= grens && x.datum <= vandaag)).forEach(s => {
     Object.entries(s.oefeningen || {}).forEach(([k, v]) => {
       const o = OEF[k]; if (!o || !v.sets) return;
       Object.entries(o.spieren).forEach(([spier, deel]) => {
@@ -9985,8 +10004,27 @@ function sessieStatusLabel(iso, s) {
   return uiStatus(s.tekst === "voorwaardelijk" ? "Voorwaardelijk" : "Gepland", "open");
 }
 /* gelogde krachtsets van die dag (geen sets verzinnen als je alleen Gedaan zet) */
-const krachtLogOp = (iso, wk) => logLees().find(x => x.datum === iso && (!wk || x.type === wk)) || null;
+const krachtLogOp = (iso, wk) => {
+  const dag = logLees().filter(x => x.datum === iso && x.oefeningen);
+  const eigen = dag.filter(x => !wk || x.type === wk);
+  if (!eigen.length) return null;
+  /* de nieuwste van deze sessie, ook als de coach hem vastlegde onder een andere naam */
+  return dag.filter(x => eigen.some(e => e === x || logDubbel(e, x))).sort((a, b) => logTijd(b) - logTijd(a))[0];
+};
+const logSleutel = x => x._id || x.sessieId || `${x.datum}|${logTijd(x)}`;
+const krachtLogDubbel = (iso, log) => log ? logLees().filter(x => logSleutel(x) !== logSleutel(log) && x.oefeningen && logDubbel(x, log)) : [];
 
+/* Bij een dubbele registratie: de gekozen houden, de andere verwijderen. */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-houdlog]"); if (!b) return;
+  e.stopPropagation();
+  const id = b.dataset.houdlog, alles = logLees(), houd = alles.find(x => (x._id || x.sessieId) === id);
+  if (!houd) return;
+  logZet(alles.filter(x => x === houd || !(x.datum === houd.datum && logDubbel(x, houd))));
+  uiMelding("Registratie bewaard; de andere is verwijderd");
+  allesNaInvoer(); renderDoelen();
+  const up = b.closest(".up"); if (up) uiPaneelSluit();
+});
 function trainingKaart(iso, i, opties = {}) {
   const {s, achteraf} = sessieStand(iso, i);
   const sl = `${iso}|${i.id}`;
@@ -10101,7 +10139,15 @@ function kaartAchteraf(iso, i, s) {
     /* een gestarte maar niet afgeronde workout staat als concept op dit apparaat */
     const concept = (() => { try { const c = JSON.parse(localStorage.getItem(WK_CONCEPT_KEY) || "null"); return c && c.sl === sl ? c : null; } catch (e) { return null; } })();
     const ingevuld = concept ? concept.oef.flatMap(o => o.sets).filter(x => parseFloat(x.a) > 0).length : 0;
-    midden = log
+    const dubbel = krachtLogDubbel(iso, log);
+    const regel = x => { const n = Object.values(x.oefeningen || {}).reduce((t, o) => t + (o.sets || 0), 0);
+      const t = logTijd(x) ? new Date(logTijd(x)).toLocaleString("nl-NL", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
+      return `<div class="tk-dubbel-r"><span>${Object.keys(x.oefeningen || {}).length} oefeningen · ${n} sets · ${x.bron === "coach" ? "via de coach" : "workoutmodus"}${t ? ` · ${t}` : ""}</span>
+        <button class="u-knop u-knop--stil u-knop--klein" data-houdlog="${x._id || x.sessieId}" data-houddag="${iso}">Deze klopt</button></div>`; };
+    midden = log && dubbel.length
+      ? `<div class="tk-noot">${ic("letop")}Deze workout is ${dubbel.length + 1} keer vastgelegd. Alleen de nieuwste telt mee; welke klopt?</div>
+         <div class="tk-dubbel">${[log, ...dubbel].map(regel).join("")}</div>`
+      : log
       ? `<p class="tk-volgt">${ic("halter")}${Object.keys(log.oefeningen || {}).length} oefeningen · ${sets} sets gelogd</p>`
       : concept && ingevuld
       ? `<p class="tk-noot">${ic("letop")}Workout niet afgerond: ${ingevuld} sets ingevuld op dit apparaat, nog niet bewaard.</p>`
@@ -12511,7 +12557,7 @@ function trainingsAdvies(ma) {
   logLees().filter(x => x.datum >= ma && x.datum <= tot && x.oefeningen && Object.keys(x.oefeningen).length).forEach(x => zet(x.datum, "krachtlog"));
   extra.filter(x => x.doel === "kracht" && x.bron === "eigen").forEach(x => zet(x.d, "zelf ingevuld"));
   items.filter(x => x.i.soort === "kracht" && x.st.k === "gedaan").forEach(x => zet(x.d, x.st.eigen ? "zelf bevestigd" : "plan"));
-  const logs = logLees().filter(x => x.datum >= ma && x.datum <= tot);
+  const logs = logZonderDubbel(logLees().filter(x => x.datum >= ma && x.datum <= tot));
   const sets = logs.flatMap(x => Object.entries(x.oefeningen || {}).flatMap(([k, o]) => (o.reeksen && o.reeksen.length ? o.reeksen : Array.from({length: o.sets || 0}, () => ({})))
     .map(r => ({k, rir: x.rirOnzeker ? null : (r.rir ?? o.rir), onzeker: !!x.rirOnzeker}))));
   const rirGetal = x => typeof x === "number" ? x : (m => m ? Number(m[1]) : null)(String(x ?? "").match(/(\d+)/));
@@ -15827,10 +15873,15 @@ async function ghApi(pad, opties = {}) {
    ---------------------------------------------------------------------- */
 const SYNCFASES = ["Starten", "Ophalen bij Garmin", "Online zetten"];
 
+let SYNCBAR_WEG = null;
 function syncbarToon({pct, titel, sub, fase, staat}) {
   const bar = document.getElementById("syncbar");
   if (!bar) return;
   bar.hidden = false;
+  /* klaar: na een paar tellen weg; een fout blijft even langer staan om te lezen */
+  clearTimeout(SYNCBAR_WEG);
+  if (staat === "klaar") SYNCBAR_WEG = setTimeout(syncbarWeg, 2500);
+  else if (staat === "fout") SYNCBAR_WEG = setTimeout(syncbarWeg, 15000);
   bar.className = "syncbar" + (staat ? " " + staat : "");
   const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
   document.getElementById("syncbarPct").textContent = p + "%";
@@ -16999,6 +17050,9 @@ function workoutKaart(v, i) {
    in de historie. Hetzelfde voorstel twee keer bevestigen geeft geen dubbel. */
 function workoutWegschrijven(v, vervangId) {
   const ruw = lijstLees(LOG_KEY);
+  /* dezelfde workout bestaat al (bijvoorbeeld uit de workoutmodus): vervangen, met historie */
+  if (!vervangId) { const bestaand = ruw.find(x => logDubbel(x, {datum: v.datum, oefeningen: v.oefeningen || {}}));
+    if (bestaand) vervangId = bestaand.sessieId || bestaand._id; }
   if (v.voorstelId && ruw.some(x => x.voorstelId === v.voorstelId)) return {ok: true, dubbel: true};
   const item = {type: v.type, datum: v.datum, soort: v.soort, oefeningen: v.oefeningen, bron: "coach", rirBron: v.rirBron || "niet genoemd",
     voorstelId: v.voorstelId || null, opgeslagen: new Date().toISOString(), ...(v.sessie ? {sessie: v.sessie.id} : {})};
