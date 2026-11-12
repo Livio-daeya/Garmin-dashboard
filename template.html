@@ -1087,6 +1087,24 @@ tr.klikrij { cursor: pointer; } tr.klikrij:hover td, tr.klikrij:focus-visible td
 .hc-rij:last-child { border-bottom: 0; }
 .hc-rij b { color: var(--ink); font-weight: var(--w-nadruk); }
 .hc-rij .letop { color: var(--warning); }
+.ck { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--hair-strong); font-size: 10px; font-weight: var(--w-nadruk);
+  color: var(--ink-2); text-decoration: none; vertical-align: 1px; letter-spacing: .02em; }
+.sv-blok { display: grid; gap: var(--sp2); }
+.sv-blok h4 { margin: var(--sp3) 0 0; font-size: var(--t-body); }
+.sv-ev { display: grid; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--hair); font-size: var(--t-klein); color: var(--ink-2); }
+.sv-ev:last-child { border-bottom: 0; }
+.sv-ev b { color: var(--ink); }
+.sv-ev textarea { min-height: 60px; resize: vertical; box-sizing: border-box; width: 100%; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--hair-strong);
+  background: var(--bg1); color: var(--ink); font: inherit; font-size: var(--t-klein); }
+.sv-ev ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.sv-taak { display: grid; grid-template-columns: var(--klik) 1fr; gap: 0 var(--sp2); align-items: start; padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: var(--t-klein); color: var(--ink-2); }
+.sv-taak:last-child { border-bottom: 0; }
+.sv-taak input[type=checkbox] { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--good); }
+.sv-taak b { color: var(--ink); font-weight: var(--w-nadruk); }
+.sv-taak.klaar b { text-decoration: line-through; color: var(--ink-2); }
+.sv-velden { display: flex; flex-wrap: wrap; gap: var(--sp2); margin-top: 6px; grid-column: 2; }
+.sv-velden label { display: grid; gap: 2px; }
+.sv-velden input { min-height: 36px; width: 110px; box-sizing: border-box; padding: 0 8px; border-radius: var(--r-md); border: 1px solid var(--hair-strong); background: var(--bg1); color: var(--ink); font: inherit; }
 .tk-oef summary { cursor: pointer; min-height: var(--klik); display: flex; align-items: center; color: var(--ink); font-weight: var(--w-nadruk); }
 .tk-cijfers { display: flex; gap: var(--sp7); }
 .tk-cijfer { display: flex; flex-direction: column; }
@@ -2996,6 +3014,7 @@ footer { color: var(--muted); font-size: var(--t-label); line-height: 1.6;
 <section class="panel" id="tab-training">
   <h1 class="pg-vraag">Wat voer ik uit en wat heb ik gedaan?</h1>
   <div class="card" id="wkVandaag"></div>
+  <div id="schemaV13"></div>
   <div class="card card--rij" id="testInvoer"></div>
 
   <!-- Verdieping: het krachtlogboek en de vrije workoutkeuze. De workout van
@@ -5542,10 +5561,17 @@ function progressieV13(sleutel, presc, sch, basis, ctx, log, dbMax) {
     if ((v.reps || 0) < sch.laag) return uit(v.kg || null, `${vorig}, onder het bereik: zelfde zwaarte en werk naar ${sch.laag}${eenheid} toe`);
     return uit(v.kg || null, `${vorig}: zelfde zwaarte, ${oef.eenheid ? "iets verder" : "een herhaling erbij"}`);
   }
+  /* de kleinste stap die jouw materiaal toelaat; zolang die niet is
+     ingevuld (open punt) noemt het voorstel de stap zonder kilo's */
+  const st = instelLees().stappen || {};
   const stap = {
-    staaf: [v.kg != null ? v.kg + 2.5 : null, `alle sets bovenaan bij ${sch.rir}: de kleinste stap omhoog (2,5 kg totaal als je schijven van 1,25 kg hebt)`],
+    staaf: st.schijf > 0 && v.kg != null
+      ? [v.kg + st.schijf, `alle sets bovenaan bij ${sch.rir}: de kleinste stap, +${komma(st.schijf)} kg totaal op de stang`]
+      : [null, `alle sets bovenaan bij ${sch.rir}: de kleinste stap die je schijven toelaten boven ${komma(v.kg || 0)} kg (vul je kleinste stap in bij de open punten)`],
     db: oef.db && dbMax && v.kg >= dbMax
       ? [v.kg, `alle sets bovenaan, maar ${dbMax} kg is de zwaarste dumbbell in de hal: rustiger zakken of de staafvariant`]
+      : st.dumbbell > 0 && v.kg != null && !(dbMax && v.kg + st.dumbbell > dbMax)
+      ? [v.kg + st.dumbbell, `alle sets bovenaan bij ${sch.rir}: de kleinste dumbbellstap, +${komma(st.dumbbell)} kg per hand`]
       : [null, `alle sets bovenaan bij ${sch.rir}: pak de eerstvolgende dumbbell boven ${komma(v.kg || 0)} kg per hand`],
     pullup: [v.kg || null, (v.kg || 0) > 0 ? `alle sets bovenaan: het kleinste extra gewicht erbij` : `alle sets bovenaan bij RIR 2: het kleinste extra gewicht erbij`],
     trx: [null, `2 × ${sch.hoog} bij RIR 2: één variabele zwaarder, leg de nieuwe opstelling vast en begin weer bij ${sch.laag}`],
@@ -10285,14 +10311,135 @@ function herstelcheckPaneel(iso = vandaagIso(), moment = hcMomentVan(vandaagIso(
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-herstelcheck]"); if (!b) return; e.stopPropagation();
   const [iso, m] = (b.dataset.herstelcheck || "").split("|"); herstelcheckPaneel(iso || vandaagIso(), m || undefined); });
+/* ---------------------------------------------------------------------
+   Schema v1.3: uitgangsniveau, evaluatiemomenten en open punten.
+   Uitgangsniveau is de week van 16 november plus eerdere vergelijkbare
+   registraties (fysiotest 27-10, 4 × 4 hardlopen 4-11). De fysiowaarden
+   zelf staan niet in dit bestand (dat is openbaar); ze moeten nog tegen
+   het originele blad gecontroleerd worden. De gegevens bij elke evaluatie
+   komen uit je eigen logboek en checks; ontbreekt iets, dan staat dat er.
+   --------------------------------------------------------------------- */
+const V13_EVALUATIE = [
+  {datum: "2026-11-27", vragen: ["Is het uitvoerbaar binnen de tijd?", "Zijn schouders, ellebogen en achilles stabiel?"]},
+  {datum: "2026-12-11", vragen: ["Is de airbike beter beheersbaar, of haal je een hoger vermogen bij vergelijkbare zwaarte?", "Hoe staat de hollow-hold-progressie?"]},
+  {datum: "2026-12-30", vragen: ["Zijn gewichten of herhalingen beter dan het uitgangsniveau bij dezelfde RIR?", "Is je wedstrijdfrisheid gelijk of beter?"]},
+];
+const V13_OPEN = [
+  {id: "stappen", tekst: "Kleinste schijf- en dumbbellstap invullen.", velden: [["schijf", "schijf (kg totaal)"], ["dumbbell", "dumbbell (kg per hand)"]]},
+  {id: "squatlunge", tekst: "Squat lunge: 20 of 30 kg (fysio)."},
+  {id: "hal", tekst: "Is er een bank en pull-upstang in de hal? Anders gelden de alternatieven.",
+   noot: "In het dashboard staan bank en pull-upbar in de hal nu als bevestigd (5 november)."},
+  {id: "fysio", tekst: "Fysio: snelheidsregel voor gewichtsverhoging op maandag, hinge-oefening (RDL of 45° back extension), kuitfrequentie en -doel, criteria voor afremmen, draaien en springen."},
+  {id: "maxhr", tekst: "Gemeten maximale hartslag met HRM 600 (bron en datum).", velden: [["waarde", "slagen/min"], ["datum", "datum"], ["bron", "bron"]],
+   noot: "De rekenwaarde 187 komt uit de shuttlerun van 17-8-2026 en is niet met de HRM 600 bevestigd; 182 op 4-11 is geen bevestigd maximum."},
+  {id: "maartensson", tekst: "Identiteit Coach Mårtensson (waarschijnlijk Jesper, JM Athletes) nog bevestigen."},
+  {id: "fysioblad", tekst: "Fysiowaarden van de test van 27-10-2026 controleren tegen het originele blad."},
+];
+const v13Open = () => instelLees().openpunten || {};
+/* eerste en laatste log van een oefening binnen het schema */
+function v13Verloop(k) {
+  const l = logZonderDubbel(logLees()).filter(x => x.datum >= V13.van && x.datum <= V13.tot && x.oefeningen && x.oefeningen[k])
+    .sort((a, b) => a.datum < b.datum ? -1 : 1);
+  if (!l.length) return null;
+  const f = x => { const o = x.oefeningen[k]; return {datum: x.datum, kg: o.kg, reps: o.reps, rir: o.rir, sets: o.sets}; };
+  return {eerste: f(l[0]), laatste: f(l[l.length - 1]), n: l.length, basis: l[0].datum <= isoPlus(V13.van, 6)};
+}
+const v13Set = x => `${x.reps}${x.kg ? ` × ${komma(x.kg)} kg` : ""}${x.rir != null ? ` @ RIR ${x.rir}` : ""} (${kortDatum(x.datum)})`;
+function v13EvaluatieData(datum) {
+  const tot = datum, hc = Object.values(hcLees()).filter(c => c.datum >= V13.van && c.datum <= tot);
+  const regels = [];
+  if (datum === "2026-11-27") {
+    const sessies = [];
+    for (let d = V13.van; d <= tot && d <= vandaagIso(); d = isoPlus(d, 1)) {
+      const it = dagRoute(d, {alleenLezen: true}).items.find(i => i.soort === "kracht" && i.plek === "hal");
+      if (!it) continue;
+      const fb = feedbackVan(d, it), act = (DATA.activities || []).find(a => a.date === d && a.sport === "Kracht");
+      const min = act && act.duration_s ? Math.round(act.duration_s / 60) : fb.duur;
+      sessies.push(`${kortDagNaam(d)} ${kortDatum(d)}: ${min != null ? `${min} min (gepland 45–55)` : krachtLogOp(d, it.wk) ? "gelogd, duur onbekend" : "geen registratie"}`);
+    }
+    regels.push(sessies.length ? `Haltrainingen: ${sessies.join("; ")}.` : "Nog geen haltrainingen in het schema.");
+    const tel = f => hc.filter(f).length;
+    regels.push(hc.length ? `Herstelchecks: ${hc.length}; achilles stijf ${tel(c => c.achilles && c.achilles !== "geen")}×, zwelling ${tel(c => c.zwelling === "ja")}×, schouder/elleboog anders ${tel(c => c.schouder && c.schouder !== "normaal")}×.`
+      : "Nog geen herstelchecks ingevuld.");
+  } else if (datum === "2026-12-11") {
+    const ab = Object.entries(instelLees().conditielog || {}).filter(([k, v]) => v && v.airbike && k >= V13.van && k.split("|")[0] <= tot).sort();
+    const gem = l => { const w = (l.blokken || []).map(b => b.watt), p = (l.blokken || []).map(b => b.rpe).filter(x => x != null);
+      return `${Math.round(w.reduce((a, b) => a + b, 0) / w.length)} W gemiddeld${p.length ? `, RPE ${komma((p.reduce((a, b) => a + b, 0) / p.length).toFixed(1))}` : ""}, ${l.voltooid}/4 blokken`; };
+    regels.push(ab.length >= 2 ? `Airbike: eerste ${kortDatum(ab[0][0])} ${gem(ab[0][1])} → laatste ${kortDatum(ab[ab.length - 1][0])} ${gem(ab[ab.length - 1][1])}.`
+      : ab.length ? `Airbike: één sessie (${kortDatum(ab[0][0])}, ${gem(ab[0][1])}); nog niets om mee te vergelijken.` : "Airbike: nog geen sessies met watt per blok.");
+    const h = v13Verloop("hollowhold");
+    regels.push(h ? `Hollow hold: ${h.eerste.reps} s (${kortDatum(h.eerste.datum)}) → ${h.laatste.reps} s (${kortDatum(h.laatste.datum)}).` : "Hollow hold: nog niet gelogd.");
+  } else {
+    const ks = ["bench", "inclinebb", "pullup", "csrow", "trxrow", "curl", "ohtricep"];
+    const rij = ks.map(k => { const v = v13Verloop(k); if (!v || v.n < 2) return null;
+      const zelfdeRir = v.eerste.rir === v.laatste.rir;
+      return `${(OEF[k] || {}).naam || k}: ${v13Set(v.eerste)} → ${v13Set(v.laatste)}${zelfdeRir ? "" : " (andere RIR: niet zuiver te vergelijken)"}${v.basis ? "" : " (eerste log na de basisweek)"}`; }).filter(Boolean);
+    regels.push(rij.length ? `Kracht t.o.v. uitgangsniveau: ${rij.join("; ")}.` : "Kracht: nog te weinig logs om met het uitgangsniveau te vergelijken.");
+    const gem = c => c.length ? c.reduce((a, b) => a + b, 0) / c.length : null;
+    const wed = hc.filter(c => (c.moment === "wedstrijd" || c.moment === "na-za") && c.benen != null).sort((a, b) => a.datum < b.datum ? -1 : 1);
+    regels.push(wed.length >= 3 ? `Wedstrijdfrisheid (benen 1–5): begin ${komma(gem(wed.slice(0, 2).map(c => c.benen)).toFixed(1))} → nu ${komma(gem(wed.slice(-2).map(c => c.benen)).toFixed(1))}.`
+      : "Wedstrijdfrisheid: te weinig herstelchecks rond wedstrijden.");
+  }
+  return regels;
+}
+function renderSchemaV13() {
+  const host = document.getElementById("schemaV13");
+  if (!host) return;
+  const v = vandaagIso();
+  if (v < isoPlus(V13.van, -7) || v > isoPlus(V13.tot, 14)) { host.innerHTML = ""; return; }
+  const ev = instelLees().evaluatie || {}, op = v13Open(), st = instelLees().stappen || {};
+  const open = host.querySelector("details") ? host.querySelector("details").open : false;
+  const loop = (DATA.activities || []).find(a => a.date === "2026-11-04" && /hardlo|run/i.test(`${a.sport} ${a.type_key || ""}`));
+  host.innerHTML = `<details class="verdieping" ${open ? "open" : ""}><summary>Schema v1.3 · evaluatie en open punten</summary><div class="card sv-blok">
+    <p class="u-klein" style="margin:0">Geldig ${kortDatum(V13.van)} t/m ${kortDatum(V13.tot)}. Prioriteit (bevestigd 13-11): explosiviteit van de benen = conditie > kracht; geen 1RM-PR's nodig, benen sterk houden, zaterdag geen zware benen.</p>
+    <h4>Uitgangsniveau</h4>
+    <p class="u-klein" style="margin:0">De week van 16 november plus eerdere vergelijkbare registraties: de fysiotest van 27-10-2026 en de 4 × 4 hardlopen van 4-11-2026${loop ? ` (<button class="u-link" data-activiteit="${loop.id}">bekijk</button>)` : ""}. De fysiowaarden staan bewust niet in het dashboard en moeten nog tegen het originele blad gecontroleerd worden.</p>
+    <h4>Evaluatie</h4>
+    ${V13_EVALUATIE.map(e => { const x = ev[e.datum] || {}, bereikt = v >= e.datum;
+      return `<div class="sv-ev" data-evblok="${e.datum}"><span><b>${hoofdletter(kortDagNaam(e.datum))} ${kortDatum(e.datum)}</b>${x.klaar ? " · afgerond" : bereikt ? " · nu aan de beurt" : ` · over ${dagVerschil(v, e.datum)} dagen`}</span>
+        <ul>${e.vragen.map(q => `<li>${q}</li>`).join("")}</ul>
+        ${bereikt || x.notitie ? `<p style="margin:0">Uit je registraties: ${v13EvaluatieData(e.datum).join(" ")}</p>
+          <textarea data-ev="${e.datum}" maxlength="800" placeholder="Jouw conclusie en wat je eventueel aanpast (één ding tegelijk)">${veiligeTekst(x.notitie || "")}</textarea>
+          <label class="u-klein"><input type="checkbox" data-evklaar="${e.datum}" ${x.klaar ? "checked" : ""}> Afgerond</label>` : ""}</div>`; }).join("")}
+    <h4>Open punten</h4>
+    <div>${V13_OPEN.map(t => { const x = op[t.id] || {}, w = t.id === "stappen" ? st : x;
+      return `<div class="sv-taak${x.klaar ? " klaar" : ""}"><input type="checkbox" data-open="${t.id}" ${x.klaar ? "checked" : ""} aria-label="${t.tekst}">
+        <span><b>${t.tekst}</b>${t.noot ? `<br>${t.noot}` : ""}</span>
+        ${t.velden ? `<div class="sv-velden">${t.velden.map(([k, l]) => `<label>${l}<input data-openveld="${t.id}|${k}" ${k === "datum" ? `type="date"` : k === "bron" ? `type="text" maxlength="60"` : `type="number" inputmode="decimal" step="0.25" min="0"`} value="${veiligeTekst(w[k] ?? "")}"></label>`).join("")}</div>` : ""}</div>`; }).join("")}</div>
+  </div></details>`;
+  const bewaar = (f, melding) => { const I = bewaardLees(INSTEL_KEY, {}); instelZet(f(I)); if (melding) uiMelding(melding); };
+  const evZet = (d, w) => bewaar(I => ({...I, evaluatie: {...(I.evaluatie || {}), [d]: {...((I.evaluatie || {})[d] || {}), ...w, _t: Date.now()}}}));
+  host.querySelectorAll("[data-ev]").forEach(t => t.onchange = () => { evZet(t.dataset.ev, {notitie: t.value.trim() || null}); uiMelding("Evaluatie bewaard"); });
+  host.querySelectorAll("[data-evklaar]").forEach(c => c.onchange = () => { evZet(c.dataset.evklaar, {klaar: c.checked}); renderHerstelcheck(); });
+  host.querySelectorAll("[data-open]").forEach(c => c.onchange = () => {
+    bewaar(I => ({...I, openpunten: {...(I.openpunten || {}), [c.dataset.open]: {...((I.openpunten || {})[c.dataset.open] || {}), klaar: c.checked, _t: Date.now()}}}));
+    c.closest(".sv-taak").classList.toggle("klaar", c.checked); });
+  host.querySelectorAll("[data-openveld]").forEach(inp => inp.onchange = () => {
+    const [id, k] = inp.dataset.openveld.split("|");
+    const w = inp.type === "number" ? (parseFloat(String(inp.value).replace(",", ".")) || null) : (inp.value.trim() || null);
+    if (id === "stappen") { bewaar(I => ({...I, stappen: {...(I.stappen || {}), [k]: w}}), "Stap bewaard; de voorstellen rekenen ermee"); allesNaInvoer(); }
+    else bewaar(I => ({...I, openpunten: {...(I.openpunten || {}), [id]: {...((I.openpunten || {})[id] || {}), [k]: w, _t: Date.now()}}}), "Bewaard");
+  });
+}
+/* Op de evaluatiedag (en tot vijf dagen erna, tot hij is afgerond) een regel op Vandaag. */
+function v13EvaluatieVandaag() {
+  const v = vandaagIso(), ev = instelLees().evaluatie || {};
+  const e = V13_EVALUATIE.find(x => v >= x.datum && v <= isoPlus(x.datum, 5) && !(ev[x.datum] || {}).klaar);
+  return e ? `<div class="vlak hc-kaart"><div class="hc-rij" style="border:0;padding:0"><span><b>Evaluatie schema v1.3</b> · ${kortDatum(e.datum)}</span>
+      <button class="u-knop u-knop--klein" data-v13ev>Bekijken</button></div><p class="u-klein" style="margin:0">${e.vragen.join(" ")}</p></div>` : "";
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-v13ev]"); if (!b) return;
+  naarTab("training"); setTimeout(() => { const d = document.querySelector("#schemaV13 details"); if (d) { d.open = true; d.scrollIntoView({block: "start"}); } }, 100); });
+
 function renderHerstelcheck() {
+  try { renderSchemaV13(); } catch (e) { console.error("schema v1.3", e); }
   const v = vandaagIso(), m = hcMomentVan(v), lijst = hcLees();
   const vd = document.getElementById("vdHerstelcheck");
   if (vd) {
     const c = m ? lijst[`${v}|${m}`] : null;
-    vd.innerHTML = !m ? "" : `<div class="vlak hc-kaart"><div class="hc-rij" style="border:0;padding:0"><span><b>Herstelcheck</b> · ${HC_MOMENT[m]}</span>
+    vd.innerHTML = v13EvaluatieVandaag() + (!m ? "" : `<div class="vlak hc-kaart"><div class="hc-rij" style="border:0;padding:0"><span><b>Herstelcheck</b> · ${HC_MOMENT[m]}</span>
         <button class="u-knop u-knop--klein${c ? " u-knop--stil" : ""}" data-herstelcheck="${v}|${m}">${c ? "Wijzigen" : "Invullen"}</button></div>
-        ${c ? `<p class="u-klein" style="margin:0">${hcSamenvatting(c)}</p>` : `<p class="u-klein" style="margin:0">Achilles, afzet, schouder en benen, vergeleken met je normaal.${m === "wedstrijd" ? " Na de wedstrijd ook speelminuten en RPE." : ""}</p>`}</div>`;
+        ${c ? `<p class="u-klein" style="margin:0">${hcSamenvatting(c)}</p>` : `<p class="u-klein" style="margin:0">Achilles, afzet, schouder en benen, vergeleken met je eigen normaal.${m === "wedstrijd" ? " Na de wedstrijd ook speelminuten en RPE." : ""}</p>`}</div>`);
   }
   const hs = document.getElementById("hsHerstelcheck");
   if (hs) {
@@ -10315,6 +10462,9 @@ function kerncijfers(iso, i, hp) {
   return `<div class="tk-cijfers">${cijfer(duur != null ? `${duur}<small> min</small>` : null, "Duur")}${cijfer(fb.rpe != null ? `${fb.rpe}<small>/10</small>` : null, "Zwaarte")}</div>`;
 }
 
+/* CK: coachingskeuze. Aantallen, stappen en grenzen zonder persoonlijke
+   onderbouwing (schema v1.3, sectie 6). */
+const CK_TAG = `<abbr class="ck" title="coachingskeuze: nog geen persoonlijke onderbouwing">CK</abbr>`;
 /* Rust in seconden als woorden: 60 s, 90 s, 2 min, 3 min. */
 const rustTekst = sec => sec == null ? null : sec >= 120 && sec % 60 === 0 ? `${sec / 60} min` : `${sec} s`;
 /* De kaart van een krachtsessie: per oefening direct wat je doet (sets ×
@@ -10323,7 +10473,7 @@ const rustTekst = sec => sec == null ? null : sec >= 120 && sec % 60 === 0 ? `${
 function schemaKaart(i) {
   const o = i.oefeningen;
   const rijen = o.map(x => `<li><span class="tk-sn">${x.naam}</span>
-      <span class="tk-ss">${x.sets} × ${x.reps}${x.kg != null ? ` · ${komma(x.kg)} kg` : ""}</span>
+      <span class="tk-ss">${x.sets} × ${x.reps}${x.kg != null ? ` · ${komma(x.kg)} kg` : ""}${i.schema ? CK_TAG : ""}</span>
       <span class="tk-sd">${[x.rir, x.rust ? `rust ${rustTekst(x.rust)}` : i.rustAlg ? `rust ${i.rustAlg}` : null, x.noot].filter(Boolean).join(" · ")}</span></li>`).join("");
   const valt = o.filter(x => x.valt).sort((a, b) => a.valt - b.valt);
   const alts = o.filter(x => x.alt);
@@ -10336,6 +10486,7 @@ function schemaKaart(i) {
     alts.length ? `<h5>Alternatief zonder bank of stang</h5><ul>${alts.map(x => `<li>${x.naam} → ${x.alt}</li>`).join("")}</ul>` : "",
     i.schema ? `<h5>Inspanning</h5><p>Hoofdoefeningen RIR 2, accessoires RIR 1–2, core en exorotatie: stoppen zodra de afgesproken uitvoering verandert. Niet automatisch tot falen: Nippards Min-Max is voor spiergroei, dit is de vertaling voor handbal.</p>` : "",
     i.waarom ? `<h5>Onderbouwing</h5><p>${i.waarom}</p>` : "",
+    i.schema ? `<p>${CK_TAG} Aantallen sets, herhalingsbereiken, rusttijden, stappen en grenzen zijn een coachingskeuze zolang persoonlijke onderbouwing ontbreekt.</p>` : "",
   ].join("");
   return `<ul class="tk-schema" aria-label="Oefeningen">${i.warmup ? `<li><span class="tk-sw">Warming-up: ${i.warmup}</span></li>` : ""}${rijen}</ul>
     <details class="tk-oef"><summary>Details</summary><div class="tk-det">${details}</div></details>`;
@@ -16608,8 +16759,15 @@ function coachContext() {
     vandaag,
     trainingsschema: isV13(vandaag) ? {versie: "v1.3", geldig: `${V13.van} t/m ${V13.tot}`, prioriteit: "explosiviteit (benen) = conditie > kracht; geen 1RM-PR's nodig, benen sterk houden, zaterdag geen zware benen; maandag fysio-schema onveranderd"} : null,
     herstelchecks, airbike_sessies: airbike,
+    evaluatie: isV13(vandaag) || Object.keys(I.evaluatie || {}).length ? V13_EVALUATIE.map(e => ({datum: e.datum, vragen: e.vragen,
+      ...((I.evaluatie || {})[e.datum] || {}), _t: undefined})) : null,
+    open_punten: V13_OPEN.map(t => ({punt: t.tekst, afgerond: !!((I.openpunten || {})[t.id] || {}).klaar,
+      ...(t.id === "stappen" ? {waarden: I.stappen || null} : t.id === "maxhr" ? {waarden: (I.openpunten || {}).maxhr || null} : {})})),
     workout_notities: notities,
-    max_hartslag: DATA.max_hr,
+    max_hartslag: (() => { const m = (instelLees().openpunten || {}).maxhr || {};
+      return m.waarde ? {waarde: m.waarde, bron: m.bron || null, datum: m.datum || null, bevestigd: true}
+        : {rekenwaarde: DATA.max_hr, bron: "hoogste gemeten, shuttlerun 17-8-2026", bevestigd: false,
+           noot: "geen met de HRM 600 gemeten maximum; 182 op 4-11 is geen bevestigd maximum"}; })(),
     gereedheid: g.score == null ? null : {score: g.score, opbouw: g.delen, compleet: g.compleet},
     vorm: f ? {fitheid: Math.round(f.ctl), vermoeidheid: Math.round(f.atl), vorm_tsb: Math.round(f.tsb)} : null,
     laatste_14_dagen: laatste,
@@ -16739,6 +16897,39 @@ verwijs naar de fysio. Een oude operatiedatum is geen toestemming.
 De vraag over zijn rug bij squatten staat mogelijk open. Diagnoseer geen zwakke rug of slechte bracing
 uit een squat-deadliftverhouding.
 
+COACHREGELS (schema v1.3, door hem vastgesteld)
+- Stuur alleen bij op zijn werkelijke registraties en opgehaalde data. Verzin geen ontbrekende
+  waarden. Scheid metingen (Garmin), handmatige invoer (logboek, checks) en berekeningen
+  (dashboardmodellen); behandel demodata en vaste waarden in de pagina niet als metingen.
+- Garmin (CIRQA-armband) is betrouwbaar voor gemiddelden en zone 2; voor intervallen en maximale
+  hartslag is de HRM 600-borstband leidend. Apple Watch-sessies staan niet in Garmin Connect: let op
+  dubbele activiteiten en tel niets twee keer.
+- Persoonlijke hartslaggrenzen alleen vastleggen met bron en meetdatum. Een met de borstband gemeten
+  maximum is er nog niet: 182 op 4-11 is geen bevestigd maximum, en de rekenwaarde 187 (shuttlerun
+  17-8-2026) ook niet ("max_hartslag" in de data zegt wat er bekend is).
+- Bij vermoeidheid: eerst de hele week en de timing bekijken (maandag, zaaltrainingen, woensdag,
+  bovenlichaam, speelminuten, slaap, drukte buiten de sport). Daarna één onderdeel gericht
+  aanpassen. Wijs niet automatisch één oorzaak aan.
+- Bij duidelijke klachten: niet doortrainen op de dag zelf, belasting meteen aanpassen, fysio
+  raadplegen. Bij een knap, acuut krachtverlies of functieverlies: stoppen en direct medisch laten
+  beoordelen.
+- Pas één ding tegelijk aan. Voeg geen oefeningen toe zonder concreet doel en een passende plek in
+  de weekbelasting.
+- Maandag, kuitrevalidatie, sprongen, plyometrie, afremmen en richtingsverandering bepaalt de fysio.
+  Stel geen nieuwe hops, sprongen of triphasic-blok voor op basis van coachprofielen.
+- Bronnen: zeg bij advies wat uit een bron komt en wat jouw toepassing is. Een profiel of
+  onderwerpenlijst is onvoldoende inhoudelijke onderbouwing. Zeg nooit dat een coach (Nippard,
+  Hutton, Pierre, Griffith, Greco, Mårtensson) zijn schema heeft goedgekeurd.
+- Leg een prioriteit of afspraak alleen als bevestigd vast als je zijn uitspraak kunt aanwijzen.
+- Aantallen sets, stappen en grenzen in schema v1.3 zijn coachingskeuzes (CK) zolang persoonlijke
+  onderbouwing ontbreekt; presenteer ze niet als bewezen.
+- Evaluatiemomenten: vr 27 nov (uitvoerbaar binnen de tijd; schouders, ellebogen, achilles stabiel),
+  vr 11 dec (airbike beter beheersbaar of meer vermogen bij vergelijkbare zwaarte; hollow hold),
+  wo 30 dec (beter dan het uitgangsniveau bij dezelfde RIR; wedstrijdfrisheid). Uitgangsniveau: de
+  week van 16 nov plus de fysiotest van 27-10 en de 4 x 4 hardlopen van 4-11 (fysiowaarden nog te
+  controleren tegen het originele blad). Wat hij noteerde staat in de data ("evaluatie").
+- Open punten staan in de data ("open_punten"); ga niet uit van een antwoord dat er nog niet is.
+
 WAAR JE OP LEUNT
 Onderzoek naar duur- en intervaltraining, teamsport, testbetrouwbaarheid en gecombineerde kracht- en
 conditietraining (o.a. Buchheit & Laursen 2013, Helgerud 2007, Schumann 2022, Krustrup 2006), en voor
@@ -16749,7 +16940,8 @@ onderzoek. Maak dat onderscheid zichtbaar.
 PERSPECTIEF VAN PERFORMANCE COACHES
 Bij een terugblik op zijn week, of als hij erom vraagt, bekijk je zijn data door de bril van deze
 coaches: Jeff Nippard, Jake Hutton (Fitness Culture), Shea Pierre (Pierre's Elite Performance), Vernon
-Griffith II (CSCS*D, Performance Explored), Tony Greco en Coach Martensson. Bij Nippard: prikkel tegenover
+Griffith II (CSCS*D, Performance Explored), Tony Greco en Coach Mårtensson (identiteit nog niet bevestigd,
+waarschijnlijk Jesper Mårtensson van JM Athletes; zolang dat open staat, noem je hem met dat voorbehoud). Bij Nippard: prikkel tegenover
 vermoeidheidskosten (welke spieren, hoeveel uitdagende sets, hoe dicht bij falen, wat doen je
 prestaties). Bij Hutton: kracht, conditie en atletisch functioneren samen; de vorm mag veranderen
 zolang duidelijk is welke kwaliteit je traint.

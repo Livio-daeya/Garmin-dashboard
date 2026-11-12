@@ -424,11 +424,13 @@
     const P = WORKOUTS.halDi13.voorschrift, Q = WORKOUTS.halDo13.voorschrift;
     logZet([{type: "halDi13", datum: "2026-11-10", oefeningen: {bench: {kg: 97.5, reps: 6, rir: 2, sets: 3}, csrow: {kg: 15, reps: 10, rir: 2, sets: 2},
       pullup: {kg: null, reps: 7, rir: 2, sets: 3}}}, {type: "halDo13", datum: "2026-11-12", oefeningen: {trxrow: {kg: null, reps: 12, rir: 2, sets: 2, variant: "voeten 1 stap"}}}]);
+    const b0 = volgendeSet("bench", ctx, P.bench, "hal");
+    instel({stappen: {schijf: 2.5}});
     const b = volgendeSet("bench", ctx, P.bench, "hal"), c = volgendeSet("csrow", ctx, P.csrow, "hal");
     const p = volgendeSet("pullup", ctx, P.pullup, "hal"), t = volgendeSet("trxrow", ctx, Q.trxrow, "hal");
-    const ok = b.kg === 100 && b.omhoog && c.kg === 15 && /zwaarste dumbbell/.test(c.reden)
+    const ok = b0.kg == null && /vul je kleinste stap in/.test(b0.reden) && b.kg === 100 && b.omhoog && c.kg === 15 && /zwaarste dumbbell/.test(c.reden)
       && !p.omhoog && /herhaling erbij/.test(p.reden) && t.kg == null && /variabele zwaarder/.test(t.reden) && !!t.regel;
-    return {ok, detail: `bench ${b.kg} (${b.reden}) | csrow ${c.kg} | pullup: ${p.reden} | trx: ${t.reden}`};
+    return {ok, detail: `zonder stap: ${b0.reden} | bench ${b.kg} (${b.reden}) | csrow ${c.kg} | pullup: ${p.reden} | trx: ${t.reden}`};
   });
 
   test("v1.3 hollow hold: nieuwe stap alleen op dinsdag na twee sessies 2 × 25 s", () => {
@@ -486,7 +488,63 @@
               && /alleen via de fysio/.test(COACH_SYSTEEM), detail: "COACH_SYSTEEM"};
   });
 
+  test("v1.3 dumbbellstap uit de open punten: per hand, nooit boven 15 kg in de hal", () => {
+    DATA.planbasis.vandaag = DI3;
+    logZet([{type: "halDi13", datum: "2026-11-10", oefeningen: {curl: {kg: 12, reps: 12, rir: 2, sets: 2}, csrow: {kg: 14, reps: 10, rir: 2, sets: 2}}}]);
+    instel({stappen: {dumbbell: 2}});
+    const ctx = {volumeFactor: 1, rirExtra: 0};
+    const c = volgendeSet("curl", ctx, WORKOUTS.halDi13.voorschrift.curl, "hal"), r2 = volgendeSet("csrow", ctx, WORKOUTS.halDi13.voorschrift.csrow, "hal");
+    return {ok: c.kg === 14 && /per hand/.test(c.reden) && r2.kg == null && /eerstvolgende dumbbell/.test(r2.reden), detail: `curl ${c.kg} (${c.reden}) | csrow ${r2.kg} (${r2.reden})`};
+  });
+
+  test("v1.3 CK: aantallen in de halschema's gemarkeerd als coachingskeuze, de fysio-maandag niet", () => {
+    const di = document.createElement("div"); di.innerHTML = schemaKaart(kr(DI3, "halDi13"));
+    const ma = document.createElement("div"); ma.innerHTML = schemaKaart(kr(MA3, "fysioMa"));
+    const rijen = [...di.querySelectorAll(".tk-schema li .tk-ss")];
+    return {ok: rijen.length === 7 && rijen.every(x => x.querySelector("abbr.ck")) && !ma.querySelector("abbr.ck") && /coachingskeuze/.test(di.textContent),
+            detail: `${rijen.filter(x => x.querySelector("abbr.ck")).length}/${rijen.length} rijen met CK; maandag ${ma.querySelectorAll("abbr.ck").length}`};
+  });
+
+  test("v1.3 evaluatie: drie momenten met vragen, registraties erbij vanaf de datum, op Vandaag tot afgerond", () => {
+    DATA.planbasis.vandaag = "2026-11-27";
+    instel({herstelcheck: {[`${DI3}|na-ma`]: {datum: DI3, moment: "na-ma", achilles: "licht", schouder: "normaal", benen: 3}}});
+    renderSchemaV13();
+    const h = document.getElementById("schemaV13");
+    const blokken = [...h.querySelectorAll("[data-evblok]")];
+    const eerste = blokken[0].textContent, tweede = blokken[1].textContent;
+    const vd = v13EvaluatieVandaag();
+    instel({evaluatie: {"2026-11-27": {klaar: true, notitie: "past binnen de tijd"}}});
+    const vdNa = v13EvaluatieVandaag();
+    const ctx = coachContext();
+    return {ok: blokken.length === 3 && /uitvoerbaar binnen de tijd/.test(eerste) && /Uit je registraties/.test(eerste) && /achilles stijf 1×/.test(eerste)
+              && !/Uit je registraties/.test(tweede) && /over 14 dagen/.test(tweede) && /Evaluatie schema v1\.3/.test(vd) && vdNa === ""
+              && ctx.evaluatie && ctx.evaluatie[0].notitie === "past binnen de tijd",
+            detail: eerste.replace(/\s+/g, " ").slice(0, 260)};
+  });
+
+  test("v1.3 open punten als takenlijst; stappen en gemeten max HR gaan mee naar voorstel en coach", () => {
+    DATA.planbasis.vandaag = DI3;
+    renderSchemaV13();
+    const h = document.getElementById("schemaV13");
+    const taken = h.querySelectorAll("[data-open]").length;
+    const inp = h.querySelector('[data-openveld="stappen|schijf"]'); inp.value = "2.5"; inp.onchange();
+    const vink = h.querySelector('[data-open="squatlunge"]'); vink.checked = true; vink.onchange();
+    const ctx = coachContext();
+    return {ok: taken === 7 && (instelLees().stappen || {}).schijf === 2.5 && ((instelLees().openpunten || {}).squatlunge || {}).klaar === true
+              && ctx.max_hartslag.bevestigd === false && ctx.open_punten.find(p => /Squat lunge/.test(p.punt)).afgerond
+              && ctx.open_punten.find(p => /schijf/.test(p.punt)).waarden.schijf === 2.5,
+            detail: `${taken} taken · stappen ${JSON.stringify(instelLees().stappen)} · max HR ${JSON.stringify(ctx.max_hartslag)}`};
+  });
+
+  test("v1.3 coachregels: alleen echte registraties, HRM 600 leidend, één ding tegelijk, fysio bepaalt sprongen, geen goedkeuring door coaches", () => {
+    const t = COACH_SYSTEEM;
+    const ok = /Verzin geen ontbrekende/.test(t) && /HRM 600-borstband leidend/.test(t) && /Apple Watch/.test(t) && /182 op 4-11 is geen bevestigd maximum/.test(t)
+      && /Wijs niet automatisch één oorzaak aan/.test(t) && /Pas één ding tegelijk aan/.test(t) && /bepaalt de fysio/.test(t)
+      && /Zeg nooit dat een coach/.test(t) && /acuut krachtverlies/.test(t) && /coachingskeuzes \(CK\)/.test(t) && /Mårtensson \(identiteit nog niet bevestigd/.test(t);
+    return {ok, detail: "COACH_SYSTEEM"};
+  });
+
   /* De pagina weer tonen zoals hij met jouw echte gegevens is. */
-  try { FOCUS_OPEN = null; renderBelDials(); renderRouteAlles(); renderHerstelcheck(); } catch (e) { /* alleen weergave */ }
+  try { FOCUS_OPEN = null; renderBelDials(); renderRouteAlles(); renderHerstelcheck(); renderSchemaV13(); } catch (e) { /* alleen weergave */ }
   return uit;
 })();

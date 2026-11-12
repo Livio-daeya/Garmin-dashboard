@@ -26,7 +26,11 @@
     const pl = (document.getElementById("plWeek") || {}).innerHTML || "";
     ROUTE_DAG = null; PLAN_DAG = null;
     const lijst = ongeplandOp(vrij);
-    return {ok: lijst.some(x => x.doel === "kracht") && /Ook gedaan, niet gepland/.test(tr) && /Kracht extra/.test(tr) && /Kracht vandaag extra/.test(pl),
+    /* staat er vandaag zelf kracht gepland, dan hoort de training daarbij en
+       is hij niet ongepland: dan telt alleen dat hij aan die sessie hangt */
+    const vk = dagRoute(v, {alleenLezen: true}).items.find(i => i.soort === "kracht");
+    const vandaagOk = vk ? (itemStatus(v, vk).acts || []).some(a => a.id === 9990009) : /Kracht vandaag extra/.test(pl);
+    return {ok: lijst.some(x => x.doel === "kracht") && /Ook gedaan, niet gepland/.test(tr) && /Kracht extra/.test(tr) && vandaagOk,
       detail: `${vrij}: ${lijst.map(x => `${x.wat} (${x.doel})`).join(", ")}`};
   });
   await test("In de weekscore vult hij een gemiste of onbekende krachtsessie, anders telt hij als extra", () => {
