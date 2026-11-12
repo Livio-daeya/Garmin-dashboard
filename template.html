@@ -919,6 +919,7 @@ button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
 .nb-staaf { display: grid; justify-items: center; align-content: end; gap: 4px; height: 100%; background: none; border: 0; border-radius: 10px; cursor: pointer; padding: 0; color: var(--muted); font: inherit; }
 .nb-staaf i { display: block; width: 18px; border-radius: 6px 6px 3px 3px; background: var(--sl-licht); opacity: .8; }
 .nb-staaf i.leeg { background: none; border: 1.5px dashed var(--hair-strong); height: 28px; opacity: 1; }
+.nb-staaf i.nb-dutje { background: var(--sl-licht); opacity: .4; border-radius: 6px; margin-bottom: -2px; }
 .nb-staaf.kort i { background: var(--warning); }
 .nb-staaf span { font-size: var(--t-label); }
 .nb-staaf[aria-pressed="true"] i { opacity: 1; box-shadow: 0 0 0 2px var(--bg1), 0 0 0 3.5px var(--ink); }
@@ -1114,7 +1115,14 @@ tr.klikrij { cursor: pointer; } tr.klikrij:hover td, tr.klikrij:focus-visible td
 .wm-vorig { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--t-klein); margin: var(--sp2) 0 var(--sp4); }
 .wm-vorig .ic { width: 14px; height: 14px; }
 .wm-sets { display: grid; gap: var(--sp2); }
-.wm-set { display: grid; grid-template-columns: 32px repeat(auto-fit, minmax(0, 1fr)) var(--klik); grid-auto-flow: column; gap: var(--sp2); align-items: center; }
+.wm-set { display: grid; grid-template-columns: 32px repeat(var(--velden, 2), minmax(0, 1fr)) var(--klik) 32px; gap: var(--sp2); align-items: center; }
+.wm-setweg { width: 32px; height: var(--klik); border: 0; background: none; color: var(--ink-2); cursor: pointer; display: grid; place-items: center; border-radius: var(--r-md); }
+.wm-setweg .ic { width: 16px; height: 16px; }
+.wm-setweg:hover { color: var(--critical); }
+.wm-notitie { display: grid; gap: 6px; margin-top: var(--sp6); font-size: var(--t-klein); color: var(--ink-2); }
+.wm-notitie textarea { min-height: 72px; resize: vertical; box-sizing: border-box; width: 100%; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--hair-strong);
+  background: var(--bg1); color: var(--ink); font: inherit; font-size: var(--t-body); }
+.tk-notitie { margin: 0; color: var(--ink-2); font-size: var(--t-klein); font-style: italic; }
 .wm-set--kop { font-size: var(--t-label); color: var(--ink-2); }
 .wm-set--kop span { text-align: center; }
 .wm-nr { text-align: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -6897,7 +6905,7 @@ function renderDials() {
     cap: "Slaap", num: sl.sleep_score ?? null, deel: (sl.sleep_score || 0) / 100,
     band: slaapBand, ga: "slaapnacht",
     delta: deltaVan(sl.sleep_score ?? null, slaapVorig ? slaapVorig.sleep_score : null, true, 1),
-    subt: sl.sleep_h ? `${uurMin(sl.sleep_h)} · ${({EXCELLENT:"uitstekend", GOOD:"goed",
+    subt: sl.sleep_h ? `${uurMin(sl.sleep_h)}${dutjeOp(sl.date || vandaagIso()) ? ` + ${uurMin(dutjeOp(sl.date || vandaagIso()))} dutje` : ""} · ${({EXCELLENT:"uitstekend", GOOD:"goed",
             FAIR:"matig", POOR:"slecht"})[sl.sleep_quality] || "gemeten"}`
           : "geen meting",
   };
@@ -10152,11 +10160,13 @@ function kaartAchteraf(iso, i, s) {
       : concept && ingevuld
       ? `<p class="tk-noot">${ic("letop")}Workout niet afgerond: ${ingevuld} sets ingevuld op dit apparaat, nog niet bewaard.</p>`
       : `<p class="tk-volgt">${ic("info")}Sets niet gelogd. Gedaan zetten verzint geen sets of gewichten.</p>`;
+    if (log && log.notitie) midden += `<p class="tk-notitie">“${veiligeTekst(log.notitie)}”</p>`;
     if (!log) midden += `<div class="tk-knoppen"><button class="u-knop${concept && ingevuld ? "" : " u-knop--stil"}" data-start="${sl}">${concept && ingevuld ? "Hervatten en afronden" : "Sets invullen"}</button></div>`;
   } else {
     const l = (instelLees().conditielog || {})[sl] || {};
     midden = l.werk != null || l.herh != null
       ? `<p class="tk-volgt">${ic("puls")}${l.werk != null ? `${komma(l.werk)} werkmin` : `${l.herh} herhalingen`}${l.min ? ` · ${l.min} min totaal` : ""}</p>` : "";
+    if (l.notitie) midden += `<p class="tk-notitie">“${veiligeTekst(l.notitie)}”</p>`;
   }
   return `${kerncijfers(iso, i, hp)}${midden}
     <div class="tk-knoppen">
@@ -10530,6 +10540,7 @@ function workoutStart(iso, i) {
     const r = krachtWorkout(i.wk, iso, {verkort: i.verkort, zonderBenen: i.zonderBenen});
     const vorigLog = k => logLees().filter(x => x.oefeningen && x.oefeningen[k] && x.datum < iso).sort((a, b) => a.datum < b.datum ? 1 : -1)[0];
     WKM = {sl, iso, id: i.id, soort: "kracht", wk: i.wk, titel: i.titel, plek: i.plek, start: Date.now(), actief: 0, rust: true,
+      notitie: (krachtLogOp(iso, i.wk) || {}).notitie || "",
       oef: r.oefeningen.map(o => {
         const v = vorigLog(o.k);
         const pr = {sets: o.sets, reps: o.reps, rir: o.rir, kg: o.kg};
@@ -10540,6 +10551,7 @@ function workoutStart(iso, i) {
   } else {
     const intervalSoort = i.soort === "hoog" || i.soort === "ana";
     WKM = {sl, iso, id: i.id, soort: "conditie", titel: i.titel, start: Date.now(), actief: 0, rust: false,
+      notitie: ((instelLees().conditielog || {})[sl] || {}).notitie || "",
       oef: [{k: i.soort, naam: i.titel, soort: intervalSoort ? "interval" : "duur", voorschrift: {tekst: i.voorschrift},
         sets: [{a: "", b: "", c: "", klaar: false}]}]};
   }
@@ -10578,12 +10590,13 @@ function workoutTeken() {
       <h3 class="wm-oef">${o.naam}</h3>
       <div class="wm-voorschrift">${pr.tekst ? pr.tekst : `<b>${pr.sets} × ${pr.reps}</b>${pr.rir ? ` · ${pr.rir}` : ""}${pr.kg ? ` · ${komma(pr.kg)} kg` : ""}`}</div>
       ${o.soort !== "interval" && o.soort !== "duur" ? `<p class="wm-vorig">${ic("klok")}Vorige keer: ${vorig}</p>` : ""}
-      <div class="wm-sets" role="table">
-        <div class="wm-set wm-set--kop" role="row"><span>Set</span>${velden.map(([, l]) => `<span>${l}</span>`).join("")}<span></span></div>
+      <div class="wm-sets" role="table" style="--velden: ${velden.length}">
+        <div class="wm-set wm-set--kop" role="row"><span>Set</span>${velden.map(([, l]) => `<span>${l}</span>`).join("")}<span></span><span></span></div>
         ${o.sets.map((s, n) => `<div class="wm-set${s.klaar ? " klaar" : ""}" role="row">
           <span class="wm-nr">${n + 1}</span>
           ${velden.map(([v, l, im]) => `<input type="number" inputmode="${im}" step="${im === "decimal" ? "0.5" : "1"}" min="0" data-set="${n}" data-v="${v}" value="${s[v] ?? ""}" aria-label="Set ${n + 1} ${l}">`).join("")}
           <button class="wm-vink" data-vink="${n}" aria-pressed="${s.klaar}" aria-label="Set ${n + 1} ${s.klaar ? "afgerond, wijzigen" : "afronden"}">${ic("goed")}</button>
+          <button class="wm-setweg" data-setweg="${n}" aria-label="Set ${n + 1} verwijderen">${ic("sluit")}</button>
         </div>`).join("")}
       </div>
       <div class="wm-acties">
@@ -10591,6 +10604,8 @@ function workoutTeken() {
         ${o.soort === "kracht" ? `<label class="wm-rir">RIR laatste set<select data-wm-rir>${["", 0, 1, 2, 3, 4].map(n => `<option value="${n}" ${String(o.rir ?? "") === String(n) ? "selected" : ""}>${n === "" ? "—" : n === 4 ? "4+" : n}</option>`).join("")}</select></label>` : ""}
         ${W.soort === "kracht" ? `<button class="u-knop u-knop--stil u-knop--klein" data-wm="vervang">Vervangen</button>` : ""}
       </div>
+      <label class="wm-notitie">Notitie bij deze workout
+        <textarea data-wm-notitie maxlength="500" placeholder="Context voor jezelf en de coach, bv. slecht geslapen, knie voelde stijf">${veiligeTekst(W.notitie || "")}</textarea></label>
     </div>
     <div class="wm-voet">
       <button class="u-knop u-knop--stil" data-wm="vorige" ${W.actief === 0 ? "disabled" : ""}>${ic("vorige")}Vorige</button>
@@ -10610,6 +10625,20 @@ function workoutTeken() {
     if (s.klaar && W.rust && o.soort !== "interval") rustStart(REST_S[(OEF[o.k] || {}).rol] || 90);
     workoutTeken();
   });
+  el.querySelectorAll("[data-setweg]").forEach(b => b.onclick = () => {
+    const n = +b.dataset.setweg, weg = o.sets[n];
+    o.sets.splice(n, 1);
+    /* minstens één lege regel houden om in te vullen */
+    if (!o.sets.length) o.sets.push({a: "", b: "", c: "", klaar: false});
+    workoutBewaarConcept(); workoutTeken();
+    if (weg && (weg.a || weg.b || weg.klaar)) uiMeldingTerug(`Set ${n + 1} verwijderd`, () => {
+      if (!WKM || WKM.oef[WKM.actief] !== o) return;
+      if (o.sets.length === 1 && !o.sets[0].a && !o.sets[0].b) o.sets.splice(0, 1);
+      o.sets.splice(n, 0, weg); workoutBewaarConcept(); workoutTeken();
+    });
+  });
+  const not = el.querySelector("[data-wm-notitie]");
+  if (not) not.oninput = () => { W.notitie = not.value; workoutBewaarConcept(); };
   const rir = el.querySelector("[data-wm-rir]");
   if (rir) rir.onchange = () => { o.rir = rir.value === "" ? null : +rir.value; workoutBewaarConcept(); };
   el.querySelectorAll("[data-wm-naar]").forEach(b => b.onclick = () => { W.actief = +b.dataset.wmNaar; workoutBewaarConcept(); workoutTeken(); });
@@ -10689,7 +10718,7 @@ function workoutAfronden() {
     const idx = log.findIndex(x => x.type === W.wk && x.datum === W.iso);
     /* vaste id per sessie: niet de positie in de lijst, want die verschilt
        per apparaat en zou bij synchroniseren een andere sessie overschrijven */
-    const item = {type: W.wk, datum: W.iso, oefeningen, plek: W.plek || null, _t: Date.now()};
+    const item = {type: W.wk, datum: W.iso, oefeningen, plek: W.plek || null, notitie: (W.notitie || "").trim() || null, _t: Date.now()};
     if (idx >= 0) log[idx] = {...log[idx], ...item};
     else log.push({...item, _id: `${W.iso}-${W.wk}-${Math.random().toString(36).slice(2, 8)}`});
     ok = logZet(log) !== false;
@@ -10700,6 +10729,7 @@ function workoutAfronden() {
     const v = W.oef[0].soort === "interval" && s.length
       ? {herh: tot, sec: parseFloat(s[0].b) || null, herstel: parseFloat(s[0].c) || null, werk: s[0].b ? Math.round(tot * parseFloat(s[0].b) / 60 * 10) / 10 : null, min: duur}
       : {min: tot || duur};
+    v.notitie = (W.notitie || "").trim() || null;
     ok = instelZet({...I, conditielog: {...(I.conditielog || {}), [W.sl]: {...((I.conditielog || {})[W.sl] || {}), ...v}}}) !== false;
   }
   if (!ok) { uiMelding("Opslaan mislukt; je sets staan er nog", "fout"); return; }
@@ -11035,7 +11065,17 @@ const HS_TAAK = {gevoel: "Gevoel", prestatie: "Prestatie", slaap: "Slaap", hart:
 const hsChip = (tekst, niveau) => `<span class="hs-chip hs-chip--${niveau}"><i></i>${tekst}</span>`;
 const kortDagNaam = d => WEEKDAG_LANG[isoNaarPy(d)].slice(0, 2);
 /* oudere pagina's zonder historie vallen terug op de getoonde weken */
-const hbRijen = () => (Array.isArray(DATA.historie) ? DATA.historie : DATA.daily || []);
+/* Slaap per kalenderdag: de nacht die die ochtend eindigt plus de dutjes
+   van die dag. Garmin telt een dutje niet in de nachtslaap; voor herstel
+   telt het wel, dus rekent het slaapdomein met dit totaal. */
+const slaapTotVan = r => r.sleep_h == null ? null : Math.round((r.sleep_h + (r.dutje_h || 0)) * 100) / 100;
+function slaapTotZet(rijen) {
+  if (rijen && rijen._slaapTot !== rijen.length) { rijen.forEach(r => { r.slaap_tot = slaapTotVan(r); }); rijen._slaapTot = rijen.length; }
+  return rijen;
+}
+const dutjeOp = iso => { const r = (DATA.daily || []).find(x => x.date === iso) || (Array.isArray(DATA.historie) ? DATA.historie.find(x => x.date === iso) : null);
+  return r && r.dutje_h > 0 ? r.dutje_h : 0; };
+const hbRijen = () => slaapTotZet(Array.isArray(DATA.historie) ? DATA.historie : DATA.daily || []);
 const hbActs = () => (Array.isArray(DATA.historie_acts) ? DATA.historie_acts : DATA.activities || []);
 const hbMed = xs => { const s = xs.slice().sort((a, b) => a - b), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : null; };
 const hbRsd = xs => { const m = hbMed(xs); return m == null ? null : 1.4826 * hbMed(xs.map(x => Math.abs(x - m))); };
@@ -11233,29 +11273,32 @@ function hbPrestatie(dag) {
    is niet je slaapbehoefte; alleen als je die zelf vastlegt rekenen we een
    tekort in uren uit. Garmins slaapbehoefte staat als Garmin-schatting. */
 function hbSlaap(dag) {
-  const ref = hbReferentie("sleep_h", dag);
-  const m = hbMeting("sleep_h", dag, ref, {relatief: true});
+  const ref = hbReferentie("slaap_tot", dag);
+  const m = hbMeting("slaap_tot", dag, ref, {relatief: true});
   const behoefte = instelLees().slaapBehoefteUur || null;
-  const r7 = hbRijen().filter(r => r.date > isoPlus(dag, -7) && r.date <= dag && r.sleep_h != null);
+  const r7 = hbRijen().filter(r => r.date > isoPlus(dag, -7) && r.date <= dag && r.slaap_tot != null);
+  const laatsteRij = m.datum ? hbRijen().find(r => r.date === m.datum) : null;
+  const dutje = laatsteRij && laatsteRij.dutje_h > 0 ? laatsteRij.dutje_h : 0;
+  const nachtTekst = dutje ? `${uurMin(laatsteRij.sleep_h)} vannacht plus ${uurMin(dutje)} dutje` : `${uurMin(m.actueel)} vannacht`;
   const garmin = (hbRijen().filter(r => r.date <= dag && r.slaapbehoefte_garmin_min).pop() || {}).slaapbehoefte_garmin_min || null;
   const checks = checkLees();
   const slechtGeslapen = Object.keys(checks).filter(d => d > isoPlus(dag, -7) && d <= dag && (checks[d].lijf || {}).slaap === 2).length;
   const startMin = r => { if (!r.sleep_start) return null; const t = new Date(typeof r.sleep_start === "number" ? r.sleep_start : String(r.sleep_start).replace("Z", ""));
     if (isNaN(t)) return null; const mm = t.getUTCHours() * 60 + t.getUTCMinutes(); return mm > 1080 ? mm - 1440 : mm; };
-  const tekort = behoefte ? r7.reduce((t, r) => t + (behoefte - r.sleep_h), 0) : null;
+  const tekort = behoefte ? r7.reduce((t, r) => t + (behoefte - r.slaap_tot), 0) : null;
   let niveau, reden;
   if (!ref.genoeg || m.dekking < 4) { niveau = "grijs"; reden = !ref.genoeg ? `te weinig historie (${ref.n} van ${ref.nodig} nachten)` : `${7 - m.dekking} van de 7 nachten niet gemeten`; }
   else {
-    const kortRecent = r7.slice(-5).filter(r => r.sleep_h < ref.laag).length;
+    const kortRecent = r7.slice(-5).filter(r => r.slaap_tot < ref.laag).length;
     if (kortRecent >= HB.aanhoudend) { niveau = "oranje"; reden = `${kortRecent} van de laatste 5 nachten korter dan je gebruikelijke patroon`; }
     else if (behoefte && tekort >= 3.5) { niveau = "oranje"; reden = `${uurMin(tekort)} onder je eigen opgegeven behoefte deze week`; }
-    else if ((m.stand === "onder" && !m.oud) || kortRecent >= 2 || slechtGeslapen >= 2) { niveau = "blauw"; reden = slechtGeslapen >= 2 ? "slecht geslapen volgens je check-in" : m.stand === "onder" ? "afgelopen nacht korter dan je gebruikelijke patroon" : `${kortRecent} korte nachten t.o.v. je patroon`; }
-    else { niveau = "groen"; reden = `${uurMin(m.actueel)} vannacht, binnen je gebruikelijke patroon`; }
+    else if ((m.stand === "onder" && !m.oud) || kortRecent >= 2 || slechtGeslapen >= 2) { niveau = "blauw"; reden = slechtGeslapen >= 2 ? "slecht geslapen volgens je check-in" : m.stand === "onder" ? (dutje ? `${nachtTekst}: samen nog korter dan je gebruikelijke patroon` : "afgelopen nacht korter dan je gebruikelijke patroon") : `${kortRecent} korte nachten t.o.v. je patroon`; }
+    else { niveau = "groen"; reden = `${nachtTekst}, binnen je gebruikelijke patroon`; }
   }
   const starts = r7.map(startMin).filter(x => x != null);
   const startRef = hbRijen().filter(r => r.date >= isoPlus(dag, -HB.refVan) && r.date <= isoPlus(dag, -HB.refTot)).map(startMin).filter(x => x != null);
   const regelmaat = starts.length >= 4 && startRef.length >= HB.refMinN ? {afwijkingMin: Math.round(hbMed(starts.map(x => Math.abs(x - hbMed(startRef))))), gebruikelijk: hbMed(startRef)} : null;
-  return {k: "slaap", niveau, reden, m, ref, behoefte, garmin, tekort, slechtGeslapen, regelmaat, dekking: m.dekking,
+  return {k: "slaap", niveau, reden, m, ref, behoefte, garmin, tekort, slechtGeslapen, regelmaat, dekking: m.dekking, dutje,
     ongunstig: niveau === "oranje"};
 }
 
@@ -12074,13 +12117,13 @@ function hbIndicatorInhoud(k) {
       <p class="u-klein">${x.opbouw.status === "stabiel" ? `Je eigen normaal: ${komma(x.normaal)}/5, uit ${x.opbouw.n} check-ins op ${x.opbouw.weekdagen} weekdagen.` : x.normaal != null ? `Persoonlijke referentie in opbouw: voorlopig ${komma(x.normaal)}/5 uit ${x.opbouw.n} check-ins op ${x.opbouw.weekdagen} weekdagen. Zeven check-ins is een eerste referentie, geen betrouwbare.` : `Persoonlijke referentie in opbouw (${x.opbouw.n} van ${HB.gevoelEerste} check-ins); tot dan telt 2/5 of lager. Een actuele klacht telt altijd direct.`} Oranje bij twee of meer ongunstige dagen in 7, waarvan één vandaag of gisteren [modelkeuze]. Mentale belasting telt als mogelijke andere verklaring, niet als vermoeidheid.${x.stress ? ` Deze week ${x.stress}× hoge mentale belasting ingevuld.` : ""}</p>`;
   } else if (k === "slaap") {
     const m = x.m;
-    inhoud = `<dl class="u-dl">${hbMetingRij("Slaapduur", m, n => uurMin(n), "")}
+    inhoud = `<dl class="u-dl">${hbMetingRij(x.dutje ? "Slaap incl. dutje" : "Slaapduur", m, n => uurMin(n), "")}
         <dt>Slaapbehoefte</dt><dd>${x.behoefte ? `${uurMin(x.behoefte)} <span class="u-klein">zelf vastgelegd${x.tekort != null ? ` · deze week ${x.tekort >= 0 ? uurMin(x.tekort) + " eronder" : uurMin(-x.tekort) + " erboven"}` : ""}</span>` : `<span class="u-klein">niet vastgelegd; je gebruikelijke duur is niet je behoefte</span>`}</dd>
         ${x.garmin ? `<dt>Garmin-schatting behoefte</dt><dd>${uurMin(x.garmin / 60)} <span class="u-klein">afkomstig uit Garmin, algoritmische schatting</span></dd>` : ""}
         ${x.regelmaat ? `<dt>Bedtijd</dt><dd>gemiddeld ${x.regelmaat.afwijkingMin} min van je gebruikelijke tijd</dd>` : ""}
         ${x.slechtGeslapen ? `<dt>Zelf ervaren</dt><dd>${x.slechtGeslapen}× slecht geslapen deze week</dd>` : ""}</dl>
-      ${hbGrafiek("sleep_h", v, x.ref, n => uurMin(n))}
-      <p class="u-klein">${hbRefTekst(x.ref)} Oranje bij 3 van de laatste 5 nachten onder je gebruikelijke patroon [modelkeuze]. Slaapscore en slaapfasen zijn Garmin-schattingen en tellen niet mee.</p>`;
+      ${hbGrafiek("slaap_tot", v, x.ref, n => uurMin(n))}
+      <p class="u-klein">${hbRefTekst(x.ref)} Per dag telt de nacht plus een dutje van die dag; Garmin houdt een dutje buiten de nachtslaap. Oranje bij 3 van de laatste 5 nachten onder je gebruikelijke patroon [modelkeuze]. Slaapscore en slaapfasen zijn Garmin-schattingen en tellen niet mee.</p>`;
   } else if (k === "hart") {
     const hv = x.hrv, wr = hv.weekRef;
     inhoud = `<dl class="u-dl">
@@ -12724,7 +12767,8 @@ function trainingsAdvies(ma) {
       inhoud: x.act ? `${x.minuten} min${x.act.aerobic_te != null ? `, TE ${komma(x.act.aerobic_te.toFixed(1))}/${komma((x.act.anaerobic_te || 0).toFixed(1))}` : ""}` : `${x.minuten} min${x.sessie && x.sessie.rpe != null ? `, zwaarte ${x.sessie.rpe}/10` : ""}`,
       bron: x.bron === "garmin" ? "Garmin" : "zelf ingevuld"}));
     logs.filter(l => l.datum === d).forEach(l => sessies.push({d, wat: "krachtlog", status: "gelogd",
-      inhoud: Object.entries(l.oefeningen || {}).map(([k, o]) => `${(OEF[k] || {}).naam || o.naam || k} ${o.sets || (o.reeksen || []).length}×${o.reps ?? "?"}${o.kg != null ? ` @ ${komma(o.kg)} kg` : ""}`).join(", "), bron: "krachtlog"}));
+      inhoud: Object.entries(l.oefeningen || {}).map(([k, o]) => `${(OEF[k] || {}).naam || o.naam || k} ${o.sets || (o.reeksen || []).length}×${o.reps ?? "?"}${o.kg != null ? ` @ ${komma(o.kg)} kg` : ""}`).join(", ")
+        + (l.notitie ? `. Notitie: "${l.notitie}"` : ""), bron: "krachtlog"}));
   });
   return {ma, zo, lopend, status, titel: TA_STATUS[status], reden, actie, conditie, kracht, handbal, herstel: hk, belasting, wedstrijd, totWedstrijd, extra, sessies, uitvoering: w};
 }
@@ -14047,14 +14091,14 @@ function renderNachten() {
   const kort = d => d.sleep_h != null && gewoon != null && d.sleep_h < gewoon - 1.25;
   host.innerHTML = `<div class="sectie-kop"><h3>Afgelopen 7 nachten</h3>${gewoon != null ? `<span class="u-klein">gewoonlijk ${uurMin(gewoon)}</span>` : ""}</div>
     <div class="vlak"><div class="nb">${zeven.map(d => `<button class="nb-staaf${kort(d) ? " kort" : ""}" data-nachtkies="${d.date}" aria-pressed="false"
-        aria-label="${dagNaam(d.date)} ${kortDatum(d.date)}: ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${kort(d) ? ", korter dan gewoonlijk" : ""}">
-        <i class="${d.sleep_h != null ? "" : "leeg"}" style="${d.sleep_h != null ? `height:${Math.round(Math.min(d.sleep_h, 11) / 11 * 88)}px` : ""}"></i><span>${WEEKDAG_LANG[isoNaarPy(d.date)].slice(0, 2)}</span></button>`).join("")}</div>
+        aria-label="${dagNaam(d.date)} ${kortDatum(d.date)}: ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${d.dutje_h > 0 ? ` plus ${uurMin(d.dutje_h)} dutje` : ""}${kort(d) ? ", korter dan gewoonlijk" : ""}">
+        ${d.dutje_h > 0 && d.sleep_h != null ? `<i class="nb-dutje" style="height:${Math.max(4, Math.round(Math.min(d.dutje_h, Math.max(0, 11 - d.sleep_h)) / 11 * 88))}px"></i>` : ""}<i class="${d.sleep_h != null ? "" : "leeg"}" style="${d.sleep_h != null ? `height:${Math.round(Math.min(d.sleep_h, 11) / 11 * 88)}px` : ""}"></i><span>${WEEKDAG_LANG[isoNaarPy(d.date)].slice(0, 2)}</span></button>`).join("")}</div>
       <div class="nb-info" aria-live="polite"></div></div>
     <details class="verdieping verdieping--binnen" id="hsNachtDetail"><summary>Slaapfasen en nachtelijke hartslag</summary><div id="hsNachtPlek"></div></details>`;
   const kies = iso => {
     host.querySelectorAll("[data-nachtkies]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.nachtkies === iso)));
     const d = zeven.find(x => x.date === iso) || {}, verschil = d.sleep_h != null && gewoon != null ? d.sleep_h - gewoon : null;
-    host.querySelector(".nb-info").innerHTML = `<span><b>${hoofdletter(kortDagNaam(iso))} ${kortDatum(iso)}</b> · ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${verschil == null ? ""
+    host.querySelector(".nb-info").innerHTML = `<span><b>${hoofdletter(kortDagNaam(iso))} ${kortDatum(iso)}</b> · ${d.sleep_h != null ? uurMin(d.sleep_h) : "niet gedragen"}${d.dutje_h > 0 ? ` + ${uurMin(d.dutje_h)} dutje` : ""}${verschil == null ? ""
         : ` · <span style="color:${kort(d) ? "var(--warning)" : "inherit"}">${Math.abs(verschil) < .25 ? "zoals gewoonlijk" : `${uurMin(Math.abs(verschil))} ${verschil > 0 ? "langer" : "korter"} dan gewoonlijk`}</span>`}</span>
       ${d.sleep_h != null || d.hrv != null ? `<button class="u-link" data-nacht="${iso}">Details</button>` : ""}`;
     const k = host.querySelector("[data-nacht]"); if (k) k.onclick = () => nachtPaneel(k.dataset.nacht);
@@ -14078,6 +14122,7 @@ function nachtPaneel(iso) {
       : `<p class="u-klein">Voor deze nacht is geen tijdlijn met fasen geregistreerd.</p>`}`;
   uiPaneel(`Nacht naar ${dagNaam(iso)} ${kortDatum(iso)}`, kop + `<dl class="u-dl">
       ${rij("Slaapduur", d.sleep_h != null ? uurMin(d.sleep_h) : null)}
+      ${d.dutje_h > 0 ? rij("Dutje die dag", uurMin(d.dutje_h), "telt mee in je herstel, niet in de slaapscore") : ""}
       ${rij("Slaapscore", d.sleep_score)}
       ${rij("HRV", d.hrv != null ? `${d.hrv} ms` : null, bh && bh.genoeg ? `band ${Math.round(bh.onder)}–${Math.round(bh.boven)}` : "")}
       ${rij("Rusthartslag", d.rhr != null ? `${Math.round(d.rhr)}` : null, br && br.genoeg ? `band ${Math.round(br.onder)}–${Math.round(br.boven)}` : "")}
@@ -14197,7 +14242,8 @@ function renderHerstelTegels() {
      waarde: slNu == null ? null : uurMin(slNu), reeks: laatste28("sleep_h"), dagen,
      kleur: "var(--sl-licht)", breed: true,
      bij: (() => { const g = gem(laatste28("sleep_h"));
-       return (scoreNu != null ? `score <b>${scoreNu}</b> · ` : "") + (g ? `gemiddeld <b>${uurMin(g)}</b> per nacht` : ""); })(),
+       const dt = dutjeOp(vandaagIso());
+       return (dt ? `+ <b>${uurMin(dt)}</b> dutje vandaag · ` : "") + (scoreNu != null ? `score <b>${scoreNu}</b> · ` : "") + (g ? `gemiddeld <b>${uurMin(g)}</b> per nacht` : ""); })(),
      titel: "Slaap per fase", canvas: "chSleep",
      uitleg: "Diep, licht, REM en wakker per nacht. Lees dit als grove verhouding — de fases zijn minder betrouwbaar dan de totale duur.",
      legenda: `<span><i class="swatch" style="background:var(--sl-diep)"></i>Diep</span>
@@ -16237,7 +16283,7 @@ function coachContext() {
   const f = FITHEID && FITHEID.reeks ? FITHEID.reeks[FITHEID.reeks.length - 1] : null;
   const laatste = (DATA.daily || []).slice(-14).map(d => ({
     datum: d.date,
-    slaap: d.sleep_h ?? null, hrv: d.hrv ?? null, rust_hartslag: d.rhr ?? null,
+    slaap: d.sleep_h ?? null, dutje_die_dag: d.dutje_h || null, hrv: d.hrv ?? null, rust_hartslag: d.rhr ?? null,
     belasting: Math.round((((FITHEID || {}).loads || {})[d.date]) || 0) || null,
   }));
   const sessies = (DATA.activities || []).slice(-12).map(a => ({
@@ -16263,9 +16309,14 @@ function coachContext() {
     if (!b || r.datum > b.datum) kracht[r.oefening] = {datum: r.datum, kg: r.kg, reps: r.reps, sets: r.sets};
   });
   const I = instelLees();
+  /* eigen context bij een workout, uit de workoutmodus */
+  const notities = [...logLees().filter(r => r.notitie).map(r => ({datum: r.datum, workout: r.type, notitie: r.notitie})),
+    ...Object.entries(I.conditielog || {}).filter(([, v]) => v && v.notitie).map(([k, v]) => ({datum: k.split("|")[0], workout: k.split("|")[1], notitie: v.notitie}))]
+    .sort((a, b) => a.datum < b.datum ? 1 : -1).slice(0, 8);
 
   return {
     vandaag,
+    workout_notities: notities,
     max_hartslag: DATA.max_hr,
     gereedheid: g.score == null ? null : {score: g.score, opbouw: g.delen, compleet: g.compleet},
     vorm: f ? {fitheid: Math.round(f.ctl), vermoeidheid: Math.round(f.atl), vorm_tsb: Math.round(f.tsb)} : null,
