@@ -355,7 +355,138 @@
     return {ok: !fout.length, detail: fout.join(", ") || "geen"};
   });
 
+  /* ---------------- Trainingsschema v1.3 (16 nov – 31 dec 2026) ---------------- */
+  const MA3 = "2026-11-16", DI3 = "2026-11-17", WO3 = "2026-11-18", DO3 = "2026-11-19", VR3 = "2026-11-20", ZA3 = "2026-11-21", ZO3 = "2026-11-22";
+  const kr = (iso, wk) => route(iso).items.find(i => i.wk === wk);
+  /* direct dicht, zonder history.back: anders blijft het feedbackvenster openstaan */
+  const sluitAlles = () => { try { workoutSluiten(true); } catch (e) {} try { if (PANEEL.open) { PANEEL.stap = false; uiPaneelSluit(); } } catch (e) {} };
+
+  test("v1.3 weekplanning: ma fysio, di/do zaal vóór bovenlichaam, wo airbike, vr zaal, za wedstrijd, zo optioneel herstel", () => {
+    const ids = iso => route(iso).items.map(i => i.wk || i.soort);
+    const di = ids(DI3), dO = ids(DO3), wo = route(WO3).items.find(i => i.airbike), zo = route(ZO3).items.find(i => i.optioneel);
+    const ok = ids(MA3).includes("fysioMa") && di.indexOf("handbal") === 0 && di.indexOf("halDi13") === 1
+      && dO.indexOf("handbal") === 0 && dO.indexOf("halDo13") === 1 && !!wo && wo.werk === 16 && wo.min === 40
+      && ids(VR3).includes("handbal") && ids(ZA3).includes("wedstrijd") && !!zo && zo.werk === 0;
+    return {ok, detail: `ma ${ids(MA3)} | di ${di} | wo ${wo && wo.titel} | do ${dO} | zo ${zo && zo.voorschrift}`};
+  });
+
+  test("v1.3 geldt pas vanaf 16 november: eerdere dagen houden het oude schema", () => {
+    return {ok: !!kr(DI, "halDi") && !kr(DI, "halDi13") && !!kr(DI3, "halDi13") && !kr(DI3, "halDi"),
+            detail: `10 nov: ${route(DI).items.map(i => i.wk).filter(Boolean)} · 17 nov: ${route(DI3).items.map(i => i.wk).filter(Boolean)}`};
+  });
+
+  test("v1.3 voorschrift dinsdag en donderdag: sets, herhalingen, inspanning, rust", () => {
+    const di = Object.fromEntries(kr(DI3, "halDi13").oefeningen.map(o => [o.k, o]));
+    const dO = Object.fromEntries(kr(DO3, "halDo13").oefeningen.map(o => [o.k, o]));
+    const ok = di.bench.sets === 3 && di.bench.reps === "4–6" && di.bench.rir === "RIR 2" && di.bench.rust === 180
+      && di.pullup.sets === 3 && di.pullup.reps === "5–8" && di.csrow.sets === 2 && di.pushdownband.rust === 60
+      && di.hollowhold.reps === "15–25 s" && dO.inclinebb.sets === 3 && dO.inclinebb.reps === "6–10" && dO.pullup.reps === "6–10"
+      && dO.trxrow.reps === "8–12" && dO.extrot.rust === 45 && dO.suitcase.reps === "20–30 m per kant" && dO.ohtricep.rir === "RIR 1–2"
+      && !Object.keys(dO).some(k => OEF[k].onder);
+    return {ok, detail: [...Object.values(di), ...Object.values(dO)].map(o => `${o.naam} ${o.sets}×${o.reps} ${o.rir} ${o.rust}s`).join("; ")};
+  });
+
+  test("v1.3 weekvolume rug 10 directe sets (6 verticaal, 4 horizontaal) tegenover 6 sets drukken", () => {
+    const o = [...kr(DI3, "halDi13").oefeningen, ...kr(DO3, "halDo13").oefeningen];
+    const som = ks => o.filter(x => ks.includes(x.k)).reduce((t, x) => t + x.sets, 0);
+    const vert = som(["pullup"]), hor = som(["csrow", "trxrow"]), druk = som(["bench", "inclinebb"]);
+    return {ok: vert === 6 && hor === 4 && druk === 6, detail: `verticaal ${vert}, horizontaal ${hor}, drukken ${druk}`};
+  });
+
+  test("v1.3 bij tijdgebrek valt eerst triceps, dan curl, dan reverse crunch / carry; druk en trek blijven", () => {
+    const di = kr(DI3, "halDi13").oefeningen.filter(o => o.valt).sort((a, b) => a.valt - b.valt).map(o => o.k);
+    const dO = kr(DO3, "halDo13").oefeningen.filter(o => o.valt).sort((a, b) => a.valt - b.valt).map(o => o.k);
+    DATA.planbasis.vandaag = DI3;
+    instel({halzwaar: {[DI3]: true}});
+    const na = kr(DI3, "halDi13").oefeningen.map(o => o.k);
+    return {ok: di.join() === "pushdownband,curl,reversecrunch" && dO.join() === "ohtricep,curl,suitcase"
+              && ["hollowhold", "bench", "pullup", "csrow"].every(k => na.includes(k)) && !na.includes("curl"),
+            detail: `di ${di} | do ${dO} | verkort: ${na}`};
+  });
+
+  test("v1.3 trainingskaart: per oefening sets × herh, inspanning en rust direct; progressie en onderbouwing achter Details", () => {
+    const i = kr(DI3, "halDi13");
+    const h = schemaKaart(i);
+    const el = document.createElement("div"); el.innerHTML = h;
+    const rijen = [...el.querySelectorAll(".tk-schema li")];
+    const direct = rijen.every(li => /\d+ × /.test(li.textContent) && /rust \d/.test(li.textContent));
+    const det = el.querySelector("details.tk-oef");
+    const ma = document.createElement("div"); ma.innerHTML = schemaKaart(kr(MA3, "fysioMa"));
+    return {ok: rijen.length === 7 && direct && det && !det.open && /Progressie/.test(det.textContent) && /Onderbouwing/.test(det.textContent)
+              && /Bij tijdgebrek/.test(det.textContent) && /floor press/.test(det.textContent)
+              && /Warming-up/.test(ma.textContent) && /rust volgens fysio/.test(ma.textContent),
+            detail: rijen.map(li => li.textContent.replace(/\s+/g, " ").trim()).join(" | ")};
+  });
+
+  test("v1.3 progressie: staaf kleinste stap, dumbbell max 15 kg in de hal, pull-up eerst herhalingen, TRX nieuwe variant", () => {
+    DATA.planbasis.vandaag = DI3;
+    const ctx = {volumeFactor: 1, rirExtra: 0};
+    const P = WORKOUTS.halDi13.voorschrift, Q = WORKOUTS.halDo13.voorschrift;
+    logZet([{type: "halDi13", datum: "2026-11-10", oefeningen: {bench: {kg: 97.5, reps: 6, rir: 2, sets: 3}, csrow: {kg: 15, reps: 10, rir: 2, sets: 2},
+      pullup: {kg: null, reps: 7, rir: 2, sets: 3}}}, {type: "halDo13", datum: "2026-11-12", oefeningen: {trxrow: {kg: null, reps: 12, rir: 2, sets: 2, variant: "voeten 1 stap"}}}]);
+    const b = volgendeSet("bench", ctx, P.bench, "hal"), c = volgendeSet("csrow", ctx, P.csrow, "hal");
+    const p = volgendeSet("pullup", ctx, P.pullup, "hal"), t = volgendeSet("trxrow", ctx, Q.trxrow, "hal");
+    const ok = b.kg === 100 && b.omhoog && c.kg === 15 && /zwaarste dumbbell/.test(c.reden)
+      && !p.omhoog && /herhaling erbij/.test(p.reden) && t.kg == null && /variabele zwaarder/.test(t.reden) && !!t.regel;
+    return {ok, detail: `bench ${b.kg} (${b.reden}) | csrow ${c.kg} | pullup: ${p.reden} | trx: ${t.reden}`};
+  });
+
+  test("v1.3 hollow hold: nieuwe stap alleen op dinsdag na twee sessies 2 × 25 s", () => {
+    logZet([{type: "halDi13", datum: "2026-11-10", oefeningen: {hollowhold: {reps: 25, sets: 2}}}, {type: "halDo13", datum: "2026-11-12", oefeningen: {hollowhold: {reps: 25, sets: 2}}}]);
+    const ctx = {volumeFactor: 1, rirExtra: 0};
+    const di = volgendeSet("hollowhold", ctx, WORKOUTS.halDi13.voorschrift.hollowhold, "hal");
+    const dO = volgendeSet("hollowhold", ctx, WORKOUTS.halDo13.voorschrift.hollowhold, "hal");
+    return {ok: /volgende stap/.test(di.reden) && !/volgende stap/.test(dO.reden) && /dinsdag/.test(dO.reden), detail: `di: ${di.reden} | do: ${dO.reden}`};
+  });
+
+  test("v1.3 maandag fysio blijft vast: geen automatische ophoging", () => {
+    logZet([{type: "fysioMa", datum: "2026-11-09", oefeningen: {boxsquat: {kg: 50, reps: 6, rir: 3, sets: 4}}}]);
+    const ma = kr(MA3, "fysioMa");
+    const box = ma.oefeningen.find(o => o.k === "boxsquat");
+    return {ok: box.kg === 50 && box.sets === 4 && /1,0–1,05 m\/s/.test(box.rir) && ma.min === 85, detail: `${box.naam} ${box.sets}×${box.reps} ${box.kg} kg ${box.rir}`};
+  });
+
+  test("v1.3 registratie: voorgeschreven en uitgevoerd apart in het logboek, met notitie", () => {
+    const i = kr(DI3, "halDi13");
+    workoutStart(DI3, i);
+    const o = WKM.oef.find(x => x.k === "bench");
+    o.sets[0] = {a: "6", b: "97.5", klaar: true}; o.sets[1] = {a: "5", b: "97.5", klaar: false};
+    WKM.notitie = "proef"; workoutAfronden(); sluitAlles();
+    const l = krachtLogOp(DI3, "halDi13"), b = l && l.oefeningen.bench;
+    return {ok: !!b && b.voorschrift.sets === 3 && b.voorschrift.reps === "4–6" && b.voorschrift.rir === "RIR 2" && b.voorschrift.rust === 180
+              && b.reeksen.length === 2 && b.reeksen[1].reps === 5 && b.reeksen[0].kg === 97.5 && l.notitie === "proef" && l.schema === "v1.3",
+            detail: b ? JSON.stringify({voorschrift: b.voorschrift, reeksen: b.reeksen}) : "geen log"};
+  });
+
+  test("v1.3 airbike: per blok watt en RPE, voltooide blokken", () => {
+    const i = route(WO3).items.find(x => x.airbike);
+    workoutStart(WO3, i);
+    const n = WKM.oef[0].sets.length;
+    WKM.oef[0].sets[0] = {a: "220", b: "6"}; WKM.oef[0].sets[1] = {a: "220", b: "7"}; WKM.oef[0].sets[2] = {a: "220", b: "9"};
+    workoutAfronden(); sluitAlles();
+    const l = (instelLees().conditielog || {})[`${WO3}|${i.id}`] || {};
+    return {ok: n === 4 && l.airbike && l.voltooid === 3 && l.blokken[2].rpe === 9 && l.werk === 12 && !/172/.test(i.voorschrift + i.klaar),
+            detail: `${n} regels · ${airbikeTekst(l)}`};
+  });
+
+  test("v1.3 herstelcheck: momenten per dag, afwijkingen zichtbaar, naar de coach", () => {
+    const m = [DI3, DO3, ZA3, ZO3, MA3].map(hcMomentVan);
+    instel({herstelcheck: {[`${DI3}|na-ma`]: {datum: DI3, moment: "na-ma", achilles: "duidelijk", zwelling: "nee", afzet: "ja", schouder: "normaal", benen: 2}}});
+    renderHerstelcheck();
+    const hs = (document.getElementById("hsHerstelcheck") || {}).textContent || "";
+    DATA.planbasis.vandaag = DO3;
+    const ctx = coachContext();
+    return {ok: m.join() === "na-ma,na-wo,wedstrijd,na-za," && /achilles duidelijk stijf/.test(hs) && /benen 2\/5/.test(hs)
+              && ctx.herstelchecks.length === 1 && ctx.herstelchecks[0].afwijkend.length === 2 && ctx.trainingsschema && ctx.trainingsschema.versie === "v1.3",
+            detail: `momenten ${m} | ${hs.replace(/\s+/g, " ").slice(0, 160)}`};
+  });
+
+  test("v1.3 coachinstructie kent het nieuwe schema en geen hartslagregel voor de airbike", () => {
+    return {ok: /TRAININGSSCHEMA v1\.3/.test(COACH_SYSTEEM) && !/172-180/.test(COACH_SYSTEEM) && /explosiviteit/.test(COACH_SYSTEEM)
+              && /alleen via de fysio/.test(COACH_SYSTEEM), detail: "COACH_SYSTEEM"};
+  });
+
   /* De pagina weer tonen zoals hij met jouw echte gegevens is. */
-  try { FOCUS_OPEN = null; renderBelDials(); renderRouteAlles(); } catch (e) { /* alleen weergave */ }
+  try { FOCUS_OPEN = null; renderBelDials(); renderRouteAlles(); renderHerstelcheck(); } catch (e) { /* alleen weergave */ }
   return uit;
 })();

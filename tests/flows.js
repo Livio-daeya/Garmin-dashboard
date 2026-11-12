@@ -131,7 +131,9 @@
     const conditie = dagRoute("2026-11-04", {alleenLezen: true}).items.find(i => i.soort === "hoog");
     let interval = "";
     if (conditie) { workoutStart("2026-11-04", conditie); interval = [...document.querySelectorAll("#wkModus .wm-set--kop span")].map(s => s.textContent).filter(Boolean).slice(1).join("+"); workoutSluiten(true); }
-    return {ok: hold[1] === "sec" && carry[1] === "m+kg" && druk[1] === "herh+kg" && (!conditie || interval === "herh+werk s+herstel s"),
+    /* dumbbells: het gewicht staat per hand (schema v1.3) */
+    const db = WKM === null ? Object.entries(soorten).filter(([k]) => /Overhead/.test(k)).every(([, v]) => v === "herh+kg p/h") : true;
+    return {ok: db && hold[1] === "sec" && carry[1] === "m+kg" && /^herh\+kg( p\/h)?$/.test(druk[1]) && (!conditie || interval === "herh+werk s+herstel s"),
       detail: Object.entries(soorten).map(([k, v]) => `${k}: ${v}`).join(" · ") + (conditie ? ` · interval: ${interval}` : "")};
   });
 
