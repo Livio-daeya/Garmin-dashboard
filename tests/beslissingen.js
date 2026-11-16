@@ -544,6 +544,27 @@
     return {ok, detail: "COACH_SYSTEEM"};
   });
 
+  test("Workoutmodus: opmerking per oefening apart, de workoutnotitie alleen bij de laatste stap", () => {
+    const i = kr(DI3, "halDi13");
+    workoutStart(DI3, i);
+    const el = document.getElementById("wkModus");
+    const eerst = {oef: !!el.querySelector("[data-wm-oefnotitie]"), workout: !!el.querySelector("[data-wm-notitie]")};
+    const t = el.querySelector("[data-wm-oefnotitie]"); t.value = "schouder voelde anders"; t.oninput();
+    WKM.oef[0].sets[0] = {a: "20", b: "", klaar: true};
+    WKM.actief = 1; workoutTeken();
+    const tweede = document.querySelector("#wkModus [data-wm-oefnotitie]").value;
+    const b = WKM.oef.find(o => o.k === "bench"); b.sets[0] = {a: "6", b: "95", klaar: true};
+    WKM.oef.find(o => o.k === "curl").notitie = "overgeslagen, elleboog";
+    WKM.actief = WKM.oef.length - 1; workoutTeken();
+    const laatst = !!document.querySelector("#wkModus [data-wm-notitie]");
+    workoutAfronden(); sluitAlles();
+    const l = krachtLogOp(DI3, "halDi13") || {};
+    const kaart = kaartAchteraf(DI3, i, itemStatus(DI3, i));
+    return {ok: eerst.oef && !eerst.workout && tweede === "" && laatst && l.oefNotities && l.oefNotities.hollowhold === "schouder voelde anders"
+              && l.oefNotities.curl === "overgeslagen, elleboog" && !l.oefeningen.curl && /schouder voelde anders/.test(kaart) && /Curl \(dumbbell, per hand\):/.test(kaart),
+            detail: JSON.stringify({eerst, tweede, laatst, oefNotities: l.oefNotities})};
+  });
+
   /* De pagina weer tonen zoals hij met jouw echte gegevens is. */
   try { FOCUS_OPEN = null; renderBelDials(); renderRouteAlles(); renderHerstelcheck(); renderSchemaV13(); } catch (e) { /* alleen weergave */ }
   return uit;

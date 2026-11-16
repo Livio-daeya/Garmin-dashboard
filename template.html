@@ -10563,6 +10563,8 @@ function kaartAchteraf(iso, i, s) {
       ? `<p class="tk-noot">${ic("letop")}Workout niet afgerond: ${ingevuld} sets ingevuld op dit apparaat, nog niet bewaard.</p>`
       : `<p class="tk-volgt">${ic("info")}Sets niet gelogd. Gedaan zetten verzint geen sets of gewichten.</p>`;
     if (log && log.notitie) midden += `<p class="tk-notitie">“${veiligeTekst(log.notitie)}”</p>`;
+    if (log && log.oefNotities) midden += Object.entries(log.oefNotities).map(([k, t]) =>
+      `<p class="tk-notitie"><span style="font-style:normal">${(WORKOUTS[i.wk] && ((WORKOUTS[i.wk].voorschrift || {})[k] || {}).naam) || (OEF[k] || {}).naam || k}:</span> “${veiligeTekst(t)}”</p>`).join("");
     if (!log) midden += `<div class="tk-knoppen"><button class="u-knop${concept && ingevuld ? "" : " u-knop--stil"}" data-start="${sl}">${concept && ingevuld ? "Hervatten en afronden" : "Sets invullen"}</button></div>`;
   } else {
     const l = (instelLees().conditielog || {})[sl] || {};
@@ -10959,6 +10961,7 @@ function workoutStart(iso, i) {
         const v = vorigLog(o.k);
         const pr = {sets: o.sets, reps: o.reps, rir: o.rir, kg: o.kg, rust: o.rust || null, alt: o.alt || null};
         return {k: o.k, naam: o.naam, soort: oefSoort(o.k), voorschrift: pr, accessoire: o.accessoire,
+          notitie: ((krachtLogOp(iso, i.wk) || {}).oefNotities || {})[o.k] || "",
           vorig: v ? {datum: v.datum, ...v.oefeningen[o.k]} : null, rir: null,
           sets: Array.from({length: o.sets}, () => ({a: "", b: "", klaar: false}))};
       })};
@@ -11030,8 +11033,10 @@ function workoutTeken() {
         ${o.soort === "kracht" ? `<label class="wm-rir">RIR laatste set<select data-wm-rir>${["", 0, 1, 2, 3, 4].map(n => `<option value="${n}" ${String(o.rir ?? "") === String(n) ? "selected" : ""}>${n === "" ? "—" : n === 4 ? "4+" : n}</option>`).join("")}</select></label>` : ""}
         ${W.soort === "kracht" ? `<button class="u-knop u-knop--stil u-knop--klein" data-wm="vervang">Vervangen</button>` : ""}
       </div>
-      <label class="wm-notitie">Notitie bij deze workout
-        <textarea data-wm-notitie maxlength="500" placeholder="Context voor jezelf en de coach, bv. slecht geslapen, knie voelde stijf">${veiligeTekst(W.notitie || "")}</textarea></label>
+      ${W.soort === "kracht" ? `<label class="wm-notitie">Opmerking bij ${o.naam.toLowerCase()}
+        <textarea data-wm-oefnotitie maxlength="300" placeholder="Alleen voor deze oefening, bv. schouder voelde anders, langzamer gezakt, andere stang">${veiligeTekst(o.notitie || "")}</textarea></label>` : ""}
+      ${W.soort !== "kracht" || W.actief === W.oef.length - 1 || W.notitie ? `<label class="wm-notitie">Notitie bij de hele workout
+        <textarea data-wm-notitie maxlength="500" placeholder="Context voor de hele sessie, bv. slecht geslapen, zware zaaltraining">${veiligeTekst(W.notitie || "")}</textarea></label>` : ""}
     </div>
     <div class="wm-voet">
       <button class="u-knop u-knop--stil" data-wm="vorige" ${W.actief === 0 ? "disabled" : ""}>${ic("vorige")}Vorige</button>
@@ -11063,6 +11068,8 @@ function workoutTeken() {
       o.sets.splice(n, 0, weg); workoutBewaarConcept(); workoutTeken();
     });
   });
+  const oefNot = el.querySelector("[data-wm-oefnotitie]");
+  if (oefNot) oefNot.oninput = () => { o.notitie = oefNot.value; workoutBewaarConcept(); };
   const not = el.querySelector("[data-wm-notitie]");
   if (not) not.oninput = () => { W.notitie = not.value; workoutBewaarConcept(); };
   const rir = el.querySelector("[data-wm-rir]");
@@ -11145,7 +11152,11 @@ function workoutAfronden() {
     const idx = log.findIndex(x => x.type === W.wk && x.datum === W.iso);
     /* vaste id per sessie: niet de positie in de lijst, want die verschilt
        per apparaat en zou bij synchroniseren een andere sessie overschrijven */
-    const item = {type: W.wk, datum: W.iso, sessie: W.titel, schema: (WORKOUTS[W.wk] || {}).schema || null, oefeningen, plek: W.plek || null, notitie: (W.notitie || "").trim() || null, _t: Date.now()};
+    /* opmerkingen per oefening apart, ook bij een oefening zonder sets
+       (bv. overgeslagen door pijn) */
+    const oefNotities = Object.fromEntries(W.oef.filter(o => (o.notitie || "").trim()).map(o => [o.k, o.notitie.trim()]));
+    const item = {type: W.wk, datum: W.iso, sessie: W.titel, schema: (WORKOUTS[W.wk] || {}).schema || null, oefeningen, plek: W.plek || null,
+      notitie: (W.notitie || "").trim() || null, oefNotities: Object.keys(oefNotities).length ? oefNotities : null, _t: Date.now()};
     if (idx >= 0) log[idx] = {...log[idx], ...item};
     else log.push({...item, _id: `${W.iso}-${W.wk}-${Math.random().toString(36).slice(2, 8)}`});
     ok = logZet(log) !== false;
@@ -13204,7 +13215,8 @@ function trainingsAdvies(ma) {
       bron: x.bron === "garmin" ? "Garmin" : "zelf ingevuld"}));
     logs.filter(l => l.datum === d).forEach(l => sessies.push({d, wat: "krachtlog", status: "gelogd",
       inhoud: Object.entries(l.oefeningen || {}).map(([k, o]) => `${(OEF[k] || {}).naam || o.naam || k} ${o.sets || (o.reeksen || []).length}×${o.reps ?? "?"}${o.kg != null ? ` @ ${komma(o.kg)} kg` : ""}`).join(", ")
-        + (l.notitie ? `. Notitie: "${l.notitie}"` : ""), bron: "krachtlog"}));
+        + (l.notitie ? `. Notitie: "${l.notitie}"` : "")
+        + (l.oefNotities ? `. Per oefening: ${Object.entries(l.oefNotities).map(([k, t]) => `${(OEF[k] || {}).naam || k}: "${t}"`).join("; ")}` : ""), bron: "krachtlog"}));
   });
   return {ma, zo, lopend, status, titel: TA_STATUS[status], reden, actie, conditie, kracht, handbal, herstel: hk, belasting, wedstrijd, totWedstrijd, extra, sessies, uitvoering: w};
 }
@@ -16746,7 +16758,8 @@ function coachContext() {
   });
   const I = instelLees();
   /* eigen context bij een workout, uit de workoutmodus */
-  const notities = [...logLees().filter(r => r.notitie).map(r => ({datum: r.datum, workout: r.type, notitie: r.notitie})),
+  const notities = [...logLees().filter(r => r.notitie || r.oefNotities).map(r => ({datum: r.datum, workout: r.type, notitie: r.notitie || null,
+      per_oefening: r.oefNotities ? Object.fromEntries(Object.entries(r.oefNotities).map(([k, t]) => [(OEF[k] || {}).naam || k, t])) : null})),
     ...Object.entries(I.conditielog || {}).filter(([, v]) => v && v.notitie).map(([k, v]) => ({datum: k.split("|")[0], workout: k.split("|")[1], notitie: v.notitie}))]
     .sort((a, b) => a.datum < b.datum ? 1 : -1).slice(0, 8);
 
