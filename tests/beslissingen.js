@@ -471,16 +471,47 @@
             detail: `${n} regels · ${airbikeTekst(l)}`};
   });
 
-  test("v1.3 herstelcheck: momenten per dag, afwijkingen zichtbaar, naar de coach", () => {
-    const m = [DI3, DO3, ZA3, ZO3, MA3].map(hcMomentVan);
-    instel({herstelcheck: {[`${DI3}|na-ma`]: {datum: DI3, moment: "na-ma", achilles: "duidelijk", zwelling: "nee", afzet: "ja", schouder: "normaal", benen: 2}}});
-    renderHerstelcheck();
-    const hs = (document.getElementById("hsHerstelcheck") || {}).textContent || "";
+  test("Eén check-in: sessies van gisteren vanzelf, zwaarte alleen waar hij ontbreekt, geen achilles of rug, gedrag bij de avond", () => {
     DATA.planbasis.vandaag = DO3;
-    const ctx = coachContext();
-    return {ok: m.join() === "na-ma,na-wo,wedstrijd,na-za," && /achilles duidelijk stijf/.test(hs) && /benen 2\/5/.test(hs)
-              && ctx.herstelchecks.length === 1 && ctx.herstelchecks[0].afwijkend.length === 2 && ctx.trainingsschema && ctx.trainingsschema.versie === "v1.3",
-            detail: `momenten ${m} | ${hs.replace(/\s+/g, " ").slice(0, 160)}`};
+    DATA.activities.push({id: "t-ab", date: WO3, sport: "Fietsen", name: "Airbike", duration_s: 1800, load: 80});
+    rpeZet(WO3, "Kracht", 7, 50);
+    checkOpen(DO3);
+    const vel = document.getElementById("checkVel");
+    const tekst = vel.textContent.replace(/\s+/g, " ");
+    const vragen = [...vel.querySelectorAll(".lijfvraag")].map(x => x.textContent);
+    const rpeRijen = vel.querySelectorAll(".rpes").length;
+    vel.querySelector('[data-gevoel="4"]').click();
+    vel.querySelector('[data-alc="2"]').click();
+    vel.querySelector('[data-gedrag="cafeine"][data-n="1"]').click();
+    vel.querySelector('[data-gedrag="scherm"][data-n="0"]').click();
+    vel.querySelector('.rpes [data-rpe="6"]').click();
+    const opm = vel.querySelector("#cOpm"); opm.value = "rug iets stijf na het tillen"; opm.oninput({target: opm});
+    vel.querySelector("#cOk").click();
+    const c = checkLees(), wo = c[WO3] || {}, dO = c[DO3] || {};
+    const ctx = coachContext(); renderHerstelcheck();
+    const vd = (document.getElementById("vdHerstelcheck") || {}).textContent || "";
+    return {ok: /Gisteren/.test(tekst) && /Airbike/.test(tekst) && /Zwaarte 7\/10 al ingevuld/.test(tekst) && rpeRijen === 1
+              && !vragen.some(v => /Achilles|Rug/.test(v)) && vragen.some(v => /Cafeïne/.test(v)) && !/die dag gedaan/.test(tekst)
+              && dO.gevoel === 4 && dO.opmerking === "rug iets stijf na het tillen" && !dO.alcohol
+              && wo.alcohol === 2 && wo.gedrag && wo.gedrag.cafeine === true && wo.gedrag.scherm === false
+              && wo.sessies.some(x => x.sport === "Fietsen" && x.rpe === 6) && wo.sessies.some(x => x.sport === "Kracht" && x.rpe === 7)
+              && glazenOp(WO3).glazen === 2 && ctx.eigen_checks.some(x => x.opmerking === "rug iets stijf na het tillen")
+              && typeof herstelcheckPaneel === "undefined" && !/Herstelcheck/.test(vd),
+            detail: JSON.stringify({vragen, rpeRijen, wo, dO})};
+  });
+
+  test("Check-in na een wedstrijd vraagt speelminuten bij de handbalsessie", () => {
+    DATA.planbasis.vandaag = ZO3;
+    DATA.activities.push({id: "t-hb", date: ZA3, sport: "Handbal", name: "Wedstrijd", duration_s: 5400, load: 200});
+    checkOpen(ZO3);
+    const vel = document.getElementById("checkVel");
+    const inp = vel.querySelector('[data-veld="speelmin"]');
+    if (!inp) return {ok: false, detail: "geen veld voor speelminuten"};
+    inp.value = "52"; inp.oninput();
+    vel.querySelector('.rpes [data-rpe="8"]').click();
+    vel.querySelector("#cOk").click();
+    const s = ((checkLees()[ZA3] || {}).sessies || []).find(x => x.sport === "Handbal") || {};
+    return {ok: s.speelmin === 52 && s.rpe === 8 && /52 speelmin/.test(JSON.stringify(coachContext().eigen_checks)), detail: JSON.stringify(s)};
   });
 
   test("v1.3 coachinstructie kent het nieuwe schema en geen hartslagregel voor de airbike", () => {
@@ -507,7 +538,7 @@
 
   test("v1.3 evaluatie: drie momenten met vragen, registraties erbij vanaf de datum, op Vandaag tot afgerond", () => {
     DATA.planbasis.vandaag = "2026-11-27";
-    instel({herstelcheck: {[`${DI3}|na-ma`]: {datum: DI3, moment: "na-ma", achilles: "licht", schouder: "normaal", benen: 3}}});
+    check(DI3, {gevoel: 4, sessies: [], opmerking: "schouder licht anders"});
     renderSchemaV13();
     const h = document.getElementById("schemaV13");
     const blokken = [...h.querySelectorAll("[data-evblok]")];
@@ -516,7 +547,7 @@
     instel({evaluatie: {"2026-11-27": {klaar: true, notitie: "past binnen de tijd"}}});
     const vdNa = v13EvaluatieVandaag();
     const ctx = coachContext();
-    return {ok: blokken.length === 3 && /uitvoerbaar binnen de tijd/.test(eerste) && /Uit je registraties/.test(eerste) && /achilles stijf 1×/.test(eerste)
+    return {ok: blokken.length === 3 && /uitvoerbaar binnen de tijd/.test(eerste) && /Uit je registraties/.test(eerste) && /Check-ins: 1/.test(eerste) && /schouder licht anders/.test(eerste)
               && !/Uit je registraties/.test(tweede) && /over 14 dagen/.test(tweede) && /Evaluatie schema v1\.3/.test(vd) && vdNa === ""
               && ctx.evaluatie && ctx.evaluatie[0].notitie === "past binnen de tijd",
             detail: eerste.replace(/\s+/g, " ").slice(0, 260)};

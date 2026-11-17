@@ -6614,7 +6614,7 @@ function sessiesVanDag(iso) {
   /* Bewaarde RPE terugkoppelen aan de herkende sessies, op sport + duur. */
   uitGarmin.forEach(g => {
     const m = bewaard.find(b => !b.handmatig && b.sport === g.sport);
-    if (m) g.rpe = m.rpe;
+    if (m) { g.rpe = m.rpe; if (m.speelmin != null) g.speelmin = m.speelmin; }
   });
   /* Voegde je vlak na de training zelf iets toe en heeft Garmin die training
      inmiddels ook, dan blijft jouw regel staan met je RPE, maar telt hij niet
@@ -6622,18 +6622,32 @@ function sessiesVanDag(iso) {
      zeggen in plaats van het stilletjes te doen. */
   const gemeten = new Set(uitGarmin.map(g => g.sport));
   return uitGarmin.concat(bewaard.filter(b => b.handmatig)
-    .map(b => ({...b, ingehaald: gemeten.has(b.sport)})));
+    .map(b => ({...b, ingehaald: gemeten.has(b.sport)})),
+    /* eerder bewaard bij een Garmin-sessie die (nog) niet in de data staat:
+       laten staan, anders wist opslaan hem */
+    bewaard.filter(b => !b.handmatig && !gemeten.has(b.sport)));
 }
 
 let CHECK_CONCEPT = null;
 
+/* Eén check-in per dag. Gevoel, lijf en opmerking horen bij de dag zelf;
+   welke sessies je deed weet het dashboard al (Garmin, workoutmodus,
+   sessiefeedback), dus die van gisteren en vandaag staan er vanzelf en
+   alleen een ontbrekende zwaarte wordt gevraagd. Alcohol en gedrag gaan
+   over de avond ervoor en worden bij gisteren bewaard: daar zoekt
+   glazenOp ze ook. */
 function checkOpen(iso) {
   const vandaag = (DATA.planbasis || {}).vandaag;
   const datum = iso || vandaag;
-  const bestaand = checkLees()[datum] || {};
-  CHECK_CONCEPT = {datum, gevoel: bestaand.gevoel || null,
-                   alcohol: bestaand.alcohol != null ? bestaand.alcohol : null,
-                   sessies: sessiesVanDag(datum)};
+  const gisteren = isoPlus(datum, -1);
+  const alles = checkLees();
+  const bestaand = alles[datum] || {}, avond = alles[gisteren] || {};
+  CHECK_CONCEPT = {datum, gisteren, gevoel: bestaand.gevoel || null,
+                   opmerking: bestaand.opmerking || "",
+                   alcohol: avond.alcohol != null ? avond.alcohol : null,
+                   gedrag: {...(avond.gedrag || {})}, wijzig: {},
+                   sessies: [...sessiesVanDag(gisteren).map(x => ({...x, datum: gisteren})),
+                             ...sessiesVanDag(datum).map(x => ({...x, datum}))]};
   checkTeken();
   document.getElementById("checkVel").scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -6652,10 +6666,23 @@ const LIJFVRAGEN = [
   {k: "energie", vraag: "Zin en energie om te trainen", keuzes: ["goed", "gewoon", "weinig"]},
   {k: "stress", vraag: "Mentale belasting of stress", keuzes: ["laag", "gemiddeld", "hoog"]},
   {k: "slaap", vraag: "Hoe sliep je", keuzes: ["goed", "matig", "slecht"]},
-  {k: "achilles", vraag: "Achillespees", keuzes: ["rustig", "stijf of gevoelig", "pijnlijk"]},
-  {k: "rug", vraag: "Rug", keuzes: ["rustig", "gevoelig", "pijnlijk"]},
+  /* achilles en rug: sinds 17-11 niet meer standaard gevraagd (beide goed);
+     oude antwoorden tellen nog mee, iets nieuws gaat in de opmerking */
+  {k: "achilles", vraag: "Achillespees", keuzes: ["rustig", "stijf of gevoelig", "pijnlijk"], gevraagd: false},
+  {k: "rug", vraag: "Rug", keuzes: ["rustig", "gevoelig", "pijnlijk"], gevraagd: false},
   {k: "ziek", vraag: "Ziek of koorts", keuzes: ["nee", "ja"]},
 ];
+
+/* De avond ervoor: de drie gedragingen die WHOOP-gebruikers het vaakst in
+   hun journal bijhouden (cafeïne, alcohol, late maaltijd; WHOOP Year in
+   Review 2025), plus scherm in bed. Ja/nee, want "hoeveel" weet je de
+   ochtend erna zelden precies. Alcohol staat apart, in glazen. */
+const GEDRAGVRAGEN = [
+  {k: "cafeine", vraag: "Cafeïne na 14:00"},
+  {k: "laatEten", vraag: "Gegeten binnen 2 uur voor het slapen"},
+  {k: "scherm", vraag: "Scherm in bed"},
+];
+const isWedstrijddag = iso => { try { return dagRoute(iso, {alleenLezen: true}).items.some(i => i.soort === "wedstrijd"); } catch (e) { return false; } };
 
 function checkTeken() {
   const C = CHECK_CONCEPT;
@@ -6668,7 +6695,10 @@ function checkTeken() {
     <button class="gvk ${C.gevoel === n ? "aan" : ""}" data-gevoel="${n}">
       <span class="n">${n}</span><span class="w">${GEVOELWOORD[n]}</span></button>`;
 
-  const sessie = (s, i) => `
+  const dagLabel = d => `${d === C.gisteren ? "Gisteren" : d === C.datum && d === vandaagIso() ? "Vandaag" : hoofdletter(dagNaam(d))} · ${kortDatum(d)}`;
+  const sessie = (s, i) => {
+    const vragen = s.rpe == null || C.wijzig[i];
+    return `
     <div class="csess" data-i="${i}">
       <div class="ckop">
         <i class="swatch" style="background:var(${SPORT_VAR[s.sport] || "--muted"})"></i>
@@ -6684,18 +6714,28 @@ function checkTeken() {
             : ic("goed") + "uit Garmin"}</span>
         ${s.handmatig ? `<button class="cweg" data-weg="${i}" title="weghalen">&times;</button>` : ""}
       </div>
-      <div class="lbl" style="margin:var(--sp3) 0 var(--sp2)">Hoe zwaar voelde het?
+      ${vragen ? `<div class="lbl" style="margin:var(--sp3) 0 var(--sp2)">Hoe zwaar voelde het?
         <span style="text-transform:none;letter-spacing:0;font-weight:var(--w-normaal)">(1 licht — 10 alles eruit)</span></div>
       <div class="rpes">${[1,2,3,4,5,6,7,8,9,10].map(n =>
-        `<button class="rpe ${s.rpe === n ? "aan" : ""}" data-rpe="${n}" data-i="${i}">${n}</button>`).join("")}</div>
-    </div>`;
+        `<button class="rpe ${s.rpe === n ? "aan" : ""}" data-rpe="${n}" data-i="${i}">${n}</button>`).join("")}</div>`
+      : `<div class="cbij" style="margin-top:var(--sp2)">Zwaarte ${s.rpe}/10 al ingevuld.
+          <button class="u-link" data-wijzig="${i}">Wijzigen</button></div>`}
+      ${s.sport === "Handbal" && isWedstrijddag(s.datum) ? `<div class="ckop" style="margin-top:var(--sp3)"><span class="cmin">Speelminuten
+        <input type="number" min="0" max="80" step="1" value="${s.speelmin ?? ""}" data-veld="speelmin" inputmode="numeric"></span></div>` : ""}
+    </div>`; };
+  const dagen = [C.gisteren, C.datum];
+  const sessieBlok = dagen.map(d => {
+    const rij = C.sessies.map((x, i) => [x, i]).filter(([x]) => x.datum === d);
+    return `<div class="lbl" style="margin:var(--sp3) 0 var(--sp2)">${dagLabel(d)}</div>` + (rij.length ? rij.map(([x, i]) => sessie(x, i)).join("")
+      : `<div class="cbij" style="margin:0 0 var(--sp2)">Geen training geregistreerd.</div>`);
+  }).join("");
 
   host.innerHTML = `
     <div class="card checkcard" id="checkVelKaart">
       <div class="card-head">
-        <div><h2>Even bijwerken</h2>
-        <p class="hint" style="margin-bottom:0">Twee vragen, dertig seconden. Dit is de enige data
-          die je elke dag hebt — je band niet nodig.</p></div>
+        <div><h2>Check-in</h2>
+        <p class="hint" style="margin-bottom:0">Eén keer per dag, het liefst 's ochtends. Je trainingen
+          haalt hij zelf uit Garmin en je logboek; jij vult aan wat je band niet ziet.</p></div>
         <span class="spacer"></span>
         <button class="knop knop--secundair knop--icoon" data-how="howCheck" aria-expanded="false"
                 title="Waarom juist deze twee vragen?">i</button>
@@ -6727,26 +6767,29 @@ function checkTeken() {
         : `Nog ${MIN_CHECKS_BASISLIJN - basis.n} check${MIN_CHECKS_BASISLIJN - basis.n === 1 ? "" : "s"}
            voordat het dashboard weet wat voor jou normaal is.`}</div>
 
-      <div class="sectiontitle" style="margin-top:var(--sp5)">2 · Wat heb je die dag gedaan?</div>
-      ${C.sessies.length
-        ? C.sessies.map(sessie).join("")
-        : `<div class="cbij" style="margin:0 0 var(--sp3)">Garmin kent geen sessie op deze dag.</div>`}
-      <button class="knop knop--toevoegen knop--breed" id="cAdd">+ sessie die Garmin miste</button>
+      <div class="sectiontitle" style="margin-top:var(--sp5)">2 · Je trainingen</div>
+      ${sessieBlok}
+      <button class="knop knop--toevoegen knop--breed" id="cAdd">+ training die Garmin miste</button>
 
-      <div class="sectiontitle" style="margin-top:var(--sp5)">3 &middot; Alcohol die avond?</div>
+      <div class="sectiontitle" style="margin-top:var(--sp5)">3 &middot; Gisteravond</div>
+      <div class="lijfrij"><span class="lijfvraag">Alcohol (glazen)</span>
       <div class="alcknoppen">${[0,1,2,3,4,5,6,8,10].map(n =>
-        `<button class="alck ${C.alcohol === n ? "aan" : ""}" data-alc="${n}">${n === 10 ? "10+" : n}</button>`).join("")}</div>
-      <div class="cbij">Aantal glazen. Laat leeg als je het niet weet \u2014 een geraden getal is
-        hier erger dan geen getal. Hiermee kan het dashboard een hoge hartslag de ochtend erna
-        verklaren in plaats van als waarschuwing tonen.</div>
+        `<button class="alck ${C.alcohol === n ? "aan" : ""}" data-alc="${n}">${n === 10 ? "10+" : n}</button>`).join("")}</div></div>
+      ${GEDRAGVRAGEN.map(v => `<div class="lijfrij"><span class="lijfvraag">${v.vraag}</span>
+        <div class="alcknoppen">${["nee", "ja"].map((w, n) =>
+          `<button class="alck ${C.gedrag[v.k] === !!n ? "aan" : ""}" data-gedrag="${v.k}" data-n="${n}">${w}</button>`).join("")}</div></div>`).join("")}
+      <div class="cbij">Laat leeg als je het niet weet: een geraden antwoord is erger dan geen
+        antwoord. Hiermee kan het dashboard een hoge hartslag of korte nacht verklaren in plaats
+        van als waarschuwing tonen.</div>
 
       <div class="sectiontitle" style="margin-top:var(--sp5)">4 &middot; Je lijf</div>
-      ${LIJFVRAGEN.map(v => `<div class="lijfrij"><span class="lijfvraag">${v.vraag}</span>
+      ${LIJFVRAGEN.filter(v => v.gevraagd !== false).map(v => `<div class="lijfrij"><span class="lijfvraag">${v.vraag}</span>
         <div class="alcknoppen">${v.keuzes.map((w, n) =>
           `<button class="alck ${C.lijf[v.k] === n ? "aan" : ""}" data-lijf="${v.k}" data-n="${n}">${w}</button>`).join("")}</div></div>`).join("")}
-      <div class="cbij">Je band ziet je hart, niet je pezen en spieren. Deze vragen wegen mee in
-        het plan: een gevoelige achillespees zet looptraining om naar fietsen of roeien, ook als je
-        HRV goed is. Niet ingevuld is onbekend, niet "geen klachten".</div>
+      <label class="wm-notitie" style="margin-top:var(--sp3)">Opmerking
+        <textarea id="cOpm" maxlength="500" placeholder="Bijvoorbeeld pees, rug of schouder die anders voelt, of iets anders dat opvalt">${veiligeTekst(C.opmerking || "")}</textarea></label>
+      <div class="cbij">Je band ziet je hart, niet je pezen en spieren. Niet ingevuld is onbekend,
+        niet "geen klachten". Een opmerking verandert het plan niet vanzelf; de coach leest hem wel.</div>
 
       <div class="knoprij knoprij--ruim">
         <button class="knop knop--primair knop--groot" id="cOk">Opslaan</button>
@@ -6762,13 +6805,24 @@ function checkTeken() {
     C.alcohol = (C.alcohol === n) ? null : n;   // nogmaals tikken = weer leeg
     checkTeken();
   });
+  host.querySelectorAll("[data-gedrag]").forEach(b => b.onclick = () => {
+    const k = b.dataset.gedrag, w = b.dataset.n === "1";
+    C.gedrag[k] = C.gedrag[k] === w ? null : w;   // nogmaals tikken = weer onbekend
+    checkTeken();
+  });
+  host.querySelectorAll("[data-wijzig]").forEach(b => b.onclick = () => { C.wijzig[+b.dataset.wijzig] = true; checkTeken(); });
+  document.getElementById("cOpm").oninput = e => { C.opmerking = e.target.value; };
+  host.querySelectorAll('[data-veld="speelmin"]').forEach(inp => inp.oninput = () => {
+    const x = parseInt(inp.value, 10);
+    C.sessies[+inp.closest(".csess").dataset.i].speelmin = Number.isFinite(x) ? x : null;
+  });
   host.querySelectorAll("[data-lijf]").forEach(b => b.onclick = () => {
     const k = b.dataset.lijf, n = +b.dataset.n;
     C.lijf[k] = C.lijf[k] === n ? null : n;    // nogmaals tikken = weer onbekend
     checkTeken();
   });
   host.querySelectorAll("[data-rpe]").forEach(b => b.onclick = () => {
-    C.sessies[+b.dataset.i].rpe = +b.dataset.rpe; checkTeken();
+    C.sessies[+b.dataset.i].rpe = +b.dataset.rpe; C.wijzig[+b.dataset.i] = true; checkTeken();
   });
   host.querySelectorAll("[data-weg]").forEach(b => b.onclick = () => {
     C.sessies.splice(+b.dataset.weg, 1); checkTeken();
@@ -6780,14 +6834,16 @@ function checkTeken() {
   document.getElementById("cDatum").onchange = e => checkOpen(e.target.value);
   document.getElementById("cAdd").onclick = () => {
     C.sessies.push({sport: "Kracht", naam: "Krachttraining", minuten: 60,
-                    handmatig: true, rpe: null});
+                    handmatig: true, rpe: null, datum: C.gisteren});
     checkTeken();
     /* de sportkeuze van de nieuwe regel meteen bewerkbaar maken */
     const laatste = host.querySelectorAll(".csess");
     const rij = laatste[laatste.length - 1];
     const b = rij.querySelector("b");
     b.outerHTML = `<select class="csport">${SPORTKEUZE.map(s =>
-      `<option${s === "Kracht" ? " selected" : ""}>${s}</option>`).join("")}</select>`;
+      `<option${s === "Kracht" ? " selected" : ""}>${s}</option>`).join("")}</select>
+      <select class="cdag"><option value="${C.gisteren}">gisteren</option><option value="${C.datum}">${C.datum === vandaagIso() ? "vandaag" : kortDatum(C.datum)}</option></select>`;
+    rij.querySelector(".cdag").onchange = e => { C.sessies[C.sessies.length - 1].datum = e.target.value; };
     rij.querySelector(".csport").onchange = e => {
       C.sessies[C.sessies.length - 1].sport = e.target.value;
       C.sessies[C.sessies.length - 1].naam = e.target.value;
@@ -6797,14 +6853,27 @@ function checkTeken() {
   document.getElementById("cOk").onclick = () => {
     tik(true);
     const alles = checkLees();
-    const bewaar = C.sessies.filter(s => s.rpe && s.minuten).map(s => ({
+    const bewaar = d => C.sessies.filter(s => s.datum === d && s.rpe && s.minuten).map(s => ({
       sport: s.sport, naam: s.naam, minuten: s.minuten, rpe: s.rpe, handmatig: !!s.handmatig,
+      ...(s.speelmin != null ? {speelmin: s.speelmin} : {}),
     }));
     const lijf = Object.fromEntries(Object.entries(C.lijf || {}).filter(([, v]) => v != null));
-    if (!C.gevoel && !bewaar.length && C.alcohol == null && !Object.keys(lijf).length) { checkSluit(); return; }
-    alles[C.datum] = {gevoel: C.gevoel || null, sessies: bewaar};
-    if (C.alcohol != null) alles[C.datum].alcohol = C.alcohol;
-    if (Object.keys(lijf).length) alles[C.datum].lijf = lijf;
+    const gedrag = Object.fromEntries(Object.entries(C.gedrag || {}).filter(([, v]) => v != null));
+    const opm = (C.opmerking || "").trim();
+    if (!C.gevoel && !C.sessies.some(s => s.rpe) && C.alcohol == null && !Object.keys(lijf).length
+        && !Object.keys(gedrag).length && !opm && !alles[C.datum] && !alles[C.gisteren]) { checkSluit(); return; }
+    /* de dag zelf; wat over die avond al bewaard was (alcohol, gedrag) blijft staan */
+    const nu = {...(alles[C.datum] || {}), gevoel: C.gevoel || null, sessies: bewaar(C.datum)};
+    delete nu.lijf; delete nu.opmerking;
+    if (Object.keys(lijf).length) nu.lijf = lijf;
+    if (opm) nu.opmerking = opm;
+    if (alles[C.datum] || nu.gevoel || nu.sessies.length || nu.lijf || nu.opmerking) alles[C.datum] = nu;
+    /* gisteren: de sessies en de avond, de rest van die check-in blijft */
+    const gi = {gevoel: null, ...(alles[C.gisteren] || {}), sessies: bewaar(C.gisteren)};
+    delete gi.alcohol; delete gi.gedrag;
+    if (C.alcohol != null) gi.alcohol = C.alcohol;
+    if (Object.keys(gedrag).length) gi.gedrag = gedrag;
+    if (alles[C.gisteren] || gi.sessies.length || gi.alcohol != null || gi.gedrag) alles[C.gisteren] = gi;
     checkZet(alles);
     checkSluit();
     allesHertekenen();
@@ -10250,15 +10319,10 @@ function metingPaneel(sl) {
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-meting]"); if (!b) return; e.stopPropagation(); metingPaneel(b.dataset.meting); });
 
-/* Herstelcheck (schema v1.3): na de beendag, na de airbike, bij en na de
-   wedstrijd. Klachten altijd vergeleken met je eigen normaal. Bewaard bij
-   je instellingen (gesynchroniseerd), per datum en moment. Het dashboard
-   trekt hier geen automatische conclusies uit; het laat zien wat afwijkt. */
-const HC_MOMENT = {"na-ma": "ochtend na maandag", "na-wo": "ochtend na woensdag", wedstrijd: "wedstrijd", "na-za": "ochtend na zaterdag", anders: "anders"};
-const HC_BENEN = {1: "zwaar en merkbaar trager", 2: "zwaarder dan normaal", 3: "normaal", 4: "fris", 5: "fris en scherp"};
+/* Herstelcheck (schema v1.3, 16-11 t/m 17-11): sinds 17-11 opgegaan in de
+   ene dagelijkse check-in. Wat er al was ingevuld blijft bewaard en gaat
+   als historie mee naar de coach; nieuwe invoer komt er niet meer bij. */
 const hcLees = () => instelLees().herstelcheck || {};
-/* welk moment hoort bij deze dag in de weekplanning */
-const hcMomentVan = iso => isV13(iso) ? ({1: "na-ma", 3: "na-wo", 5: "wedstrijd", 6: "na-za"})[isoNaarPy(iso)] || null : null;
 function hcAfwijkend(c) {
   const a = [];
   if (c.achilles && c.achilles !== "geen") a.push(`achilles ${c.achilles} stijf`);
@@ -10268,49 +10332,10 @@ function hcAfwijkend(c) {
   if (c.benen != null && c.benen <= 2) a.push(`benen ${c.benen}/5`);
   return a;
 }
-function hcSamenvatting(c) {
-  return [c.achilles ? `achilles ${c.achilles}` : null, c.zwelling ? `zwelling ${c.zwelling}` : null, c.afzet ? `afzet ${c.afzet === "ja" ? "normaal" : "niet normaal"}` : null,
-    c.schouder ? `schouder/elleboog ${c.schouder}` : null, c.benen != null ? `benen ${c.benen}/5` : null,
-    c.speelmin != null ? `${c.speelmin} speelmin` : null, c.wrpe != null ? `wedstrijd-RPE ${c.wrpe}` : null].filter(Boolean).join(" · ");
+/* check-ins binnen schema v1.3, met de wedstrijddagen erbij */
+function v13Checks(tot) {
+  return Object.entries(checkLees()).filter(([d]) => d >= V13.van && d <= tot).sort((a, b) => a[0] < b[0] ? -1 : 1);
 }
-function herstelcheckPaneel(iso = vandaagIso(), moment = hcMomentVan(vandaagIso()) || "anders") {
-  const sleutel = `${iso}|${moment}`;
-  const c = hcLees()[sleutel] || {};
-  const opt = (w, lijst) => lijst.map(([v, t]) => `<option value="${v}" ${String(w ?? "") === String(v) ? "selected" : ""}>${t}</option>`).join("");
-  uiPaneel("Herstelcheck", `<div class="hc-form">
-      <p class="u-klein">Vergelijk steeds met hoe het normaal voor jou is.</p>
-      <div class="hc-twee"><label>Datum<input type="date" id="hcDatum" value="${iso}" max="${vandaagIso()}"></label>
-        <label>Moment<select id="hcMoment">${opt(moment, Object.entries(HC_MOMENT))}</select></label></div>
-      <div class="hc-twee"><label>Achilles stijfheid<select id="hcAchilles">${opt(c.achilles, [["", "—"], ["geen", "geen"], ["licht", "licht"], ["duidelijk", "duidelijk"]])}</select></label>
-        <label>Zwelling<select id="hcZwelling">${opt(c.zwelling, [["", "—"], ["nee", "nee"], ["ja", "ja"]])}</select></label></div>
-      <div class="hc-twee"><label>Afzet normaal<select id="hcAfzet">${opt(c.afzet, [["", "—"], ["ja", "ja"], ["nee", "nee"]])}</select></label>
-        <label>Schouder/elleboog<select id="hcSchouder">${opt(c.schouder, [["", "—"], ["normaal", "normaal"], ["licht anders", "licht anders"], ["duidelijk anders", "duidelijk anders"]])}</select></label></div>
-      <label>Benen<select id="hcBenen">${opt(c.benen, [["", "—"], ...Object.entries(HC_BENEN).map(([n, t]) => [n, `${n} · ${t}`])])}</select></label>
-      <div class="hc-twee" id="hcWedstrijd"><label>Speelminuten<input type="number" inputmode="numeric" min="0" max="80" id="hcMin" value="${c.speelmin ?? ""}"></label>
-        <label>Wedstrijd-RPE<input type="number" inputmode="numeric" min="1" max="10" id="hcRpe" value="${c.wrpe ?? ""}"></label></div>
-      <label>Notitie<textarea id="hcNotitie" maxlength="500">${veiligeTekst(c.notitie || "")}</textarea></label>
-      <button class="u-knop u-knop--vol" id="hcBewaar">Bewaren</button></div>`, box => {
-    const wed = () => { box.querySelector("#hcWedstrijd").hidden = !["wedstrijd", "na-za", "anders"].includes(box.querySelector("#hcMoment").value); };
-    box.querySelector("#hcMoment").onchange = wed; wed();
-    box.querySelector("#hcBewaar").onclick = () => {
-      const g = id => box.querySelector(id).value;
-      const getal = id => { const x = parseFloat(String(g(id)).replace(",", ".")); return Number.isFinite(x) ? x : null; };
-      const d = g("#hcDatum") || iso, m = g("#hcMoment");
-      const w = {datum: d, moment: m, achilles: g("#hcAchilles") || null, zwelling: g("#hcZwelling") || null, afzet: g("#hcAfzet") || null,
-        schouder: g("#hcSchouder") || null, benen: getal("#hcBenen"), speelmin: getal("#hcMin"), wrpe: getal("#hcRpe"),
-        notitie: g("#hcNotitie").trim() || null, _t: Date.now()};
-      if (![w.achilles, w.zwelling, w.afzet, w.schouder, w.benen].some(x => x != null)) { uiMelding("Vul minstens één onderdeel in", "fout"); return; }
-      const I = bewaardLees(INSTEL_KEY, {});
-      const alle = {...(I.herstelcheck || {})};
-      if (`${d}|${m}` !== sleutel) delete alle[sleutel];
-      alle[`${d}|${m}`] = w;
-      if (instelZet({...I, herstelcheck: alle}) === false) { uiMelding("Opslaan mislukt", "fout"); return; }
-      uiPaneelSluit(); uiMelding("Herstelcheck bewaard"); allesNaInvoer();
-    };
-  });
-}
-document.addEventListener("click", e => { const b = e.target.closest("[data-herstelcheck]"); if (!b) return; e.stopPropagation();
-  const [iso, m] = (b.dataset.herstelcheck || "").split("|"); herstelcheckPaneel(iso || vandaagIso(), m || undefined); });
 /* ---------------------------------------------------------------------
    Schema v1.3: uitgangsniveau, evaluatiemomenten en open punten.
    Uitgangsniveau is de week van 16 november plus eerdere vergelijkbare
@@ -10358,9 +10383,11 @@ function v13EvaluatieData(datum) {
       sessies.push(`${kortDagNaam(d)} ${kortDatum(d)}: ${min != null ? `${min} min (gepland 45–55)` : krachtLogOp(d, it.wk) ? "gelogd, duur onbekend" : "geen registratie"}`);
     }
     regels.push(sessies.length ? `Haltrainingen: ${sessies.join("; ")}.` : "Nog geen haltrainingen in het schema.");
-    const tel = f => hc.filter(f).length;
-    regels.push(hc.length ? `Herstelchecks: ${hc.length}; achilles stijf ${tel(c => c.achilles && c.achilles !== "geen")}×, zwelling ${tel(c => c.zwelling === "ja")}×, schouder/elleboog anders ${tel(c => c.schouder && c.schouder !== "normaal")}×.`
-      : "Nog geen herstelchecks ingevuld.");
+    const ch = v13Checks(tot), opm = ch.filter(([, c]) => c.opmerking);
+    regels.push(ch.length ? `Check-ins: ${ch.length}; zware benen ${ch.filter(([, c]) => (c.lijf || {}).benen === 2).length}×${opm.length
+        ? `; opmerkingen: ${opm.map(([d, c]) => `${kortDagNaam(d)} ${kortDatum(d)} “${veiligeTekst(c.opmerking)}”`).join("; ")}` : ", geen opmerkingen over pees, rug of schouder"}.`
+      : "Nog geen check-ins in dit schema.");
+    if (hc.length) regels.push(`Eerdere herstelchecks: ${hc.length}; afwijkend: ${hc.map(hcAfwijkend).flat().join(", ") || "niets"}.`);
   } else if (datum === "2026-12-11") {
     const ab = Object.entries(instelLees().conditielog || {}).filter(([k, v]) => v && v.airbike && k >= V13.van && k.split("|")[0] <= tot).sort();
     const gem = l => { const w = (l.blokken || []).map(b => b.watt), p = (l.blokken || []).map(b => b.rpe).filter(x => x != null);
@@ -10376,9 +10403,10 @@ function v13EvaluatieData(datum) {
       return `${(OEF[k] || {}).naam || k}: ${v13Set(v.eerste)} → ${v13Set(v.laatste)}${zelfdeRir ? "" : " (andere RIR: niet zuiver te vergelijken)"}${v.basis ? "" : " (eerste log na de basisweek)"}`; }).filter(Boolean);
     regels.push(rij.length ? `Kracht t.o.v. uitgangsniveau: ${rij.join("; ")}.` : "Kracht: nog te weinig logs om met het uitgangsniveau te vergelijken.");
     const gem = c => c.length ? c.reduce((a, b) => a + b, 0) / c.length : null;
-    const wed = hc.filter(c => (c.moment === "wedstrijd" || c.moment === "na-za") && c.benen != null).sort((a, b) => a.datum < b.datum ? -1 : 1);
-    regels.push(wed.length >= 3 ? `Wedstrijdfrisheid (benen 1–5): begin ${komma(gem(wed.slice(0, 2).map(c => c.benen)).toFixed(1))} → nu ${komma(gem(wed.slice(-2).map(c => c.benen)).toFixed(1))}.`
-      : "Wedstrijdfrisheid: te weinig herstelchecks rond wedstrijden.");
+    /* gevoel (1–5) in de check-in van de wedstrijddag zelf */
+    const wed = v13Checks(tot).filter(([d, c]) => c.gevoel && isWedstrijddag(d));
+    regels.push(wed.length >= 3 ? `Wedstrijdfrisheid (gevoel 1–5 op de wedstrijddag): begin ${komma(gem(wed.slice(0, 2).map(([, c]) => c.gevoel)).toFixed(1))} → nu ${komma(gem(wed.slice(-2).map(([, c]) => c.gevoel)).toFixed(1))}.`
+      : "Wedstrijdfrisheid: te weinig check-ins op wedstrijddagen.");
   }
   return regels;
 }
@@ -10431,25 +10459,14 @@ function v13EvaluatieVandaag() {
 document.addEventListener("click", e => { const b = e.target.closest("[data-v13ev]"); if (!b) return;
   naarTab("training"); setTimeout(() => { const d = document.querySelector("#schemaV13 details"); if (d) { d.open = true; d.scrollIntoView({block: "start"}); } }, 100); });
 
+/* Schema v1.3 en, op Vandaag, de evaluatieregel. De aparte herstelcheck is
+   opgegaan in de check-in; zijn plekken blijven leeg. */
 function renderHerstelcheck() {
   try { renderSchemaV13(); } catch (e) { console.error("schema v1.3", e); }
-  const v = vandaagIso(), m = hcMomentVan(v), lijst = hcLees();
   const vd = document.getElementById("vdHerstelcheck");
-  if (vd) {
-    const c = m ? lijst[`${v}|${m}`] : null;
-    vd.innerHTML = v13EvaluatieVandaag() + (!m ? "" : `<div class="vlak hc-kaart"><div class="hc-rij" style="border:0;padding:0"><span><b>Herstelcheck</b> · ${HC_MOMENT[m]}</span>
-        <button class="u-knop u-knop--klein${c ? " u-knop--stil" : ""}" data-herstelcheck="${v}|${m}">${c ? "Wijzigen" : "Invullen"}</button></div>
-        ${c ? `<p class="u-klein" style="margin:0">${hcSamenvatting(c)}</p>` : `<p class="u-klein" style="margin:0">Achilles, afzet, schouder en benen, vergeleken met je eigen normaal.${m === "wedstrijd" ? " Na de wedstrijd ook speelminuten en RPE." : ""}</p>`}</div>`);
-  }
+  if (vd) vd.innerHTML = v13EvaluatieVandaag();
   const hs = document.getElementById("hsHerstelcheck");
-  if (hs) {
-    const recent = Object.entries(lijst).sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 6);
-    hs.innerHTML = !isV13(v) && !recent.length ? "" : `<div class="sectie-kop"><h3>Herstelchecks</h3><button class="u-knop u-knop--stil u-knop--klein" data-herstelcheck="${v}|${m || "anders"}">Nieuwe check</button></div>
-      <div class="vlak">${recent.length ? recent.map(([k, c]) => { const af = hcAfwijkend(c);
-        return `<div class="hc-rij"><span><b>${hoofdletter(kortDagNaam(c.datum))} ${kortDatum(c.datum)}</b> · ${HC_MOMENT[c.moment] || c.moment}<br>${hcSamenvatting(c)}${c.notitie ? `<br><i>“${veiligeTekst(c.notitie)}”</i>` : ""}</span>
-          <span>${af.length ? `<span class="letop">${af.join(", ")}</span> ` : ""}<button class="u-link" data-herstelcheck="${k}">Wijzigen</button></span></div>`; }).join("")
-        : `<p class="u-klein" style="margin:0">Nog geen herstelchecks. Ze staan op dinsdag, donderdag, zaterdag en zondag op Vandaag.</p>`}</div>`;
-  }
+  if (hs) hs.innerHTML = "";
 }
 
 function kerncijfers(iso, i, hp) {
@@ -11322,7 +11339,7 @@ function renderHerstelBronnen() {
   const rij = (naam, waarde, bron) => `<div class="wd-rij"><span>${naam}</span><span>${waarde} <em class="bronlabel">${bron}</em></span></div>`;
   host.innerHTML = `<h2>Wat je lijf zegt</h2>
     <p class="hint">Je band meet je hart, niet je pezen en spieren. Signalen die samenhangen tellen één keer.</p>
-    ${LIJFVRAGEN.map(v => rij(v.vraag, lijf[v.k] == null ? "onbekend" : v.keuzes[lijf[v.k]], "ingevuld")).join("")}
+    ${LIJFVRAGEN.filter(v => v.gevraagd !== false || lijf[v.k] != null).map(v => rij(v.vraag, lijf[v.k] == null ? "onbekend" : v.keuzes[lijf[v.k]], "ingevuld")).join("")}
     ${rij("HRV en rusthartslag", herstelKern(vandaagIso()).ind.hart.reden, "sensor, één bron")}
     ${rij("Slaapduur", herstelKern(vandaagIso()).ind.slaap.reden, "sensor")}
     ${rij("Gereedheid", (gereedheidNu() || {}).score ?? "onbekend", "berekend door dit dashboard")}
@@ -14501,7 +14518,7 @@ function renderHerstelSamen() {
     ? `${hoofdletter(sig.groepen.map(g => g.tekst).join("; "))}.`
     : "Metingen binnen je gebruikelijke bereik.";
   const vragen = {benen: "benen", achilles: "achillespees", rug: "rug", ziek: "algemeen gevoel"};
-  const onbekend = LIJFVRAGEN.filter(q => sig.los[q.k] == null).map(q => vragen[q.k] || q.vraag);
+  const onbekend = LIJFVRAGEN.filter(q => q.gevraagd !== false && sig.los[q.k] == null).map(q => vragen[q.k] || q.vraag);
   const klachten = LIJFVRAGEN.filter(q => ["achilles", "rug", "ziek"].includes(q.k) && sig.los[q.k] != null && sig.los[q.k] > 0).map(q => `${q.vraag.toLowerCase()}: ${q.keuzes[sig.los[q.k]]}`);
   const laatst = laatsteCheckLijf();
   const soort = sig.groepen.length >= 2 || klachten.length ? "let" : onbekend.length ? "info" : "ok";
@@ -14967,7 +14984,7 @@ function renderCheckRegel() {
   } else {
     el.className = "checkregel open";
     el.innerHTML = `<span class="i">${ic("smiley")}</span>
-      <span><b>Even bijwerken</b> · 30 seconden</span>
+      <span><b>Check-in</b> · een minuut</span>
       <span class="sp"></span><span class="a">invullen</span>`;
   }
   el.onclick = () => (CHECK_CONCEPT ? checkSluit() : checkOpen());
@@ -16749,8 +16766,8 @@ function coachContext() {
   const checks = Object.entries(checkLees())
     .sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 10)
     .map(([datum, c]) => ({datum, gevoel: c.gevoel ?? null,
-      alcohol_glazen: c.alcohol ?? null, lijf: c.lijf || null,
-      sessies: (c.sessies || []).map(x => `${x.sport} ${x.minuten}min RPE${x.rpe}`)}));
+      alcohol_glazen: c.alcohol ?? null, gedrag_avond: c.gedrag || null, lijf: c.lijf || null, opmerking: c.opmerking || null,
+      sessies: (c.sessies || []).map(x => `${x.sport} ${x.minuten}min RPE${x.rpe}${x.speelmin != null ? ` ${x.speelmin} speelmin` : ""}`)}));
   const kracht = {};
   logLees().forEach(r => {
     const b = kracht[r.oefening];
@@ -16895,9 +16912,14 @@ Prioriteit, bevestigd op 13-11-2026: explosiviteit (benen) = conditie > kracht. 
 - Inspanning: hoofdoefeningen RIR 2, accessoires RIR 1-2, core en exorotatie stoppen zodra de
   uitvoering verandert. Niet tot falen. Omhoog pas als alle sets bovenaan het bereik zaten, met de
   kleinste stap die het materiaal toelaat.
-- Herstelchecks (dinsdag- en donderdagochtend, wedstrijd, zondagochtend) staan in de data
-  ("herstelchecks"): achilles, zwelling, afzet, schouder/elleboog, benen 1-5. Benoem wat afwijkt,
-  trek er zelf geen conclusies over belastbaarheid uit; dat is aan de fysio.
+- Sinds 17 november is er één dagelijkse check-in ("eigen_checks"): gevoel 1-5, lijf (benen, herstel,
+  energie, stress, slaap, ziek), de avond ervoor (alcohol_glazen, gedrag_avond: cafeine na 14:00,
+  laat gegeten, scherm in bed; bewaard op de datum van die avond), speelminuten bij wedstrijden en
+  een vrije opmerking. Achilles en rug worden niet meer standaard gevraagd: volgens hem zijn beide
+  goed. Staat er in een opmerking iets over pees, rug, schouder of elleboog, benoem dat; trek er
+  zelf geen conclusies over belastbaarheid uit, dat is aan de fysio. De herstelchecks van
+  16-17 november ("herstelchecks": achilles, zwelling, afzet, schouder/elleboog, benen 1-5) zijn
+  historie.
 - Afspraak fysio: zware benen of meer reactie van de achilles, dan eerst de intervallen van woensdag
   schrappen; blijft het, de maandag verlagen in overleg met de fysio.
 - De squat lunge staat op 20 kg; het fysioblad noemt 30 kg. Open punt.
