@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#07080B">
 <title>Sportdashboard</title>
+<meta name="codeversie" content="__CODEVERSIE__">
 <!-- Chart.js 4.4.1, ingebakken. Stond op een CDN; zonder internet viel de
      hele pagina daardoor om. -->
 <script>
@@ -16002,8 +16003,31 @@ function boot() {
   }).catch(e => { SUPA.fout = e.message; renderSyncPaneel(); });
   /* nieuwe Garmin-cijfers van de snelle sync: bij terugkomen en elke paar
      minuten zolang de pagina open en zichtbaar is */
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") garminPakketLaden(); });
-  setInterval(() => { if (document.visibilityState === "visible") garminPakketLaden(); }, 3 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { garminPakketLaden(); nieuweCodeCheck(); } });
+  setInterval(() => { if (document.visibilityState === "visible") { garminPakketLaden(); nieuweCodeCheck(); } }, 3 * 60 * 1000);
+}
+
+/* Nieuwe code. De sync hierboven ververst alleen data; een tab of
+   beginschermapp die al openstond, bleef de oude code tonen. Hier lezen we
+   alleen het begin van de live pagina (de codeversie staat in de kop) en
+   herladen als die anders is. Niet midden in invoer: dan eerst een melding.
+   De wachtwoordzin staat in sessionStorage, herladen vraagt hem niet. */
+const CODEVERSIE = (document.querySelector('meta[name="codeversie"]') || {}).content || "";
+let CODE_MELDING = false;
+async function nieuweCodeCheck() {
+  if (!/^https?:$/.test(location.protocol) || !/^[0-9a-f]{12}$/.test(CODEVERSIE)) return;
+  try {
+    const r = await fetch(location.pathname, {cache: "no-store", headers: {Range: "bytes=0-2047"}});
+    if (!r.ok || !r.body) return;
+    const lezer = r.body.getReader(); let kop = "";
+    while (kop.length < 2048) { const {done, value} = await lezer.read(); if (done) break; kop += new TextDecoder().decode(value); }
+    lezer.cancel().catch(() => {});
+    const live = (kop.match(/name="codeversie" content="([0-9a-f]{12})"/) || [])[1];
+    if (!live || live === CODEVERSIE) return;
+    const bezig = PANEEL.open || CHECK_CONCEPT || WKM || /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "");
+    if (!bezig) { location.reload(); return; }
+    if (!CODE_MELDING) { CODE_MELDING = true; uiMelding("Er is een nieuwe versie van het dashboard; hij laadt zodra je klaar bent met invullen"); }
+  } catch (e) { /* offline of geen Range: volgende keer opnieuw */ }
 }
 
 /* ---- klikken op een dag, en de knoppen boven de planner ---- */

@@ -1100,6 +1100,10 @@ def render(payload: dict[str, Any], passphrase: str | None = None,
     if not TEMPLATE.exists():
         sys.exit(f"template.html ontbreekt naast {Path(__file__).name}")
     html = TEMPLATE.read_text(encoding="utf-8")
+    # Versie van de code (niet van de data): een pagina die al openstaat
+    # vergelijkt hem met de live versie en herlaadt bij nieuwe code.
+    import hashlib
+    html = html.replace("__CODEVERSIE__", hashlib.sha256(html.encode("utf-8")).hexdigest()[:12], 1)
     blob = json.dumps(payload, ensure_ascii=False, allow_nan=False, default=str)
     if passphrase:
         blob = encrypt_payload(blob, passphrase)
