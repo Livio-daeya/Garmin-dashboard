@@ -11822,6 +11822,12 @@ function hbHrvMethoden() {
   });
   return uit;
 }
+/* datums in de redenen: over welke nacht of dag gaat het */
+const hbNacht = d => `nacht naar ${kortDagNaam(d)} ${kortDatum(d)}`;
+const hbDag = d => `${kortDagNaam(d)} ${kortDatum(d)}`;
+/* "do 19/11 (zaaltraining + kracht)": de dag met wat Garmin die dag registreerde */
+const hbTraining = d => { const n = [...new Set((DATA.activities || []).filter(a => a.date === d).map(a => (a.name || a.sport || "").toLowerCase()).filter(Boolean))];
+  return `${hbDag(d)}${n.length ? ` (${n.join(" + ")})` : ""}`; };
 function hbHart(dag) {
   const rij = hbRijen().filter(r => r.date <= dag && r.hrv_week != null && r.hrv_band_laag != null).pop();
   let hrv;
@@ -11851,16 +11857,30 @@ function hbHart(dag) {
   const nachtRef = hbReferentie("slaap_hr", dag);
   const nacht = hbMeting("slaap_hr", dag, nachtRef);
   const geenHrv = hrv.weekStand == null, geenRhr = rhr.stand === "onbekend";
-  let niveau, reden, ongunstig = false;
+  let niveau, reden, ongunstig = false, bijgetrokken = false;
+  /* De meting van de afgelopen nacht (of vandaag) beslist of iets nog
+     speelt. Een oudere meting telt niet als actueel. Is een afwijking weer
+     binnen je band, dan heet hij bijgetrokken en weegt hij één stap lichter:
+     een weekgemiddelde loopt dagen achter op hoe je er nu voor staat. */
+  const hrvNu = hrv.oud ? "onbekend" : hrv.stand, rhrNu = rhr.oud ? "onbekend" : rhr.stand;
   const hrvLaag = hrv.weekStand === "onder", rhrHoog = !geenRhr && rhr.boven7 >= HB.aanhoudend;
+  const hrvTerug = hrvLaag && hrvNu === "binnen", rhrTerug = rhrHoog && rhrNu === "binnen";
   if (geenHrv && geenRhr) { niveau = "grijs"; reden = "HRV en rusthartslag onvoldoende gemeten of geen referentie"; }
-  else if (hrvLaag || rhrHoog) { niveau = "oranje"; ongunstig = true;
-    reden = hrvLaag ? `HRV-weekgemiddelde onder je ${hrv.weekRef.bron === "garmin" ? "Garmin-" : "eigen "}band` : `rusthartslag ${rhr.boven7} van de 7 dagen boven je eigen band`; }
-  else if (hrv.weekStand === "boven") { niveau = "blauw"; reden = "HRV boven je band; hoog is niet automatisch beter"; }
-  else if (rhr.stand === "boven" || (rhr.boven7 || 0) >= 2 || hrv.stand === "onder") { niveau = "blauw";
-    reden = hrv.stand === "onder" ? "HRV vannacht onder je band; weekgemiddelde binnen" : rhr.stand === "boven" ? "rusthartslag vandaag boven je band" : `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`; }
-  else { niveau = "groen"; reden = "geen afwijking van je gebruikelijke bereik"; }
-  return {k: "hart", niveau, reden, hrv, rhr, nacht, dekking: Math.max(hrv.dekking || 0, rhr.dekking || 0), ongunstig, aanhoudend: ongunstig && ((hrv.weekDuur || 0) >= HB.aanhoudend || rhrHoog)};
+  else if ((hrvLaag && !hrvTerug) || (rhrHoog && !rhrTerug)) { niveau = "oranje"; ongunstig = true;
+    reden = hrvLaag && !hrvTerug ? `HRV-weekgemiddelde onder je ${hrv.weekRef.bron === "garmin" ? "Garmin-" : "eigen "}band${(hrv.weekDuur || 0) > 1 ? ` (${hrv.weekDuur} dagen op rij)` : ""}${hrvNu === "onder" ? `, ook in de ${hbNacht(hrv.datum)}` : ""}`
+      : `rusthartslag ${rhr.boven7} van de 7 dagen boven je eigen band, ook ${hbDag(rhr.datum)}`; }
+  else if (hrvTerug || rhrTerug) { niveau = "blauw"; bijgetrokken = true;
+    reden = `${hrvTerug ? "HRV-weekgemiddelde nog onder je band" : `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`}, maar ${hrvTerug ? `in de ${hbNacht(hrv.datum)}` : hbDag(rhr.datum)} weer binnen: aan het bijtrekken`; }
+  else if (hrv.weekStand === "boven" && hrvNu !== "binnen") { niveau = "blauw"; reden = "HRV-weekgemiddelde boven je band; hoog is niet automatisch beter"; }
+  else if (hrvNu === "onder") { niveau = "blauw"; reden = `HRV in de ${hbNacht(hrv.datum)} onder je band; weekgemiddelde binnen`; }
+  else if (rhrNu === "boven") { niveau = "blauw"; reden = `rusthartslag ${hbDag(rhr.datum)} boven je band`; }
+  else if ((rhr.boven7 || 0) >= 2 && rhrNu !== "binnen") { niveau = "blauw"; reden = `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`; }
+  else { niveau = "groen";
+    const eerder = [hrv.weekStand === "boven" ? `HRV-weekgemiddelde boven je band, in de ${hbNacht(hrv.datum)} weer binnen` : null,
+      (rhr.boven7 || 0) >= 2 ? `rusthartslag ${rhr.boven7} van de 7 dagen hoger, ${hbDag(rhr.datum)} weer binnen` : null].filter(Boolean);
+    bijgetrokken = eerder.length > 0;
+    reden = eerder.length ? `${hoofdletter(eerder.join("; "))}: bijgetrokken` : "geen afwijking van je gebruikelijke bereik"; }
+  return {k: "hart", niveau, reden, hrv, rhr, nacht, bijgetrokken, dekking: Math.max(hrv.dekking || 0, rhr.dekking || 0), ongunstig, aanhoudend: ongunstig && ((hrv.weekDuur || 0) >= HB.aanhoudend || rhrHoog)};
 }
 
 /* Overig: aanvullende gezondheidsmetingen. Krijgen geen gelijke stem; een
@@ -11872,13 +11892,20 @@ function hbOverig(dag) {
   const aRef = hbReferentie("resp_sleep", dag, {minSpreiding: 0.3});
   const adem = hbMeting("resp_sleep", dag, aRef, {relatief: true});
   const spo2 = hbRijen().filter(r => r.date > isoPlus(dag, -7) && r.date <= dag && r.spo2_gem != null).length;
-  const tempHoog = temp.stand === "boven" && (temp.duur || 0) >= 2, ademHoog = adem.stand === "boven" && (adem.duur || 0) >= 2;
-  let niveau, reden;
-  if (temp.stand === "onbekend" && adem.stand === "onbekend") { niveau = "grijs"; reden = "huidtemperatuur en ademhaling niet beschikbaar"; }
-  else if (tempHoog && ademHoog) { niveau = "oranje"; reden = "huidtemperatuur en ademhaling beide 2+ nachten boven je band"; }
-  else if (tempHoog || ademHoog || temp.stand === "boven" || adem.stand === "boven") { niveau = "blauw"; reden = tempHoog || temp.stand === "boven" ? "huidtemperatuur hoger dan gebruikelijk" : "ademhaling 's nachts hoger dan gebruikelijk"; }
-  else { niveau = "groen"; reden = "huidtemperatuur en ademhaling binnen je band"; }
-  return {k: "overig", niveau, reden, temp, adem, spo2, dekking: Math.max(temp.dekking || 0, adem.dekking || 0), mogelijkZiek: tempHoog && ademHoog};
+  /* alleen de afgelopen nacht telt als actueel; een oudere meting niet */
+  const tNu = temp.oud ? "onbekend" : temp.stand, aNu = adem.oud ? "onbekend" : adem.stand;
+  const tempHoog = tNu === "boven" && (temp.duur || 0) >= 2, ademHoog = aNu === "boven" && (adem.duur || 0) >= 2;
+  const hoger = (m, naam) => (m.duur || 0) >= 2 ? `${naam} ${m.duur} nachten hoger dan gebruikelijk (t/m de ${hbNacht(m.datum)})` : `${naam} hoger in de ${hbNacht(m.datum)}`;
+  let niveau, reden, bijgetrokken = false;
+  if (tNu === "onbekend" && aNu === "onbekend") { niveau = "grijs";
+    reden = temp.oud && temp.datum ? `geen meting van de afgelopen nacht (laatste: ${hbNacht(temp.datum)})` : "huidtemperatuur en ademhaling niet beschikbaar"; }
+  else if (tempHoog && ademHoog) { niveau = "oranje"; reden = `huidtemperatuur en ademhaling beide ${Math.min(temp.duur, adem.duur)} nachten boven je band (t/m de ${hbNacht(temp.datum)})`; }
+  else if (tNu === "boven" || aNu === "boven") { niveau = "blauw"; reden = tNu === "boven" ? hoger(temp, "huidtemperatuur") : hoger(adem, "ademhaling 's nachts"); }
+  else { niveau = "groen";
+    const eerder = [(temp.boven7 || 0) && tNu === "binnen" ? `huidtemperatuur ${temp.boven7}× hoger` : null, (adem.boven7 || 0) && aNu === "binnen" ? `ademhaling ${adem.boven7}× hoger` : null].filter(Boolean);
+    bijgetrokken = eerder.length > 0;
+    reden = eerder.length ? `in de ${hbNacht((tNu === "binnen" ? temp : adem).datum)} weer binnen je band; eerder deze week ${zinLijst(eerder)}: bijgetrokken` : "huidtemperatuur en ademhaling binnen je band"; }
+  return {k: "overig", niveau, reden, temp, adem, spo2, bijgetrokken, dekking: Math.max(temp.dekking || 0, adem.dekking || 0), mogelijkZiek: tempHoog && ademHoog};
 }
 
 /* Belasting: context, geen oordeel over herstel. Garmin-belasting en
@@ -11897,8 +11924,10 @@ function hbBelasting(dag) {
   const checks = checkLees();
   const srpe = Object.keys(checks).filter(d => d > isoPlus(dag, -7) && d <= dag)
     .reduce((t, d) => t + ((checks[d].sessies || []).filter(s => s.rpe && s.minuten).reduce((u, s) => u + s.rpe * s.minuten, 0)), 0);
-  const recentZwaar = zwaarGrens ? [0, 1, 2].some(n => som(isoPlus(dag, -n), isoPlus(dag, -n)) >= zwaarGrens) : false;
-  return {nu: Math.round(nu), normaal: normaal != null ? Math.round(normaal) : null, weken: eerder.length, zwareReeks: max, zwaarGrens, recentZwaar, srpe: srpe || null};
+  /* zware dagen (je zwaarste kwart) vandaag en de twee dagen ervoor */
+  const zwareDagen = zwaarGrens ? [2, 1, 0].map(n => isoPlus(dag, -n)).filter(d => som(d, d) >= zwaarGrens) : [];
+  const recentZwaar = zwareDagen.length > 0;
+  return {nu: Math.round(nu), normaal: normaal != null ? Math.round(normaal) : null, weken: eerder.length, zwareReeks: max, zwaarGrens, recentZwaar, zwareDagen, srpe: srpe || null};
 }
 
 /* Beslisregel [modelkeuze]: geen optelsom van stemmen. Gevoel en prestatie
@@ -11968,7 +11997,12 @@ function herstelStatus(iso) {
     const af = Object.values(k.ind).filter(x => ["oranje", "blauw"].includes(x.niveau));
     oorzaak = af.length ? hoofdletter(af.map(x => `${HS_TAAK[x.k].toLowerCase()}: ${x.reden}`).join("; ")) + "."
       : k.klachten.length ? `${k.klachten.map(x => `${x.naam} ${x.tekst}`).join(", ")}.` : "Geen afwijking gevonden in gevoel, prestatie, slaap en hartmetingen.";
-    if (k.niveau === "blauw" && k.bel.recentZwaar) oorzaak = oorzaak.replace(/\.$/, "") + "; past bij je zware training van de afgelopen dagen.";
+    /* combineren met belasting: na een zware dag is een afwijking te
+       verwachten; zonder zware training ervoor ligt de oorzaak eerder bij
+       slaap, stress of beginnende ziekte */
+    const sensor = ["slaap", "hart", "overig"].some(x => ["blauw", "oranje"].includes((k.ind[x] || {}).niveau) && !(k.ind[x] || {}).bijgetrokken);
+    if (k.niveau === "blauw" && k.bel.recentZwaar) oorzaak = oorzaak.replace(/\.$/, "") + `; past bij je zware training van ${zinLijst(k.bel.zwareDagen.map(hbTraining))}.`;
+    else if (k.niveau === "blauw" && sensor) oorzaak = oorzaak.replace(/\.$/, "") + "; zonder zware training ervoor: let op slaap, stress of beginnende ziekte.";
   }
   /* één hoofdactie, uit wat er vandaag nog gepland staat */
   const open = dagRoute(dag, {alleenLezen: true}).items.filter(i => i.soort !== "rust" && !i.optioneel && ["vandaag", "gepland"].includes(itemStatus(dag, i).k));
@@ -13217,8 +13251,8 @@ function trainingsAdvies(ma) {
         /* Herstel is wél bekend: lichte vermoeidheid of een losse afwijking,
            geen ongunstig verloop. Dat is na training te verwachten; het
            betekent alleen dat er vandaag niets bij hoeft. */
-        const oorzaak = String(hk.oorzaak || hk.regel).replace(/; past bij je zware training van de afgelopen dagen/, "").replace(/\.$/, "");
-        reden = `${gedaan}. Je herstel ${hk.bel && hk.bel.recentZwaar ? "laat de vermoeidheid zien die bij deze training past" : "laat een lichte afwijking zien, zonder ongunstig verloop"} (${oorzaak.charAt(0).toLowerCase() + oorzaak.slice(1)}).`;
+        const oorzaak = String(hk.oorzaak || hk.regel).replace(/; past bij je zware training van [^;]*?\.$/, "").replace(/\.$/, "");
+        reden = `${gedaan}. Je herstel ${hk.bel && hk.bel.recentZwaar ? `laat de vermoeidheid zien die past bij je zware training van ${zinLijst(hk.bel.zwareDagen.map(hbTraining))}` : "laat een lichte afwijking zien, zonder ongunstig verloop"} (${oorzaak.charAt(0).toLowerCase() + oorzaak.slice(1)}).`;
         actie = ontbreekt.length && ruimte && !(bovenGewoon || opRij >= 3)
           ? `Vandaag niets extra; kijk morgen of ${zinLijst(ontbreekt)} erbij kan.`
           : "Geen extra training; je plan voor de komende dagen blijft staan.";

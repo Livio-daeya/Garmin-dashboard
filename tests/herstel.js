@@ -115,6 +115,39 @@
     const k = herstelKern(V), s = herstelSignalen(V), c = coachContext().herstel, h = herstelStatus(V);
     return {ok: k.niveau === s.niveau && c.status === h.titel && c.regel === k.regel, detail: `kern ${k.niveau}, plan ${s.niveau}, coach "${c.status}"`};
   });
+  await test("Hogere huidtemperatuur noemt de nacht; een oude meting telt niet als actueel", () => {
+    zet(reeks((d, i, n) => i === n - 1 ? {huidtemp_afw: 1.2} : {})); checks(normaal);
+    const nu = herstelKern(V).ind.overig;
+    zet(reeks((d, i, n) => i === n - 3 ? {huidtemp_afw: 1.2} : i >= n - 2 ? {huidtemp_afw: null, resp_sleep: null} : {})); checks(normaal);
+    const oud = herstelKern(V).ind.overig;
+    return {ok: nu.niveau === "blauw" && nu.reden.includes(`nacht naar ${kortDagNaam(V)} ${kortDatum(V)}`) && oud.niveau === "grijs" && /geen meting van de afgelopen nacht/.test(oud.reden),
+      detail: `nu: ${nu.niveau} (${nu.reden}) | oud: ${oud.niveau} (${oud.reden})`};
+  });
+  await test("Bijgetrokken: temperatuur en rusthartslag weer binnen je band remmen niet meer", () => {
+    zet(reeks((d, i, n) => i === n - 3 || i === n - 2 ? {huidtemp_afw: 1.2, rhr: 55} : {})); checks(normaal);
+    const k = herstelKern(V);
+    return {ok: k.ind.overig.niveau === "groen" && k.ind.overig.bijgetrokken && /bijgetrokken/.test(k.ind.overig.reden)
+              && k.ind.hart.niveau === "groen" && /bijgetrokken/.test(k.ind.hart.reden),
+      detail: `overig ${k.ind.overig.niveau}: ${k.ind.overig.reden} | hart ${k.ind.hart.niveau}: ${k.ind.hart.reden}`};
+  });
+  await test("Laag HRV-weekgemiddelde maar vannacht weer binnen: van aandacht naar bijtrekken", () => {
+    zet(reeks((d, i, n) => i >= n - 5 ? {hrv_week: 80, hrv: i === n - 1 ? 100 : 75} : {})); checks(normaal);
+    const terug = herstelKern(V).ind.hart;
+    zet(reeks((d, i, n) => i >= n - 5 ? {hrv_week: 80, hrv: 75} : {})); checks(normaal);
+    const nog = herstelKern(V).ind.hart;
+    return {ok: terug.niveau === "blauw" && !terug.ongunstig && /bijtrekken/.test(terug.reden) && nog.niveau === "oranje" && nog.ongunstig,
+      detail: `terug: ${terug.niveau} (${terug.reden}) | nog laag: ${nog.niveau} (${nog.reden})`};
+  });
+  await test("Afwijking gecombineerd met belasting: na een zware dag benoemd, zonder zware dag andere oorzaak", () => {
+    /* genoeg trainingsdagen voor een grens; de zwaarste valt gisteren */
+    const acts = Array.from({length: 40}, (_, i) => ({id: "t" + i, date: isoPlus(V, -(2 * i + 3)), sport: "Handbal", name: "Zaaltraining", load: 100 + (i % 5) * 10, duration_s: 5400}));
+    zet(reeks((d, i, n) => i === n - 1 ? {huidtemp_afw: 1.2} : {}), [...acts, {id: "z", date: isoPlus(V, -1), sport: "Kracht", name: "Kracht", load: 400, duration_s: 3600}]); checks(normaal);
+    const na = herstelStatus(V);
+    zet(reeks((d, i, n) => i === n - 1 ? {huidtemp_afw: 1.2} : {}), acts); checks(normaal);
+    const zonder = herstelStatus(V);
+    return {ok: /past bij je zware training van/.test(na.oorzaak) && /kracht/.test(na.oorzaak) && /zonder zware training ervoor/.test(zonder.oorzaak),
+      detail: `na: ${na.oorzaak} | zonder: ${zonder.oorzaak}`};
+  });
   await test("Historische beoordeling gebruikt geen toekomstige gegevens", () => {
     const d = isoPlus(V, -10);
     zet(reeks()); checks(normaal); const voor = JSON.stringify({n: herstelKern(d).niveau, h: herstelKern(d).ind.hart.rhr.actueel, r: herstelKern(d).ind.hart.rhr.ref.centraal});
