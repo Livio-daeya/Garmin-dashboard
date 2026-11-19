@@ -238,7 +238,7 @@
     beschrevenWeek();
     const a = trainingsAdvies(ma);
     const ok = a.herstel.niveau !== "groen" ? a.status !== "groen" && (a.status !== "grijs" || (a.herstel.niveau === "blauw" ? /Je herstel laat/.test(a.reden) && /Geen extra training|niets extra/.test(a.actie)
-      : /Herstel nog beoordelen/.test(a.reden) && /Geen extra intensief werk/.test(a.actie))) : true;
+      : /nog niet te beoordelen/.test(a.reden) && /Geen extra intensief werk/.test(a.actie))) : true;
     return {ok, detail: `TESTWEEK | herstel ${a.herstel.niveau}, plan ${a.belasting.bovenPlan === false ? "binnen verwachting" : a.belasting.bovenPlan === null ? "onbekend" : "boven"} → ${a.status}: ${a.reden} → ${a.actie}`};
   }));
   await test("Met prikkel en herstel dat op gegevens groen is: groen, met Prikkel en Vervolg apart", () => metVandaag(() => {
@@ -262,11 +262,28 @@
       if (!a) return {ok: false, detail: "geen week zonder zware reeks in de data"};
       const k = adviesKort(a), delen = adviesDelen(a), h = delen.find(x => x.k === "herstel");
       const tekst = [a.reden, a.actie, k.actie, k.reden, k.vervolgC, k.vervolgK, h.kort, h.label, h.volgende].join(" | ");
-      const ok = a.status === "grijs" && !/onbekend|check-in/i.test(tekst) && h.kort === "Verwachte vermoeidheid" && /past/.test(a.reden)
-        && taWeergave(a).label === "Verwachte vermoeidheid: niets extra";
+      const ok = a.status === "grijs" && !/onbekend|check-in/i.test(tekst) && !/[;:]/.test(tekst) && h.kort === "Verwachte vermoeidheid" && /past/.test(a.reden)
+        && taWeergave(a).label === "Verwachte vermoeidheid, niets extra";
       return {ok, detail: tekst};
     } finally { window.herstelKern = echtK; HB_CACHE.clear(); }
   }));
+  await test("Deze week: één icoon en één zin; moe na training is goed bezig, te zwaar niet", () => {
+    const a = trainingsAdvies(maandagVan(vandaagIso()));
+    const moe = weekOordeel({...a, status: "grijs", reden: "x", herstel: {...a.herstel, niveau: "blauw"}});
+    const zwaar = weekOordeel({...a, status: "oranje", herstel: {...a.herstel, niveau: "groen"}});
+    const goed = weekOordeel({...a, status: "groen"});
+    naarTab("belasting"); renderBelFocus();
+    const el = document.querySelector("#belFocus .wk-oordeel");
+    return {ok: moe.s === "groen" && /Goed bezig/.test(moe.zin) && zwaar.s === "oranje" && /licht/.test(zwaar.zin) && goed.s === "groen"
+              && !!el && !!el.querySelector(".ta3-badge") && ![moe, zwaar, goed].some(o => /[;:]/.test(o.zin)),
+      detail: `${moe.s}: ${moe.zin} | ${zwaar.s}: ${zwaar.zin} | op de pagina: ${el ? el.textContent.trim() : "ontbreekt"}`};
+  });
+  await test("Huidtemperatuur als eigen component met lijngrafiek en eigen kleur", () => {
+    naarTab("herstel"); renderHerstelTegels();
+    const mt = [...document.querySelectorAll("#herstelGrafieken .mt")].find(x => /Huidtemperatuur/.test(x.textContent));
+    return {ok: !!mt && /--c-temp/.test(mt.getAttribute("style")) && !!mt.querySelector(".lg, .lg-leeg") && getComputedStyle(document.documentElement).getPropertyValue("--c-temp").trim() !== "",
+      detail: mt ? mt.textContent.replace(/\s+/g, " ").slice(0, 200) : "geen component"};
+  });
   await test("Teller en noemer van de dekking zijn overal gelijk", () => metVandaag(() => {
     beschrevenWeek();
     const B = trainingsAdvies(ma).belasting, html = adviesHtml(trainingsAdvies(ma));

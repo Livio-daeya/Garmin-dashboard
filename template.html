@@ -354,6 +354,7 @@
 :root {
   --c-zaal: #AC73DE; --c-kracht: #DA6CB6; --c-int: #5CC8E0; --c-rust: #8FA3BF;
   --c-kort: #A5B4FC; --c-test: #7DD3C8;
+  --c-temp: #F4A261;   /* huidtemperatuur: warm, los van hart (rood) en slaap (blauw) */
   --klik: 44px;
 }
 .ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -725,6 +726,8 @@ body.up-open { overflow: hidden; }
 .ta3-kop .ic { width: 18px; height: 18px; }
 .ta3-alg { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
 .ta3-drie { display: grid; grid-template-columns: repeat(3, 1fr); }
+.wk-oordeel { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0 2px; padding: 10px 8px 4px; border-top: 1px solid var(--hair); font-size: var(--t-klein); line-height: 1.45; color: var(--ink); }
+.wk-oordeel .ta3-badge { margin-top: 2px; }
 .ta3-drie > * + * { border-left: 1px solid var(--hair); }
 .ta3-deel { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 60px; padding: 6px 2px; background: none; border: 0; border-radius: 12px; cursor: pointer; color: var(--ink); font: inherit; }
 button.ta3-deel:hover, .ta3-kop:hover { background: var(--bg2); }
@@ -3387,6 +3390,7 @@ const ICON = {
   plus:      '<path d="M12 5v14M5 12h14"/>',
   half:      '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>',
   golf:      '<path d="M2.5 12c2.4 0 2.4-4 4.8-4s2.4 8 4.7 8 2.4-8 4.7-8 2.4 4 4.8 4"/>',
+  thermo:    '<path d="M10 14.3V5.2a2 2 0 0 1 4 0v9.1a4 4 0 1 1-4 0z"/><path d="M12 10.5v6.2"/>',
 };
 const ic = (naam, klasse) =>
   ICON[naam] ? `<svg class="ic ${klasse||""}" viewBox="0 0 24 24">${ICON[naam]}</svg>` : "";
@@ -8731,7 +8735,8 @@ function renderBelFocus() {
         "korte acties binnen handbal worden niet apart gemeten"].filter(Boolean).join(" · "), st: kSt, naam: "Kort intensief"},
   ].map(x => ({...x, status: ST(x.st)}));
   meters.forEach(x => { BEL_DETAIL[x.sleutel][1] = meetKopHtml(x) + BEL_DETAIL[x.sleutel][1]; });
-  host.innerHTML = meetBalkHtml(meters);
+  let oordeel = null; try { oordeel = weekOordeel(trainingsAdvies(m.ma)); } catch (e) { console.error("weekoordeel", e); }
+  host.innerHTML = meetBalkHtml(meters, oordeel);
   /* "Deze week" opent één overzicht van de drie meters; elke regel opent zijn detail */
   host.querySelector("[data-weekinfo]").onclick = () => uiPaneel(`Deze week · ${kortDatum(m.ma)} – ${kortDatum(isoPlus(m.ma, 6))}`,
     `<div class="vlak">${meters.map(x => { const soort = meetSoort(x.st);
@@ -9956,7 +9961,7 @@ function uiBalk({gedaan = 0, verwacht = 0, doel, eenheid = "", label, doelWoord 
    hun waarde tonen. Tikken, schuiven of de pijltjestoetsen kiezen een dag. */
 const LG = {};
 let LG_N = 0;
-function lgHtml({titel = "", eenheid = "", band = null, series, labels, periode = ""}) {
+function lgHtml({titel = "", eenheid = "", band = null, series, labels, periode = "", bandFmt = Math.round}) {
   const n = labels.length, alle = series.flatMap(x => x.pts).filter(w => w != null).concat(band || []);
   if (n < 2 || !alle.length) return `<div class="lg-leeg">${titel ? `<b>${titel}</b> · ` : ""}nog te weinig metingen</div>`;
   const id = "lg" + (++LG_N), lo = Math.min(...alle), hi = Math.max(...alle), pad = (hi - lo) * .15 || 1, min = lo - pad, max = hi + pad;
@@ -9975,7 +9980,7 @@ function lgHtml({titel = "", eenheid = "", band = null, series, labels, periode 
       ${series.map(z => `<path d="${pad_(z.pts)}" fill="none" stroke="${z.kleur}" stroke-width="2" ${z.stip ? 'stroke-dasharray="4 4"' : ""} vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`).join("")}
       <line class="hulp" x1="0" x2="0" y1="0" y2="${H}" stroke="rgba(255,255,255,.35)" stroke-width="1" vector-effect="non-scaling-stroke"/>
     </svg><div class="lg-stippen" aria-hidden="true"></div></div>
-    <div class="lg-as"><span>${labels[0]}</span>${band ? `<span>jouw band ${Math.round(band[0])}–${Math.round(band[1])}${eenheid ? " " + eenheid : ""}</span>` : ""}<span>${labels[n - 1]}</span></div></div>`;
+    <div class="lg-as"><span>${labels[0]}</span>${band ? `<span>jouw band ${bandFmt(band[0])} tot ${bandFmt(band[1])}${eenheid ? " " + eenheid : ""}</span>` : ""}<span>${labels[n - 1]}</span></div></div>`;
 }
 function lgKies(el, i) {
   const g = LG[el.id]; if (!g) return;
@@ -10028,13 +10033,30 @@ const MEET_SYMBOOL = {uitgevoerd: '<path d="m6 12.5 4 4 8-9"/>', gepland: '<circ
 const MEET_KLEUR = {uitgevoerd: "groen", gepland: "grijs", geendoel: "grijs", meer: "oranje", minder: "rood", onbekend: "grijs"};
 const meetSoort = st => st.k === "groen" ? "uitgevoerd" : st.k === "blauw" ? "gepland" : st.k === "oranje" ? "meer" : st.k === "rood" ? "minder" : st.w === "geen doel" ? "geendoel" : "onbekend";
 const meetBadge = soort => `<span class="ta3-badge ta3--${MEET_KLEUR[soort]}" aria-hidden="true"><svg viewBox="0 0 24 24">${MEET_SYMBOOL[soort]}</svg></span>`;
-function meetBalkHtml(meters) {
+/* Weekoordeel onder "Deze week": één icoon en één zin. Komt uit hetzelfde
+   trainingsadvies, dus vermoeidheid en herstel tellen mee. Moe zijn na je
+   training is goed bezig; te veel of een herstel dat aandacht vraagt niet. */
+function weekOordeel(a) {
+  const week = ta2Week(a).flatMap(d => d.sessies).filter(x => !x.ongepland && x.d <= vandaagIso());
+  const gedaan = week.filter(x => x.staat === "uitgevoerd").length, telt = week.filter(x => x.staat !== "gepland").length;
+  const plan = telt ? ` ${gedaan} van de ${telt} geplande trainingen tot nu toe gedaan.` : "";
+  const H = a.herstel.niveau, niets = /nog niets geregistreerd/.test(a.reden);
+  if (a.status === "rood") return {s: "rood", zin: "Je lijf geeft een duidelijk signaal. Pas je training aan." + plan};
+  if (a.status === "oranje") return {s: "oranje", zin: (H === "oranje" ? "Je herstel vraagt aandacht. Houd het de komende dagen licht." : "Je traint deze week zwaarder dan je gewend bent. Houd het licht en doe niets extra.") + plan};
+  if (a.status === "groen") return {s: "groen", zin: "Goed bezig. Je hebt je prikkels gehad en je herstel is in orde." + plan};
+  if (a.status === "blauw") return {s: "blauw", zin: "Goed bezig, en er is nog ruimte voor één extra sessie." + plan};
+  if (niets) return {s: "grijs", zin: "De week is net begonnen. Volg je plan."};
+  if (H === "blauw") return {s: "groen", zin: `Goed bezig. Je bent wat moe van je training, dat hoort erbij. Vandaag niets extra.${plan}`};
+  return {s: "grijs", zin: `Je training loopt. Vul je check-in in, dan telt je herstel ook mee.${plan}`};
+}
+function meetBalkHtml(meters, oordeel) {
   return `<div class="ta3 ta3--meter"><button class="ta3-kop" data-weekinfo aria-label="Deze week: meer informatie"><span class="ta3-alg">Deze week</span>${ic("volgende")}</button><div class="ta3-drie">${meters.map(m => { const soort = meetSoort(m.st);
     return `<button class="ta3-deel" data-meet="${m.sleutel}" data-status="${m.status[1]}" style="--cat:${m.kleur}"
       aria-label="${m.titel}: ${m.waarde != null ? `${m.waarde} ${m.eenheid}` : (m.sub || "onbekend").toLowerCase()}, ${String(m.status[0]).toLowerCase()}">
       <span class="ta3-ic">${ic(m.icoon)}${meetBadge(soort)}</span>
       <span class="ta3-getal u-meet-getal" aria-hidden="true">${m.waarde != null ? `${m.waarde}<small>${m.eenheid}</small>` : "–"}</span>
-      <span class="ta3-naam" aria-hidden="true">${m.naam}</span></button>`; }).join("")}</div></div>`;
+      <span class="ta3-naam" aria-hidden="true">${m.naam}</span></button>`; }).join("")}</div>
+    ${oordeel ? `<p class="wk-oordeel ta3--${oordeel.s}">${ta3Badge(oordeel.s)}<span>${oordeel.zin}</span></p>` : ""}</div>`;
 }
 function meetKopHtml(m) {
   const soort = meetSoort(m.st);
@@ -11826,6 +11848,7 @@ function hbHrvMethoden() {
 const hbNacht = d => `nacht naar ${kortDagNaam(d)} ${kortDatum(d)}`;
 const hbDag = d => `${kortDagNaam(d)} ${kortDatum(d)}`;
 /* "do 19/11 (zaaltraining + kracht)": de dag met wat Garmin die dag registreerde */
+const hbZwaar = dagen => dagen && dagen.length ? zinLijst(dagen.map(hbTraining)) : "de afgelopen dagen";
 const hbTraining = d => { const n = [...new Set((DATA.activities || []).filter(a => a.date === d).map(a => (a.name || a.sport || "").toLowerCase()).filter(Boolean))];
   return `${hbDag(d)}${n.length ? ` (${n.join(" + ")})` : ""}`; };
 function hbHart(dag) {
@@ -11870,16 +11893,16 @@ function hbHart(dag) {
     reden = hrvLaag && !hrvTerug ? `HRV-weekgemiddelde onder je ${hrv.weekRef.bron === "garmin" ? "Garmin-" : "eigen "}band${(hrv.weekDuur || 0) > 1 ? ` (${hrv.weekDuur} dagen op rij)` : ""}${hrvNu === "onder" ? `, ook in de ${hbNacht(hrv.datum)}` : ""}`
       : `rusthartslag ${rhr.boven7} van de 7 dagen boven je eigen band, ook ${hbDag(rhr.datum)}`; }
   else if (hrvTerug || rhrTerug) { niveau = "blauw"; bijgetrokken = true;
-    reden = `${hrvTerug ? "HRV-weekgemiddelde nog onder je band" : `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`}, maar ${hrvTerug ? `in de ${hbNacht(hrv.datum)}` : hbDag(rhr.datum)} weer binnen: aan het bijtrekken`; }
-  else if (hrv.weekStand === "boven" && hrvNu !== "binnen") { niveau = "blauw"; reden = "HRV-weekgemiddelde boven je band; hoog is niet automatisch beter"; }
-  else if (hrvNu === "onder") { niveau = "blauw"; reden = `HRV in de ${hbNacht(hrv.datum)} onder je band; weekgemiddelde binnen`; }
+    reden = `${hrvTerug ? "HRV-weekgemiddelde nog onder je band" : `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`}, maar ${hrvTerug ? `in de ${hbNacht(hrv.datum)}` : hbDag(rhr.datum)} weer binnen, dus aan het bijtrekken`; }
+  else if (hrv.weekStand === "boven" && hrvNu !== "binnen") { niveau = "blauw"; reden = "HRV-weekgemiddelde boven je band, maar hoog is niet automatisch beter"; }
+  else if (hrvNu === "onder") { niveau = "blauw"; reden = `HRV in de ${hbNacht(hrv.datum)} onder je band, het weekgemiddelde is binnen`; }
   else if (rhrNu === "boven") { niveau = "blauw"; reden = `rusthartslag ${hbDag(rhr.datum)} boven je band`; }
   else if ((rhr.boven7 || 0) >= 2 && rhrNu !== "binnen") { niveau = "blauw"; reden = `rusthartslag ${rhr.boven7} van de 7 dagen boven je band`; }
   else { niveau = "groen";
     const eerder = [hrv.weekStand === "boven" ? `HRV-weekgemiddelde boven je band, in de ${hbNacht(hrv.datum)} weer binnen` : null,
       (rhr.boven7 || 0) >= 2 ? `rusthartslag ${rhr.boven7} van de 7 dagen hoger, ${hbDag(rhr.datum)} weer binnen` : null].filter(Boolean);
     bijgetrokken = eerder.length > 0;
-    reden = eerder.length ? `${hoofdletter(eerder.join("; "))}: bijgetrokken` : "geen afwijking van je gebruikelijke bereik"; }
+    reden = eerder.length ? `${zinLijst(eerder)}, dus bijgetrokken` : "geen afwijking van je gebruikelijke bereik"; }
   return {k: "hart", niveau, reden, hrv, rhr, nacht, bijgetrokken, dekking: Math.max(hrv.dekking || 0, rhr.dekking || 0), ongunstig, aanhoudend: ongunstig && ((hrv.weekDuur || 0) >= HB.aanhoudend || rhrHoog)};
 }
 
@@ -11904,7 +11927,7 @@ function hbOverig(dag) {
   else { niveau = "groen";
     const eerder = [(temp.boven7 || 0) && tNu === "binnen" ? `huidtemperatuur ${temp.boven7}× hoger` : null, (adem.boven7 || 0) && aNu === "binnen" ? `ademhaling ${adem.boven7}× hoger` : null].filter(Boolean);
     bijgetrokken = eerder.length > 0;
-    reden = eerder.length ? `in de ${hbNacht((tNu === "binnen" ? temp : adem).datum)} weer binnen je band; eerder deze week ${zinLijst(eerder)}: bijgetrokken` : "huidtemperatuur en ademhaling binnen je band"; }
+    reden = eerder.length ? `${zinLijst(eerder)} eerder deze week, in de ${hbNacht((tNu === "binnen" ? temp : adem).datum)} weer binnen je band, dus bijgetrokken` : "huidtemperatuur en ademhaling binnen je band"; }
   return {k: "overig", niveau, reden, temp, adem, spo2, bijgetrokken, dekking: Math.max(temp.dekking || 0, adem.dekking || 0), mogelijkZiek: tempHoog && ademHoog};
 }
 
@@ -11986,23 +12009,23 @@ function herstelStatus(iso) {
   let oorzaak;
   if (k.niveau === "grijs") {
     const d = [];
-    d.push(hart.niveau === "grijs" ? "Hartmetingen onvoldoende" : hart.niveau === "groen" ? "Hartmetingen binnen je gebruikelijke bereik" : `Hartmetingen: ${hart.reden}`);
-    if (slaap.m && slaap.m.actueel != null) d.push(`Slaap: ${uurMin(slaap.m.actueel)}`);
-    d.push(prestatie.niveau === "grijs" ? "Herstel van benen en spieren nog onbekend" : `Prestatie: ${prestatie.reden}; gevoel onbekend`);
+    d.push(hart.niveau === "grijs" ? "Hartmetingen onvoldoende" : hart.niveau === "groen" ? "Hartmetingen binnen je gebruikelijke bereik" : hoofdletter(hart.reden));
+    if (slaap.m && slaap.m.actueel != null) d.push(`Je sliep ${uurMin(slaap.m.actueel)}`);
+    d.push(prestatie.niveau === "grijs" ? "Herstel van benen en spieren nog onbekend" : `${hoofdletter(prestatie.reden)}, je gevoel is onbekend`);
     oorzaak = d.join(". ") + ".";
   } else if (k.niveau === "rood") {
     oorzaak = gevoel.niveau === "rood" ? "Je gaf aan ziek te zijn." : k.klachten.some(x => x.niveau === "rood")
-      ? `${k.klachten.filter(x => x.niveau === "rood").map(x => x.naam).join(" en ")}: pijnlijk.` : "Prestatie en gevoel blijven achter, ook zonder hogere belasting.";
+      ? `${k.klachten.filter(x => x.niveau === "rood").map(x => x.naam).join(" en ")} pijnlijk.` : "Prestatie en gevoel blijven achter, ook zonder hogere belasting.";
   } else {
     const af = Object.values(k.ind).filter(x => ["oranje", "blauw"].includes(x.niveau));
-    oorzaak = af.length ? hoofdletter(af.map(x => `${HS_TAAK[x.k].toLowerCase()}: ${x.reden}`).join("; ")) + "."
+    oorzaak = af.length ? af.map(x => `${hoofdletter(x.reden)}.`).join(" ")
       : k.klachten.length ? `${k.klachten.map(x => `${x.naam} ${x.tekst}`).join(", ")}.` : "Geen afwijking gevonden in gevoel, prestatie, slaap en hartmetingen.";
     /* combineren met belasting: na een zware dag is een afwijking te
        verwachten; zonder zware training ervoor ligt de oorzaak eerder bij
        slaap, stress of beginnende ziekte */
     const sensor = ["slaap", "hart", "overig"].some(x => ["blauw", "oranje"].includes((k.ind[x] || {}).niveau) && !(k.ind[x] || {}).bijgetrokken);
-    if (k.niveau === "blauw" && k.bel.recentZwaar) oorzaak = oorzaak.replace(/\.$/, "") + `; past bij je zware training van ${zinLijst(k.bel.zwareDagen.map(hbTraining))}.`;
-    else if (k.niveau === "blauw" && sensor) oorzaak = oorzaak.replace(/\.$/, "") + "; zonder zware training ervoor: let op slaap, stress of beginnende ziekte.";
+    if (k.niveau === "blauw" && k.bel.recentZwaar) oorzaak += ` Dat past bij je zware training van ${hbZwaar(k.bel.zwareDagen)}.`;
+    else if (k.niveau === "blauw" && sensor) oorzaak += " Er ging geen zware training aan vooraf, dus let op slaap, stress of beginnende ziekte.";
   }
   /* één hoofdactie, uit wat er vandaag nog gepland staat */
   const open = dagRoute(dag, {alleenLezen: true}).items.filter(i => i.soort !== "rust" && !i.optioneel && ["vandaag", "gepland"].includes(itemStatus(dag, i).k));
@@ -12011,16 +12034,16 @@ function herstelStatus(iso) {
   const alleenBenen = gevoel.ongunstig && gevoel.rijen.filter(x => x.r.length).every(x => x.r.every(t => /benen/.test(t)));
   const beenwerk = i => (i.oefeningen || []).some(o => /squat|trap|dead|lunge|step|rdl|been|split/i.test(typeof o === "string" ? o : o.k || ""));
   if (k.niveau === "rood" && gevoel.niveau === "rood") actie = "Vandaag niet trainen. Houden klachten aan of word je zieker, neem contact op met je huisarts.";
-  else if (k.niveau === "rood" && k.klachten.some(x => x.niveau === "rood")) actie = `Geen looptraining, sprongen of sprints; bespreek de ${k.klachten.filter(x => x.niveau === "rood").map(x => x.naam.toLowerCase()).join(" en ")} met je fysio.`;
+  else if (k.niveau === "rood" && k.klachten.some(x => x.niveau === "rood")) actie = `Geen looptraining, sprongen of sprints. Bespreek de ${k.klachten.filter(x => x.niveau === "rood").map(x => x.naam.toLowerCase()).join(" en ")} met je fysio.`;
   else if (k.niveau === "rood") actie = eerste ? `${hoofdletter(naam)} uitstellen en het patroon opnieuw beoordelen na een paar dagen lagere belasting.` : "Opnieuw beoordelen na een paar dagen lagere belasting, met check-in.";
   /* een waarschuwing voor je benen laat een bovenlichaamtraining staan */
   else if (k.niveau === "oranje" && eerste && eerste.soort === "kracht" && alleenBenen && k.regel === "aanhoudend slechter ervaren herstel" && !beenwerk(eerste))
-    actie = "Bovenlichaamtraining kan volgens plan; geen extra beenwerk erbij.";
-  else if (k.niveau === "oranje") actie = !eerste ? "Morgen opnieuw beoordelen, met check-in." : eerste.soort === "kracht" ? "Kracht inkorten: alleen de hoofdoefeningen, accessoires overslaan."
-    : ["hoog", "ana", "test"].includes(eerste.soort) ? "Intensief werk vervangen door het rustige alternatief uit je plan." : ["handbal", "wedstrijd"].includes(eerste.soort) ? "Zaaltraining zonder extra's; geen aanvullende sessie erna." : `${hoofdletter(naam)} rustig houden.`;
+    actie = "Bovenlichaamtraining kan volgens plan, zonder extra beenwerk.";
+  else if (k.niveau === "oranje") actie = !eerste ? "Morgen opnieuw beoordelen, met check-in." : eerste.soort === "kracht" ? "Kracht inkorten tot de hoofdoefeningen en de accessoires overslaan."
+    : ["hoog", "ana", "test"].includes(eerste.soort) ? "Intensief werk vervangen door het rustige alternatief uit je plan." : ["handbal", "wedstrijd"].includes(eerste.soort) ? "Zaaltraining zonder extra's en geen aanvullende sessie erna." : `${hoofdletter(naam)} rustig houden.`;
   else if (k.niveau === "grijs") actie = "Eerst je check-in invullen.";
   else actie = eerste ? "Geplande training uitvoeren." : "Rustdag zoals gepland.";
-  if (k.mogelijkZiek && k.niveau !== "rood") actie = "Let op ziekteverschijnselen en vul je check-in in; " + actie.charAt(0).toLowerCase() + actie.slice(1);
+  if (k.mogelijkZiek && k.niveau !== "rood") actie = "Let op ziekteverschijnselen en vul je check-in in. " + actie;
   const st = {...k, titel, oorzaak, actie, reden: oorzaak};
   return st;
 }
@@ -13197,8 +13220,8 @@ function trainingsAdvies(ma) {
     status = "oranje";
     if (hk.niveau === "oranje") {
       /* oorzaak herstel: dan bepaalt het hersteladvies de actie, niet het plan */
-      reden = `${hoofdletter(samen)}. Je herstel vraagt om aandacht: ${hk.oorzaak || hk.regel}.`;
-      actie = hk.actie ? hk.actie.replace(/\.$/, "") + "." : "Geen extra training; pas je volgende training aan zoals bij Herstel staat.";
+      reden = `${hoofdletter(samen)}. Je herstel vraagt om aandacht. ${hk.oorzaak || hoofdletter(hk.regel) + "."}`;
+      actie = hk.actie ? hk.actie.replace(/\.$/, "") + "." : "Geen extra training. Pas je volgende training aan zoals bij Herstel staat.";
     } else {
       const waarom = [`je belasting ligt op ${belasting.verhouding}% van je gewone week`];
       if (bovenPlan) waarom.push(`boven het verwachte bereik voor ${vergelijkbaar.length} vergelijkbare sessies`);
@@ -13207,12 +13230,12 @@ function trainingsAdvies(ma) {
       reden = `${hoofdletter(samen)}. ${hoofdletter(zinLijst(waarom))}, en ${omdat}.`;
       const nogGepland = later.find(x => wedstrijd == null || x.d < wedstrijd) || items.find(x => x.d === v && ["gepland", "vandaag"].includes(x.st.k));
       const herstelBekend = hk.niveau === "groen";
-      if (hk.ind.prestatie.ongunstig) actie = `Geen extra training; ${nogGepland ? `houd ${titelVan(nogGepland.i).toLowerCase()} lichter` : "houd de volgende training lichter"} en kijk of je prestatie herstelt.`;
+      if (hk.ind.prestatie.ongunstig) actie = `Geen extra training. ${nogGepland ? `Houd ${titelVan(nogGepland.i).toLowerCase()} lichter` : "Houd de volgende training lichter"} en kijk of je prestatie herstelt.`;
       else if (wedstrijd != null && totWedstrijd <= 2) actie = nogGepland && herstelBekend
-        ? `Geen extra training; ${titelVan(nogGepland.i).toLowerCase()} kan volgens voorschrift, zonder extra intensiteit richting ${wedWoord}.`
-        : nogGepland ? `Geen extra training; vul je check-in in voordat je ${titelVan(nogGepland.i).toLowerCase()} doet. Rustig richting ${wedWoord}.`
-        : `Geen extra training; rustig aan richting ${wedWoord}.`;
-      else actie = `Geen extra training${nogGepland ? `; ${titelVan(nogGepland.i).toLowerCase()} ${dagWoord(nogGepland.d, dagVerschil(v, nogGepland.d))} mag lichter` : ""}.`;
+        ? `Geen extra training. ${hoofdletter(titelVan(nogGepland.i).toLowerCase())} kan volgens voorschrift, zonder extra intensiteit richting ${wedWoord}.`
+        : nogGepland ? `Geen extra training. Vul je check-in in voordat je ${titelVan(nogGepland.i).toLowerCase()} doet, en doe rustig aan richting ${wedWoord}.`
+        : `Geen extra training, rustig aan richting ${wedWoord}.`;
+      else actie = `Geen extra training.${nogGepland ? ` ${hoofdletter(titelVan(nogGepland.i).toLowerCase())} ${dagWoord(nogGepland.d, dagVerschil(v, nogGepland.d))} mag lichter.` : ""}`;
     }
   } else {
     const ontbreekt = [];
@@ -13232,14 +13255,14 @@ function trainingsAdvies(ma) {
     if (ontbreekt.length && hk.niveau === "groen" && ruimte) {
       ontbreekt.splice(0, ontbreekt.length, ...ontbreektMet);
       status = "blauw"; reden = `Deze week ontbreekt ${zinLijst(ontbreekt)}, en er staat niets meer van gepland.`;
-      actie = `Ruimte voor één sessie ${zinLijst(ontbreekt)}${wedstrijd ? ` vóór ${dagWoord(isoPlus(wedstrijd, -1), totWedstrijd - 1)}; de dag voor je wedstrijd blijft rustig` : ""}.`;
+      actie = `Ruimte voor één sessie ${zinLijst(ontbreekt)}${wedstrijd ? ` vóór ${dagWoord(isoPlus(wedstrijd, -1), totWedstrijd - 1)}. De dag voor je wedstrijd blijft rustig` : ""}.`;
     } else if (hk.niveau === "groen" && (conditie.geleverd || kracht.geleverd) && !(afwijking && reeks.onzeker && reeks.opRijMogelijk >= 3 && opRij < 3)) {
       /* Groen = prikkel passend en geen extra nodig. Alleen met een geleverde
          prikkel én herstel dat op gegevens groen is. "Binnen de verwachting van
          je plan" is context, geen reden voor groen. */
       status = "groen";
-      reden = `${hoofdletter(samen)}. Herstel zonder afwijking: ${String(hk.oorzaak || "binnen je eigen bereik").replace(/\.$/, "")}.${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
-      actie = (bovenGewoon || opRij >= 3) && wedWoord && totWedstrijd <= 2 ? `Geen extra training nodig; geen extra intensief werk richting ${wedWoord}.` : "Geen extra training nodig.";
+      reden = `${hoofdletter(samen)}. Je herstel is zonder afwijking. ${String(hk.oorzaak || "Binnen je eigen bereik.")}${wedWoord && totWedstrijd <= 2 ? ` ${hoofdletter(wedWoord)}.` : ""}`;
+      actie = (bovenGewoon || opRij >= 3) && wedWoord && totWedstrijd <= 2 ? `Geen extra training nodig, en geen extra intensief werk richting ${wedWoord}.` : "Geen extra training nodig.";
     } else {
       /* Herstel onvoldoende bekend (geen geldige check-in, of een losse
          afwijking): niet groen, en ook niet automatisch oranje. Ontbrekende
@@ -13251,15 +13274,15 @@ function trainingsAdvies(ma) {
         /* Herstel is wél bekend: lichte vermoeidheid of een losse afwijking,
            geen ongunstig verloop. Dat is na training te verwachten; het
            betekent alleen dat er vandaag niets bij hoeft. */
-        const oorzaak = String(hk.oorzaak || hk.regel).replace(/; past bij je zware training van [^;]*?\.$/, "").replace(/\.$/, "");
-        reden = `${gedaan}. Je herstel ${hk.bel && hk.bel.recentZwaar ? `laat de vermoeidheid zien die past bij je zware training van ${zinLijst(hk.bel.zwareDagen.map(hbTraining))}` : "laat een lichte afwijking zien, zonder ongunstig verloop"} (${oorzaak.charAt(0).toLowerCase() + oorzaak.slice(1)}).`;
+        const oorzaak = String(hk.oorzaak || hk.regel).replace(/ Dat past bij je zware training van .*$/, "").replace(/ Er ging geen zware training aan vooraf.*$/, "");
+        reden = `${gedaan}. Je herstel ${hk.bel && hk.bel.recentZwaar ? `laat de vermoeidheid zien die past bij je zware training van ${hbZwaar(hk.bel.zwareDagen)}` : "laat een lichte afwijking zien, zonder ongunstig verloop"}. ${oorzaak}`;
         actie = ontbreekt.length && ruimte && !(bovenGewoon || opRij >= 3)
-          ? `Vandaag niets extra; kijk morgen of ${zinLijst(ontbreekt)} erbij kan.`
-          : "Geen extra training; je plan voor de komende dagen blijft staan.";
+          ? `Vandaag niets extra. Kijk morgen of ${zinLijst(ontbreekt)} erbij kan.`
+          : "Geen extra training. Je plan voor de komende dagen blijft staan.";
       } else {
-        reden = `${gedaan}. Herstel nog beoordelen: geen geldige check-in.`;
+        reden = `${gedaan}. Je herstel is nog niet te beoordelen, want je check-in ontbreekt.`;
         actie = ontbreekt.length && ruimte && !(bovenGewoon || opRij >= 3)
-          ? `Vul je check-in in; dan zie je of ${zinLijst(ontbreekt)} erbij kan.`
+          ? `Vul je check-in in, dan zie je of ${zinLijst(ontbreekt)} erbij kan.`
           : "Geen extra intensief werk toevoegen. Vul je check-in in om je herstel te beoordelen.";
       }
     }
@@ -13370,25 +13393,25 @@ function adviesKort(a) {
   const wed = a.wedstrijd != null && a.totWedstrijd <= 2;
   const ontbreektC = /conditiewerk/.test(a.status === "blauw" ? a.reden : ""), ontbreektK = /krachtsessie/.test(a.status === "blauw" ? a.reden : "");
   let actie, reden;
-  if (a.status === "groen") { actie = wed ? "Geen extra training; fris naar je wedstrijd" : "Geen extra training nodig"; reden = "Prikkel geleverd, herstel zonder afwijking."; }
+  if (a.status === "groen") { actie = wed ? "Geen extra training, zodat je fris bent voor je wedstrijd" : "Geen extra training nodig"; reden = "Je prikkels zijn geleverd en je herstel is zonder afwijking."; }
   else if (a.status === "grijs") { const niets = /nog niets geregistreerd/.test(a.reden);
     /* begin van de week: nog niets gedaan, dus je plan is het advies */
     const vandaagPlan = niets ? dagRoute(vandaagIso(), {alleenLezen: true}).items.filter(i => i.soort !== "rust" && !i.optioneel && itemStatus(vandaagIso(), i).k !== "overgeslagen").map(i => titelVanItem(i)) : [];
     const moe = a.herstel.niveau === "blauw";
-    actie = niets ? (vandaagPlan.length ? `Vandaag: ${vandaagPlan.join(" + ")}` : "Volg je plan; vandaag rust") : moe ? "Geen extra training; volg je plan" : "Geen extra intensief werk";
-    reden = niets ? "Nog geen trainingen deze week; je planning bepaalt wat je doet." : a.herstel.niveau === "groen" ? "Nog te weinig gegevens."
-      : moe ? (a.herstel.bel && a.herstel.bel.recentZwaar ? "Je herstel laat de vermoeidheid van je training zien; dat is normaal." : "Je herstel laat een lichte afwijking zien; niets om je zorgen over te maken.")
+    actie = niets ? (vandaagPlan.length ? `Vandaag: ${vandaagPlan.join(" + ")}` : "Volg je plan, vandaag is een rustdag") : moe ? "Geen extra training, volg je plan" : "Geen extra intensief werk";
+    reden = niets ? "Je hebt deze week nog niet getraind, dus je planning bepaalt wat je doet." : a.herstel.niveau === "groen" ? "Nog te weinig gegevens."
+      : moe ? (a.herstel.bel && a.herstel.bel.recentZwaar ? "Je herstel laat de vermoeidheid van je training zien. Dat is normaal." : "Je herstel laat een lichte afwijking zien. Niets om je zorgen over te maken.")
       : "Je check-in ontbreekt, dus je herstel is nog niet te beoordelen."; }
-  else if (a.status === "oranje") { actie = "Niets extra; houd het licht";
+  else if (a.status === "oranje") { actie = "Niets extra, houd het licht";
     reden = a.herstel.niveau === "oranje" ? "Je herstel vraagt aandacht." : a.belasting.opRij >= 3 ? `${a.belasting.opRij} zware dagen op rij.` : wed ? "Zware week vlak voor je wedstrijd." : "Mindere prestatie bij gelijke taak."; }
   else if (a.status === "rood") { actie = "Pas je training aan"; reden = "Klachten, ziekte of herstel duidelijk achteruit."; }
   else { actie = ontbreektC && ontbreektK ? "Eén conditie- of krachtsessie erbij" : ontbreektC ? "Eén intensieve conditiesessie erbij" : "Eén krachtsessie erbij"; reden = "Er ontbreekt een prikkel en er is ruimte."; }
   const conditie = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}${onb ? ` · ${onb} onbekend` : ""}` : onb ? "Inhoud onbekend" : C.lijst.length ? "Geen intensieve prikkel" : "Geen sessie";
   const kracht = K.sessies ? `${K.sessies} sessie${K.sessies > 1 ? "s" : ""} · ${K.gelogd ? `${K.sets} sets` : "omvang onbekend"}` : "Geen sessie";
-  const vervolg = mist => a.status === "oranje" || a.status === "rood" ? "Niet aanvullen." : a.status === "grijs" ? (a.herstel.niveau === "blauw" ? "Niet aanvullen; geef je lijf de tijd om deze training te verwerken." : "Eerst je check-in; niets extra intensiefs.") : a.status === "blauw" && mist ? "Eén sessie erbij, zie het advies." : "Niet nodig.";
+  const vervolg = mist => a.status === "oranje" || a.status === "rood" ? "Niet aanvullen." : a.status === "grijs" ? (a.herstel.niveau === "blauw" ? "Niet aanvullen. Geef je lijf de tijd om deze training te verwerken." : "Vul eerst je check-in in. Tot die tijd niets extra intensiefs.") : a.status === "blauw" && mist ? "Eén sessie erbij, zoals het advies zegt." : "Niet nodig.";
   return {actie, reden, conditie, kracht,
-    prikkelC: C.intensief ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""} geleverd${onb ? `; ${onb} met onbekende inhoud` : ""}.` : onb ? "Inhoud van je conditiewerk niet vastgesteld." : C.later.length ? "Intensief werk staat nog gepland." : "Nog geen intensieve prikkel.",
-    prikkelK: K.sessies ? (K.gelogd ? `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}, ${K.sets} gelogde sets.` : `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}; omvang en prikkel onbekend.`) : K.later.length ? "Kracht staat nog gepland." : "Geen krachtsessie.",
+    prikkelC: C.intensief ? `${C.intensief} intensieve sessie${C.intensief > 1 ? "s" : ""} geleverd${onb ? `, waarvan ${onb} met onbekende inhoud` : ""}.` : onb ? "Inhoud van je conditiewerk niet vastgesteld." : C.later.length ? "Intensief werk staat nog gepland." : "Nog geen intensieve prikkel.",
+    prikkelK: K.sessies ? (K.gelogd ? `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}, ${K.sets} gelogde sets.` : `${K.sessies} sessie${K.sessies > 1 ? "s" : ""}, maar omvang en prikkel zijn onbekend.`) : K.later.length ? "Kracht staat nog gepland." : "Geen krachtsessie.",
     vervolgC: vervolg(ontbreektC), vervolgK: vervolg(ontbreektK)};
 }
 /* Status per onderdeel. Leidt geen nieuwe beoordeling af: begrenzen en
@@ -13411,7 +13434,7 @@ function taWeergave(a) {
   if (a.status !== "grijs") return {s: a.status, label: TA_STATUS[a.status]};
   /* begin van de week: er is nog niets om te beoordelen, dus volg je plan */
   if (/nog niets geregistreerd/.test(a.reden)) return {s: "groen", label: "Volg je plan"};
-  return {s: "oranje", label: a.herstel && a.herstel.niveau === "blauw" ? `${ta3Herstel(a.herstel)}: niets extra` : "Check-in ontbreekt: niets extra"};
+  return {s: "oranje", label: a.herstel && a.herstel.niveau === "blauw" ? `${ta3Herstel(a.herstel)}, niets extra` : "Check-in ontbreekt, dus niets extra"};
 }
 function adviesDelen(a, k = adviesKort(a)) {
   const C = a.conditie, K = a.kracht, H = a.herstel;
@@ -13430,14 +13453,14 @@ function adviesDelen(a, k = adviesKort(a)) {
   const cKort = C.intensief ? `${C.intensief} intensieve prikkel${C.intensief > 1 ? "s" : ""}` : onb ? "Inhoud onbekend" : C.later.length ? "Nog gepland" : "Geen intensieve prikkel";
   const kKort = K.gelogd && K.sets ? `${K.sets} sets gelogd` : K.sessies ? "Omvang onbekend" : K.later.length ? "Nog gepland" : "Geen sessie";
   const hSt = H.niveau === "groen" || H.niveau === "rood" ? H.niveau : "oranje";
-  const kOntbreekt = K.sessies && !K.gelogd ? "Sets, gewichten en RIR in je krachtlog." : K.rirOnzeker || K.zonderRir ? "RIR bij een deel van je sets." : "";
+  const kOntbreekt = K.sessies && !K.gelogd ? "Sets, gewichten en RIR in je krachtlog." : K.rirOnzeker || K.zonderRir ? "De RIR bij een deel van je sets." : "";
   const uit = [
     {k: "conditie", naam: "Conditie", icoon: "puls", s: deel("conditie", C.intensief > 0 || C.lijst.length > 0 || C.later.length > 0), kort: cKort, vast: k.prikkelC, volgende: k.vervolgC,
       ontbreekt: onb ? `Inhoud van ${onb} conditiesessie${onb > 1 ? "s" : ""} (werkblokken of bevestiging).` : ""},
     {k: "kracht", naam: "Kracht", icoon: "halter", s: deel("kracht", K.sessies > 0 || K.later.length > 0), kort: kKort, vast: k.prikkelK, volgende: k.vervolgK, ontbreekt: kOntbreekt},
-    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: ta3Herstel(H), label: H.niveau === "blauw" ? `${ta3Herstel(H)}: niets extra` : H.niveau === "grijs" ? "Check-in ontbreekt: niets extra" : null,
-      vast: H.niveau === "grijs" ? "Geen geldige check-in of te weinig metingen." : `${HB_KORT_TITEL[H.niveau]}${H.oorzaak ? `: ${String(H.oorzaak).replace(/\.$/, "").toLowerCase()}` : ""}.`,
-      volgende: H.actie ? String(H.actie).replace(/\.?$/, ".") : H.niveau === "groen" ? "Geen beperking vanuit herstel." : H.niveau === "blauw" ? "Geen extra training; je geplande trainingen kunnen gewoon door." : "Eerst je check-in; niets extra intensiefs.",
+    {k: "herstel", naam: "Herstel", icoon: "maan", s: hSt, kort: ta3Herstel(H), label: H.niveau === "blauw" ? `${ta3Herstel(H)}, niets extra` : H.niveau === "grijs" ? "Check-in ontbreekt, dus niets extra" : null,
+      vast: H.niveau === "grijs" ? "Geen geldige check-in of te weinig metingen." : `${HB_KORT_TITEL[H.niveau]}.${H.oorzaak ? ` ${H.oorzaak}` : ""}`,
+      volgende: H.actie ? String(H.actie).replace(/\.?$/, ".") : H.niveau === "groen" ? "Geen beperking vanuit herstel." : H.niveau === "blauw" ? "Geen extra training. Je geplande trainingen kunnen gewoon door." : "Vul eerst je check-in in. Tot die tijd niets extra intensiefs.",
       ontbreekt: H.niveau === "grijs" ? "Een geldige check-in van vandaag." : ""},
   ];
   /* groen zonder vastgestelde prikkel: niets aanvullen, gewoon je plan volgen */
@@ -13445,6 +13468,21 @@ function adviesDelen(a, k = adviesKort(a)) {
   if (uit[1].s === "groen" && !(K.gelogd && K.sets)) uit[1].label = "Volg je plan";
   return uit;
 }
+/* Huidtemperatuur: Garmins nachtelijke afwijking van je eigen
+   huidtemperatuur, met je band. Op dezelfde dagen als de slaapgrafiek. */
+const tempFmt = w => w == null ? "–" : `${w > 0 ? "+" : w < 0 ? "−" : ""}${komma(Math.abs(hbRond(w, 1)))}`;
+function huidtempHtml(dagen) {
+  const per = new Map(hbRijen().map(x => [x.date, x.huidtemp_afw]));
+  const pts = dagen.isos.map(d => per.get(d) ?? null);
+  const laatst = [...pts].reverse().find(w => w != null) ?? null;
+  const ref = hbReferentie("huidtemp_afw", vandaagIso(), {minSpreiding: 0.1});
+  const band = ref && ref.genoeg ? [ref.laag, ref.hoog] : null;
+  const hoog = band && laatst != null && laatst > band[1];
+  return metriekHtml({icoon: "thermo", kleur: "var(--c-temp)", label: "Huidtemperatuur", waarde: laatst == null ? null : tempFmt(laatst), eenheid: "°C",
+    bij: band ? `${hoog ? "<b>hoger</b> dan" : "binnen"} jouw band <b>${tempFmt(band[0])} tot ${tempFmt(band[1])}</b> °C` : "band nog in opbouw",
+    grafiek: lgHtml({eenheid: "°C", band, bandFmt: tempFmt, periode: "28 dagen", labels: dagen.labels, series: [{naam: "Huidtemperatuur", pts, kleur: "var(--c-temp)", fmt: tempFmt}]})});
+}
+
 /* De iconenbalk onder de drie hoofdgetallen: alleen titel, drie iconen en labels. */
 function adviesBalkHtml(a, delen = adviesDelen(a), opties = {}) {
   const tag = opties.voorbeeld ? "div" : "button";
@@ -13530,7 +13568,7 @@ function ta2Teken(scroll) {
   } else if (view === "waarom") {
     titel = "Waarom dit advies?";
     const B = a.belasting, r = [];
-    r.push(`<b>Herstel:</b> ${HB_KORT_TITEL[a.herstel.niveau].toLowerCase()}${a.herstel.niveau !== "grijs" && a.herstel.oorzaak ? ` · ${String(a.herstel.oorzaak).replace(/\.$/, "").toLowerCase()}` : a.herstel.niveau === "grijs" ? " · geen geldige check-in" : ""}.`);
+    r.push(`<b>Herstel:</b> ${HB_KORT_TITEL[a.herstel.niveau]}.${a.herstel.niveau !== "grijs" && a.herstel.oorzaak ? ` ${a.herstel.oorzaak}` : a.herstel.niveau === "grijs" ? " Je check-in ontbreekt." : ""}`);
     r.push(`<b>Prikkel:</b> ${delen[0].kort.toLowerCase()} conditie, ${delen[1].kort.toLowerCase()} kracht${a.handbal.gedaan ? `, ${a.handbal.gedaan}× handbal` : ""}.`);
     r.push(a.wedstrijd != null && a.totWedstrijd <= 2 ? `<b>Wedstrijd:</b> ${dagWoord(a.wedstrijd, a.totWedstrijd)}.` : B.reeks && B.reeks.opRij >= 2 ? `<b>Zware dagen:</b> ${B.reeks.onzeker ? `minstens ${B.opRij}` : B.opRij} op rij.` : `<b>Belasting:</b> ${B.verhouding != null ? `${B.verhouding}% van je gewone week` : "gewone week onbekend"}.`);
     const vorige = [1, 2, 3].map(n => isoPlus(a.ma, -7 * n)).filter(m => isoPlus(m, 6) >= (status().planStart || a.ma)).map(m => trainingsAdvies(m));
@@ -14721,7 +14759,8 @@ function renderHerstelTegels() {
         knop: `<button class="u-link" data-slaapnacht aria-label="Nacht openen">Nacht</button>`,
         grafiek: lgHtml({periode: "28 dagen", labels: sl.labels, series: [{naam: "Slaap", pts: sl.pts, kleur: "var(--sl-licht)", fmt: uurMin}]})}) +
       metriekHtml({icoon: "wolk", kleur: "var(--good)", label: "Stress overdag", waarde: strNu, bij: "schaal <b>0–100</b>, continu gemeten via je HRV",
-        grafiek: lgHtml({periode: "28 dagen", labels: st.labels, series: [{naam: "Stress", pts: st.pts, kleur: "var(--good)", fmt: Math.round}]})});
+        grafiek: lgHtml({periode: "28 dagen", labels: st.labels, series: [{naam: "Stress", pts: st.pts, kleur: "var(--good)", fmt: Math.round}]})}) +
+      huidtempHtml(sl);
     lgKoppel(graf);
     /* "Nacht openen" volgt de dag die je in de slaapgrafiek kiest */
     graf.querySelector("[data-slaapnacht]").onclick = e => {

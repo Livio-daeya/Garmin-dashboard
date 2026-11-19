@@ -145,7 +145,7 @@
     const na = herstelStatus(V);
     zet(reeks((d, i, n) => i === n - 1 ? {huidtemp_afw: 1.2} : {}), acts); checks(normaal);
     const zonder = herstelStatus(V);
-    return {ok: /past bij je zware training van/.test(na.oorzaak) && /kracht/.test(na.oorzaak) && /zonder zware training ervoor/.test(zonder.oorzaak),
+    return {ok: /past bij je zware training van/.test(na.oorzaak) && /kracht/.test(na.oorzaak) && /geen zware training aan vooraf/.test(zonder.oorzaak),
       detail: `na: ${na.oorzaak} | zonder: ${zonder.oorzaak}`};
   });
   await test("Historische beoordeling gebruikt geen toekomstige gegevens", () => {
